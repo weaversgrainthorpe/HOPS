@@ -329,6 +329,8 @@
   );
   const metrics = $derived(phone ? phoneFlowMetrics(phone, innerWidthPx) : folderFlowMetrics(paging, parent.unitPx, innerWidthPx));
   const pageKids = $derived(kids.slice(paging.start, paging.end));
+  /** Outside edit mode the box has grown as far as it can (screenGrowth), and a viewer can't resize it. */
+  const noRoomNote = $derived(editing ? 'Not enough room — make the folder bigger.' : 'Not enough room to show this folder.');
   const pageNumbers = $derived(paging.pages <= 7 ? Array.from({ length: paging.pages }, (_, i) => i) : []);
   /** The dwell a drag is holding over this folder's page arrows or crumbs (shown, so the hold is visible). */
   const holdingKey = $derived(editing ? ($drag?.dwell?.key ?? null) : null);
@@ -518,7 +520,7 @@
     <!-- No room for this level's page (or a box below its minimum, noted above) (one item, or the page bar it needs): nothing is drawn clipped.
          The note is here when this box can hold it, else on the folder's own body. -->
     {#if paging.noRoomInside}
-      <p class="too-small" role="status" data-folder-no-room>Not enough room — make the folder bigger.</p>
+      <p class="too-small" role="status" data-folder-no-room>{noRoomNote}</p>
     {/if}
   {:else if kids.length === 0}
     <span class="empty-note open-empty">Empty folder</span>
@@ -879,7 +881,7 @@
         {#if paging.noRoom && !paging.noRoomInside}
           <!-- Never a silent clip: so deep that the inset bars themselves run out of room, the
                note is drawn over this folder's own body, where it is always seen. -->
-          <p class="too-small" role="status" data-folder-no-room>Not enough room — make the folder bigger.</p>
+          <p class="too-small" role="status" data-folder-no-room>{noRoomNote}</p>
         {/if}
       </div>
     {/if}

@@ -193,7 +193,7 @@ test.describe('a sub-folder opens as a folder inside a folder', () => {
     await expect(svc.locator('.nested-box')).toHaveCount(0);
   });
 
-  test('a small folder with deep nesting says "Not enough room", never clips', async ({ page, context }) => {
+  test('a small folder with deep nesting makes room, and edit mode says "Not enough room", never clips', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
       folder(id('f'), 'Tiny', { x: 0, y: 0, w: 4, h: 6 }, [
         folder(id('a'), 'A', null, [folder(id('b'), 'B', null, [folder(id('c'), 'C', null, [kid(id('z'), 'Zed')])])])
@@ -204,6 +204,11 @@ test.describe('a sub-folder opens as a folder inside a folder', () => {
     await page.reload();
     const tiny = node(page, f.id('f'));
     const note = tiny.locator('[data-folder-no-room]');
+    // Viewing: the box is drawn taller, so the item shows and there is no note.
+    await expect(page.locator(`[data-node-id="${f.id('z')}"]`)).toBeVisible();
+    await expect(note).toHaveCount(0);
+    // Editing: the stored box, and the note.
+    await enterEdit(page);
     await expect(note).toBeVisible();
     await expect(note).toHaveText(/Not enough room — make the folder bigger/);
     inside(await box(note), await box(tiny), 0, 'the note is on the folder');
@@ -212,17 +217,13 @@ test.describe('a sub-folder opens as a folder inside a folder', () => {
     const cfg = await (await page.request.get('/api/config')).json();
     const saved = cfg.dashboards.find((d: { id: string }) => d.id === f.id('dash')).tabs[0].root.children[0];
     expect(saved.placement).toEqual({ x: 0, y: 0, w: 4, h: 6 });
-    // The same in edit mode.
-    await page.locator('[aria-label="Enter Edit Mode"]').click();
-    await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
-    await expect(tiny.locator('[data-folder-no-room]')).toBeVisible();
   });
 
   test('search reveal opens the chain as nested boxes and flips the innermost to the tile\'s page', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
       folder(id('f'), 'Outer', { x: 0, y: 0, w: 12, h: 9 }, [
         kid(id('a'), 'First'),
-        folder(id('s'), 'Middle', null, [folder(id('s2'), 'Inner', null, [...kids(id, 15), kid(id('needle'), 'Needlefind')])])
+        folder(id('s'), 'Middle', null, [folder(id('s2'), 'Inner', null, [...kids(id, 100), kid(id('needle'), 'Needlefind')])])
       ], { display: 'collapsed' })
     ]);
     await page.goto(f.path);
@@ -492,7 +493,7 @@ async function navOf(page: Page, dash: string) {
 test.describe('inset boxes: room, menus and drags', () => {
   test.use({ viewport: { width: 1024, height: 900 } });
 
-  test('an inset box with room for one item but not the page bar its items need says "Not enough room" (no silent clip)', async ({ page, context }) => {
+  test('edit mode: an inset box with room for one item but not the page bar its items need says "Not enough room" (no silent clip)', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
       tile(id('m'), 'Med', 20, 0),
       // A 4 x 7 box two levels in: each level takes 70 px (tab allowance 24 + bar 28 + border
@@ -509,6 +510,7 @@ test.describe('inset boxes: room, menus and drags', () => {
     await page.reload();
     const small = node(page, f.id('f'));
     await expect(nested(small, f.id('s'))).toBeVisible();
+    await enterEdit(page);
     await expect(small.locator('[data-folder-no-room]')).toBeVisible();
     await expect(small.locator('[data-folder-no-room]')).toHaveText(/Not enough room — make the folder bigger/);
     // Nothing is drawn clipped: no item, no page bar.

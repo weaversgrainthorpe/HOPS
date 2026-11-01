@@ -2,8 +2,11 @@
 // box is too short at THIS cell is drawn taller, and what is below it in its columns moves down.
 // Render-only: the stored placements are never changed.
 import { describe, it, expect } from 'vitest';
-import { screenGrowth, clampPlacement, minOpenFolderCells, REFERENCE_CELL_PX, type ContainerMetrics } from './geometry';
-import type { Placement } from '../types/layout';
+import {
+  screenGrowth, clampPlacement, drilledFolderRows, minOpenFolderCells, nestedPaging, nodeBox, openFolderContentBox, screenRows, sizeSpan,
+  NAVBAR_PX, NESTED_CHROME, NESTED_LEVEL_Y_PX, REFERENCE_CELL_PX, type ContainerMetrics
+} from './geometry';
+import type { FolderNode, Placement } from '../types/layout';
 
 const m = (cell: number): ContainerMetrics => ({ columns: 24, unitPx: cell, rowPx: cell, innerWidthPx: 24 * cell });
 const p = (x: number, y: number, w: number, h: number): Placement => ({ x, y, w, h });
@@ -98,5 +101,216 @@ describe('screenGrowth (render-only growth)', () => {
     const g = screenGrowth(list, m(40));
     expect(g.get('a')!.placement.y).toBe(5);
     expect(g.get('b')!.placement.y).toBe(7);
+  });
+});
+
+// A folder opened inside a folder: the outer box is drawn tall enough for ALL its items, up to about
+// one screen; past that its page bar pages them. Render-only, like the narrow-screen growth.
+describe('drilledFolderRows (the rows a drilled folder wants)', () => {
+  const box = p(0, 0, 24, 4);
+  const shown = (h: number, levels: number, count: number, cell = 50, size = 'medium', pl = box) =>
+    nestedPaging(openFolderContentBox(nodeBox({ ...pl, h }, m(cell)), 'folder-flat'), levels, size, cell, count, 0);
+  const rows = (levels: number, count: number, maxRows = 40, cell = 50, size = 'medium', pl = box) =>
+    drilledFolderRows({ shape: 'folder-flat' }, pl, m(cell), { levels, contentSize: size, count }, maxRows);
+
+  it('all the items fit: the smallest box showing every one on one page, with no page bar', () => {
+    const h = rows(1, 4);
+    expect(h).toBeGreaterThan(4);
+    expect(shown(h, 1, 4)).toMatchObject({ noRoom: false, pages: 1, pageBar: false });
+    expect(shown(h - 1, 1, 4).noRoom).toBe(true); // one row less would not do
+  });
+
+  it('asks for every row of items: more items than a row want more rows, and it stays the smallest box', () => {
+    const h = rows(1, 60);
+    expect(h).toBeGreaterThan(rows(1, 4));
+    expect(shown(h, 1, 60).pages).toBe(1);
+    expect(shown(h - 1, 1, 60).pages).toBeGreaterThan(1);
+  });
+
+  it('already fits: exactly the stored rows', () => {
+    const tall = p(0, 0, 24, 10);
+    expect(rows(1, 4, 40, 50, 'medium', tall)).toBe(10);
+  });
+
+  it('a cap is honoured: the page bar then pages the rest, and the box is never above it', () => {
+    const h = rows(1, 300, 12);
+    expect(h).toBe(12);
+    expect(shown(h, 1, 300)).toMatchObject({ noRoom: false, pageBar: true });
+  });
+
+  it('a cap never leaves less than one row of items (and the page bar they need)', () => {
+    const h = rows(1, 60, 2);
+    expect(h).toBeGreaterThan(2);
+    expect(shown(h, 1, 60).noRoom).toBe(false);
+    expect(shown(h - 1, 1, 60).noRoom).toBe(true);
+    // An unmeasured window (a cap of 0) does the same.
+    expect(rows(1, 60, 0)).toBe(h);
+  });
+
+  it('a stored box above the cap keeps its size and never shrinks', () => {
+    expect(rows(1, 300, 12, 50, 'medium', p(0, 0, 24, 20))).toBe(20);
+  });
+
+  it('a folder three levels deep counts every inset bar', () => {
+    const h = rows(3, 4);
+    expect(h).toBeGreaterThan(rows(1, 4));
+    expect(shown(h, 3, 4)).toMatchObject({ noRoom: false, pages: 1 });
+    expect(shown(h - 1, 3, 4).noRoom).toBe(true);
+  });
+
+  it('too narrow for one item at this depth: no height can help, so none is asked for', () => {
+    const thin = p(0, 0, 2, 4);
+    expect(rows(1, 4, 40, 40, 'medium', thin)).toBe(4);
+    expect(shown(4, 1, 4, 40, 'medium', thin).noRoom).toBe(true); // the note stays
+  });
+
+  it('an empty sub-folder still gets room for its bars and its note, nothing more', () => {
+    const short = p(0, 0, 24, 3);
+    const h = rows(3, 0, 40, 40, 'medium', short);
+    const content = openFolderContentBox(nodeBox({ ...short, h }, m(40)), 'folder-flat');
+    expect(content.heightPx - 3 * NESTED_LEVEL_Y_PX + 2 * NESTED_CHROME.padPx).toBeGreaterThanOrEqual(24);
+    expect(h).toBeLessThan(rows(3, 1, 40, 40, 'medium', short));
+  });
+
+  it('every contents size, every shape: the wanted box shows every item', () => {
+    for (const size of ['small', 'medium', 'large']) {
+      for (const shape of ['rounded', 'simple-tab', 'folder-open']) {
+        const h = drilledFolderRows({ shape }, box, m(50), { levels: 2, contentSize: size, count: 30 }, 60);
+        const g = nestedPaging(openFolderContentBox(nodeBox({ ...box, h }, m(50)), shape), 2, size, 50, 30, 0);
+        expect(g, `${size} ${shape}`).toMatchObject({ noRoom: false, pages: 1 });
+      }
+    }
+  });
+});
+
+describe('screenRows (the cap: one screen below the navbar)', () => {
+  it('whole rows of the window below the navbar', () => {
+    expect(screenRows(1000 + NAVBAR_PX, 50)).toBe(20);
+    expect(screenRows(1049 + NAVBAR_PX, 50)).toBe(20);
+  });
+  it('an unmeasured window or row is no rows, never NaN or Infinity', () => {
+    expect(screenRows(0, 50)).toBe(0);
+    expect(screenRows(1000, 0)).toBe(0);
+  });
+});
+
+describe('screenGrowth with a drilled folder', () => {
+  const sub = (id: string, n: number, extra: Record<string, unknown> = {}) => folder(id, p(0, 0, 1, 1), n, extra) as unknown as FolderNode;
+  /** `paths`: folder id -> the sub-folders drilled into. */
+  const drills = (paths: Record<string, FolderNode[]>, rows = 40) => ({ path: (f: FolderNode) => paths[f.id] ?? [], maxRows: () => rows });
+  const wantAt = (cell: number, pl: Placement, count: number, levels = 1, rows = 40) =>
+    drilledFolderRows({ shape: 'folder-flat' }, pl, m(cell), { levels, contentSize: 'medium', count }, rows);
+
+  it('grows the box to the wanted rows and pushes what is below by the same amount; stored values untouched', () => {
+    const list = [folder('f', p(0, 0, 24, 4)), tile('t', p(4, 4, 2, 2))];
+    const want = wantAt(50, p(0, 0, 24, 4), 4);
+    const g = screenGrowth(list, m(50), drills({ f: [sub('s', 4)] }));
+    expect(g.get('f')).toEqual({ placement: p(0, 0, 24, want), extra: want - 4 });
+    expect(g.get('t')).toEqual({ placement: p(4, want, 2, 2), extra: 0 });
+    expect(list[0].placement).toEqual(p(0, 0, 24, 4));
+    expect(list[1].placement).toEqual(p(4, 4, 2, 2));
+  });
+
+  it('no sub-folder open, or one that fits: exactly as without a drill, at every width', () => {
+    const list = [folder('f', p(0, 0, 24, 12)), tile('t', p(0, 12, 2, 2))];
+    for (const cell of [32, 40, 50, 77, 104]) {
+      expect(screenGrowth(list, m(cell), drills({}))).toEqual(screenGrowth(list, m(cell)));
+    }
+    expect(screenGrowth(list, m(50), drills({ f: [sub('s', 2)] })).size).toBe(0);
+  });
+
+  it('only the columns it covers move; what is beside it stays', () => {
+    const list = [folder('f', p(0, 0, 12, 4)), tile('beside', p(12, 0, 2, 2)), tile('below', p(0, 4, 2, 2)), tile('far', p(14, 6, 2, 2))];
+    const g = screenGrowth(list, m(50), drills({ f: [sub('s', 4)] }));
+    expect(g.get('f')!.extra).toBeGreaterThan(0);
+    expect(g.get('below')!.placement.y).toBe(4 + g.get('f')!.extra);
+    expect(g.has('beside')).toBe(false);
+    expect(g.has('far')).toBe(false);
+  });
+
+  it('pushes are transitive, and two drilled folders stacked add up', () => {
+    const list = [folder('a', p(0, 0, 24, 4)), folder('b', p(0, 4, 12, 4)), tile('c', p(0, 8, 2, 2))];
+    const g = screenGrowth(list, m(50), drills({ a: [sub('s', 4)], b: [sub('t', 4)] }));
+    const ea = g.get('a')!.extra, eb = g.get('b')!.extra;
+    expect(ea).toBeGreaterThan(0);
+    expect(eb).toBeGreaterThan(0);
+    expect(g.get('b')!.placement.y).toBe(4 + ea);
+    expect(g.get('c')!.placement.y).toBe(8 + ea + eb);
+  });
+
+  it('two drilled folders side by side each grow for their own items and push only their own columns', () => {
+    const list = [
+      folder('l', p(0, 0, 12, 4)), folder('r', p(12, 0, 12, 4)), tile('ul', p(0, 4, 2, 2)), tile('ur', p(12, 4, 2, 2))
+    ];
+    const g = screenGrowth(list, m(50), drills({ l: [sub('s', 4)], r: [sub('t', 40)] }));
+    expect(g.get('r')!.extra).toBeGreaterThan(g.get('l')!.extra);
+    expect(g.get('ul')!.placement.y).toBe(4 + g.get('l')!.extra);
+    expect(g.get('ur')!.placement.y).toBe(4 + g.get('r')!.extra);
+  });
+
+  it('the narrow-screen growth and the drill are one height: the larger, never added', () => {
+    // At a 40 px cell this box already grows a row for its own page; a small sub-folder needs less.
+    const list = [folder('f', p(0, 0, 24, 4)), tile('t', p(0, 4, 2, 2))];
+    const narrow = screenGrowth(list, m(40)).get('f')!.extra;
+    expect(narrow).toBe(1);
+    const small = screenGrowth(list, m(40), drills({ f: [sub('s', 1, { contentSize: 'small' })] }));
+    const want = wantAt(40, p(0, 0, 24, 4), 40);
+    const big = screenGrowth(list, m(40), drills({ f: [sub('s', 40)] }));
+    expect(small.get('f')!.extra).toBeGreaterThanOrEqual(narrow);
+    expect(big.get('f')!.extra).toBe(want - 4);
+    expect(big.get('t')!.placement.y).toBe(want);
+  });
+
+  it('a minimised folder keeps a remembered drill out of it (it is not drawn), and a flow never grows', () => {
+    const list = [folder('f', p(0, 0, 24, 4), 12, { display: 'collapsed' })];
+    expect(screenGrowth(list, m(50), drills({ f: [sub('s', 4)] })).size).toBe(0);
+    const open = [folder('f', p(0, 0, 24, 4))];
+    expect(screenGrowth(open, { ...m(50), flow: { span: 2, perRow: 4 } }, drills({ f: [sub('s', 4)] })).size).toBe(0);
+  });
+
+  it('never makes an overlap that was not stored: random packed layouts with random drills', () => {
+    let seed = 11;
+    const rnd = (n: number) => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) % n);
+    for (let run = 0; run < 200; run++) {
+      const list: ReturnType<typeof folder | typeof tile>[] = [];
+      const paths: Record<string, FolderNode[]> = {};
+      let x = 0, y = 0, shelf = 0;
+      for (let i = 0; i < 12; i++) {
+        const isF = rnd(2) === 0;
+        const w = isF ? 3 + rnd(10) : 2, h = isF ? 3 + rnd(3) : 2;
+        if (x + w > 24) { x = 0; y += shelf; shelf = 0; }
+        list.push(isF ? folder(`n${i}`, p(x, y, w, h), rnd(20)) : tile(`n${i}`, p(x, y, w, h)));
+        if (isF && rnd(2) === 0) paths[`n${i}`] = Array.from({ length: 1 + rnd(3) }, (_, d) => sub(`s${i}-${d}`, rnd(40)));
+        x += w + rnd(2);
+        shelf = Math.max(shelf, h + rnd(2));
+      }
+      for (const cell of [32, 40, 50, 77]) {
+        const g = screenGrowth(list, m(cell), drills(paths, 8 + rnd(20)));
+        const drawn = list.map((n) => clampPlacement(g.get(n.id)?.placement ?? n.placement, 24));
+        for (let i = 0; i < drawn.length; i++) {
+          for (let j = i + 1; j < drawn.length; j++) {
+            const a = drawn[i], b = drawn[j];
+            const meet = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+            expect(meet, `run ${run} cell ${cell}: ${list[i].id} / ${list[j].id}`).toBe(false);
+          }
+        }
+      }
+    }
+  });
+
+  it('wanted rows read the STORED box: the same drill always gives the same growth (no feedback)', () => {
+    const list = [folder('f', p(0, 0, 24, 4))];
+    const once = screenGrowth(list, m(50), drills({ f: [sub('s', 60)] }, 10));
+    const grown = [folder('f', once.get('f')!.placement)];
+    expect(once.get('f')!.placement.h).toBe(10);
+    expect(screenGrowth(grown, m(50), drills({ f: [sub('s', 60)] }, 10)).size).toBe(0);
+  });
+
+  it('sizeSpan of the sub-folder, not the outer folder, sets what is wanted', () => {
+    const list = [folder('f', p(0, 0, 24, 4), 12, { contentSize: 'small' })];
+    const large = screenGrowth(list, m(50), drills({ f: [sub('s', 2, { contentSize: 'large' })] })).get('f')!;
+    const small = screenGrowth(list, m(50), drills({ f: [sub('s', 2, { contentSize: 'small' })] })).get('f');
+    expect(sizeSpan('large')).toBeGreaterThan(sizeSpan('small'));
+    expect(large.extra).toBeGreaterThan(small?.extra ?? 0);
   });
 });

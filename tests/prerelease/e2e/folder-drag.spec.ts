@@ -437,7 +437,7 @@ test.describe('drag and drop in ordered, paged folders', () => {
     await saveDraft(page);
     expect(find(await savedRoot(page, f.id('dash')), f.id('f'))!.placement).toMatchObject({ x: 0, y: 0, w: 5, h: 6 });
     // Drilled into the Large sub-folder: never clipped. At the reference cell the minimum has no slack
-    // for the inset box's own bar, so the inset level says "Not enough room" instead of a page.
+    // for the inset box's own bar, so in edit mode the inset level says "Not enough room" instead of a page.
     await node(page, f.id('s')).locator('.folder-collapsed-tile').focus();
     await page.keyboard.press('Enter');
     const fb = await box(fbox);

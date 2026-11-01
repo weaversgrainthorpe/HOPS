@@ -242,7 +242,7 @@ describe('route resolution and reveal lifetime', () => {
   });
 
   it('search reveal: opens the folder chain in place, drills down, flips to the tile\'s page and focuses it', async () => {
-    const kids = Array.from({ length: 12 }, (_, i) => entry(`k${i + 1}`, `Kid${i + 1}`));
+    const kids = Array.from({ length: 100 }, (_, i) => entry(`k${i + 1}`, `Kid${i + 1}`));
     const sub = { kind: 'folder', id: 'sb', name: 'Sub', display: 'expanded', size: 'medium', contentSize: 'medium', content: { children: kids } };
     const deep: LayoutDashboard = {
       ...legacy,
@@ -253,16 +253,17 @@ describe('route resolution and reveal lifetime', () => {
     config.set(cfg([deep, v3d]));
     const { container } = render(Dashboard, { dashboard: deep });
     await tick();
-    requestReveal({ dashboardId: 'd1', tabId: 't2', folderIds: ['box2', 'sb'], tileId: 'k12' });
-    // An 8 x 6 box at 60 px cells: 462 x 302 content; Sub's inset box inside it 444 x 256 → 3 a
-    // row; overfull, so the page bar leaves 1 row (3) a page: k12 is on page 4.
-    await waitFor(() => expect(container.querySelector('.tab-canvas [data-node-id="k12"]')).not.toBeNull());
+    requestReveal({ dashboardId: 'd1', tabId: 't2', folderIds: ['box2', 'sb'], tileId: 'k100' });
+    // An 8 wide box at 60 px cells grows to one screen (768 - 71 = 11 rows): 660 high, so Sub's inset
+    // box inside it has 462 - 18 = 444 x 532 → 3 a row; overfull, so the page bar leaves 4 rows (12)
+    // a page: k100 is on page 9.
+    await waitFor(() => expect(container.querySelector('.tab-canvas [data-node-id="k100"]')).not.toBeNull());
     expect(get(folderViewFor('d1'))).toEqual({ box2: 'expanded' });
-    expect(get(folderNavFor('d1'))).toEqual({ drill: { box2: ['sb'] }, page: { sb: 3 } });
-    expect(container.querySelector('[data-folder-page]')!.getAttribute('data-folder-page')).toBe('3');
-    expect(container.querySelector('.nested-box[data-nested-folder="sb"] [data-node-id="k12"]')).not.toBeNull(); // in Sub's inset box
+    expect(get(folderNavFor('d1'))).toEqual({ drill: { box2: ['sb'] }, page: { sb: 8 } });
+    expect(container.querySelector('[data-folder-page]')!.getAttribute('data-folder-page')).toBe('8');
+    expect(container.querySelector('.nested-box[data-nested-folder="sb"] [data-node-id="k100"]')).not.toBeNull(); // in Sub's inset box
     expect(container.querySelector('.tab-canvas [data-node-id="k1"]')).toBeNull(); // only the current page renders
-    await waitFor(() => expect(container.querySelector('[data-node-id="k12"]')!.contains(document.activeElement)).toBe(true));
+    await waitFor(() => expect(container.querySelector('[data-node-id="k100"]')!.contains(document.activeElement)).toBe(true));
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 });

@@ -309,23 +309,23 @@ describe('drilling into a sub-folder: a folder inside a folder, one inset box a 
     expect(page(container).getAttribute('data-folder-id')).toBe('s');
     expect(nested(container, 's')).not.toBeNull();
   });
-  it('each level remembers its own page; the inset box pages in its own (smaller) box', async () => {
+  it('each level remembers its own page; edit mode pages the inset box in its stored (smaller) box', async () => {
     setFolderDrill('d1', 'f', ['s']);
     setFolderPage('d1', 's', 1);
     setFolderPage('d1', 'f', 1);
     // f's content 702 x 302; s's box inside it 684 x 256 → 5 a row, 2 rows; 12 items → page bar → 1 row of 5.
-    const { container } = await renderTab([folder('f', [...kids(11), sub('s', kids(12, 'x'))])]);
+    const { container } = await renderEditing([folder('f', [...kids(11), sub('s', kids(12, 'x'))])]);
     expect(page(container).getAttribute('data-folder-per-page')).toBe('5');
     expect(shownIds(container)).toEqual(['x6', 'x7', 'x8', 'x9', 'x10']);
     expect(nested(container, 's').querySelector('[data-page-bar="next"]')).not.toBeNull();
     await fireEvent.click(el(container, 'f').querySelector('.folder-header .title-button')!);
     expect(shownIds(container)).toEqual(['k11', 's']); // f's own page 2
   });
-  it('not enough room: a deep level in a small folder says so visibly, and draws no clipped items', async () => {
+  it('edit mode, not enough room in the stored box: a deep level says so visibly, and draws no clipped items', async () => {
     setFolderDrill('d1', 'f', ['s', 's2']);
     // 4 x 5 at 60 px cells: content 222 x 242; a level takes 70 px (24 tab allowance + 28 bar + 18):
     // s 204 x 172 (fits a 120 px item); s2 186 x 102 (does not).
-    const { container } = await renderTab([folder('f', [sub('s', [sub('s2', [kid('deeper')])])], { placement: { x: 0, y: 0, w: 4, h: 5 } })]);
+    const { container } = await renderEditing([folder('f', [sub('s', [sub('s2', [kid('deeper')])])], { placement: { x: 0, y: 0, w: 4, h: 5 } })]);
     const note = el(container, 'f').querySelector('[data-folder-no-room]') as HTMLElement;
     expect(note).not.toBeNull();
     expect(note.textContent).toMatch(/Not enough room — make the folder bigger/);
@@ -338,25 +338,42 @@ describe('drilling into a sub-folder: a folder inside a folder, one inset box a 
     expect(el(container, 'f').querySelector('[data-folder-no-room]')).toBeNull();
     expect(shownIds(container)).toEqual(['s2']);
   });
-  it('room for one item but not for the page bar its items need: "Not enough room", nothing clipped', async () => {
+  it('edit mode, room for one item but not for the page bar its items need: "Not enough room", nothing clipped', async () => {
     setFolderDrill('d1', 'f', ['a', 'b', 'c', 's']);
     // 4 x 8 at 60 px: content 222 x 422; four levels in (70 px each) s's box is 150 x 142: it holds
     // one 120 px item, but 3 items need a page bar (142 - 32 < 120).
     const deep = sub('a', [sub('b', [sub('c', [sub('s', kids(3, 'x'))])])]);
-    const { container } = await renderTab([folder('f', [deep], { placement: { x: 0, y: 0, w: 4, h: 8 } })]);
+    const { container } = await renderEditing([folder('f', [deep], { placement: { x: 0, y: 0, w: 4, h: 8 } })]);
     expect(el(container, 'f').querySelector('[data-folder-no-room]')).not.toBeNull();
     expect(container.querySelector('[data-node-id="x1"]')).toBeNull();
     expect(container.querySelector('[data-page-bar]')).toBeNull();
   });
-  it('so deep the inset bars run out of room: the note is on the folder\'s own body, always seen', async () => {
+  it('edit mode, so deep the inset bars run out of room: the note is on the folder\'s own body, always seen', async () => {
     setFolderDrill('d1', 'f', ['a', 'b', 'c', 'd']);
     // 4 x 4 at 60 px: content 182 px high; four inset levels need 4 x 70 = 280 px of tabs, bars and padding.
     const deep = sub('a', [sub('b', [sub('c', [sub('d', [kid('z')])])])]);
-    const { container } = await renderTab([folder('f', [deep], { placement: { x: 0, y: 0, w: 4, h: 4 } })]);
+    const { container } = await renderEditing([folder('f', [deep], { placement: { x: 0, y: 0, w: 4, h: 4 } })]);
     const note = el(container, 'f').querySelector(':scope > .folder-body > [data-folder-no-room]');
     expect(note).not.toBeNull();
     expect(note!.textContent).toMatch(/Not enough room — make the folder bigger/);
     expect(el(container, 'f').querySelectorAll('[data-folder-no-room]')).toHaveLength(1);
+  });
+  it('outside edit mode the same folder is drawn taller and shows its items; the stored box is untouched', async () => {
+    setFolderDrill('d1', 'f', ['s', 's2']);
+    const f = folder('f', [sub('s', [sub('s2', [kid('deeper')])])], { placement: { x: 0, y: 0, w: 4, h: 5 } });
+    const { container } = await renderTab([f]);
+    expect(el(container, 'f').querySelector('[data-folder-no-room]')).toBeNull();
+    expect(container.querySelector('[data-node-id="deeper"]')).not.toBeNull();
+    expect(Number(el(container, 'f').getAttribute('data-render-grown'))).toBeGreaterThan(0);
+    expect(f.placement.h).toBe(5);
+  });
+  it('outside edit mode, too narrow for one item: the note tells a viewer nothing about resizing', async () => {
+    setFolderDrill('d1', 'f', ['s']);
+    const f = folder('f', [sub('s', [kid('wide')], { contentSize: 'large' })], { placement: { x: 0, y: 0, w: 4, h: 5 } });
+    const { container } = await renderTab([f]);
+    const note = el(container, 'f').querySelector('[data-folder-no-room]');
+    expect(note?.textContent).toBe('Not enough room to show this folder.');
+    expect(container.querySelector('[data-node-id="wide"]')).toBeNull();
   });
   it('an untitled sub-folder\'s inset bar says "Untitled folder" (muted), and an outer one goes up', async () => {
     setFolderDrill('d1', 'f', ['s', 's2']);

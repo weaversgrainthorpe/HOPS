@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { innerHeight } from 'svelte/reactivity/window';
   import type { Container, FolderNode, LayoutDashboard, LayoutNode, LayoutTab } from '$lib/types/layout';
   import type { CanvasPlan, ContainerMetrics } from '$lib/layout/geometry';
-  import { clampPlacement, hasPosition, isPlaced, isRenderable, readingOrder, nodeFit, spanFit, screenGrowth } from '$lib/layout/geometry';
+  import { clampPlacement, hasPosition, isPlaced, isRenderable, readingOrder, nodeFit, spanFit, screenGrowth, screenRows } from '$lib/layout/geometry';
+  import { folderNavFor, resolveDrill } from '$lib/stores/folderView';
   import type { Placement } from '$lib/types/layout';
   import Entry from '../Entry.svelte';
   import Folder from './Folder.svelte';
@@ -113,7 +115,14 @@
 
   // rule 3: render-only growth on a tab grid. View mode draws it; edit mode draws the SAVED
   // boxes (drag/drop geometry stays exact) and a folder that would grow says so in place (option A).
-  const growth = $derived(!isFolder && effective === 'grid' ? screenGrowth(ordered, metrics) : new Map());
+  // A folder drilled into a sub-folder that doesn't fit grows the same way, read here from the same
+  // memory the folder reads, in the same render. The window's height is read only when one is drilled.
+  const nav = $derived(folderNavFor(dashboard.id));
+  const drill = $derived({
+    path: (f: FolderNode) => resolveDrill(f, $nav.drill[f.id]),
+    maxRows: () => screenRows(innerHeight.current ?? 0, metrics.rowPx)
+  });
+  const growth = $derived(!isFolder && effective === 'grid' ? screenGrowth(ordered, metrics, editing ? undefined : drill) : new Map());
   const drawGrowth = $derived(!editing);
   /** The placement drawn on this screen: the stored one, or the grown one in view mode. */
   function drawnPlacement(n: LayoutNode): Placement {

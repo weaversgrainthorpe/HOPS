@@ -419,7 +419,9 @@ export const NO_ROOM_NOTE_PX = 24;
  * even one item at its contents size, or not the page bar its items need (tooSmall) — so Folder.svelte
  * says "Not enough room" and draws no clipped items. `noRoomInside`: the innermost box's body is tall
  * enough to hold that note; otherwise (the inset bars themselves run out of room) the note goes on the
- * folder's own body, where it is always seen. Opening a sub-folder never resizes the saved box.
+ * folder's own body, where it is always seen. Opening a sub-folder never resizes the saved box: outside
+ * edit mode the box is drawn taller instead (drilledFolderRows, screenGrowth), so this note is left for
+ * what height can't help (too narrow for one item) and for edit mode, which shows the saved box.
  */
 export function nestedPaging(
   content: { widthPx: number; heightPx: number }, levels: number, contentSize: unknown, cellPx: number, count: number, page: number
@@ -633,17 +635,57 @@ export function tabSpan(
 
 // ---------------------------------------------------------------- render-only growth 
 
+/** The navbar's height (Navbar.svelte: a 70 px bar and its 1 px border). */
+export const NAVBAR_PX = 71;
+
+/** Whole rows of `rowPx` in one screen below the navbar: the most a drilled folder grows to. */
+export function screenRows(viewportHeightPx: number, rowPx: number): number {
+  if (!(rowPx > 0)) return 0;
+  return Math.max(0, Math.floor((nonNeg(viewportHeightPx) - NAVBAR_PX) / rowPx));
+}
+
+/**
+ * The rows (never fewer than stored) the open folder `p` wants to be drawn so the sub-folder it is
+ * drilled into shows: every one of `count` items at `contentSize`, `levels` inset boxes in. Above
+ * `maxRows` it stops and the page bar pages the rest, though never below one row of items and the page
+ * bar they need. Too narrow for one item: height can't help, so the stored rows (its note stays).
+ * Empty: room for the inset bars and the note saying so.
+ * Reads only the stored box and this width (a box's content width does not depend on its height), so
+ * growing can never change what is wanted. The test is nestedPaging itself: what is drawn agrees.
+ */
+export function drilledFolderRows(
+  folder: { shape?: unknown; tabPosition?: unknown }, p: Pick<Placement, 'w' | 'h'>, m: ContainerMetrics,
+  drill: { levels: number; contentSize: unknown; count: number }, maxRows: number
+): number {
+  const { levels, contentSize, count } = drill;
+  const content = (h: number) => openFolderContentBox(nodeBox({ x: 0, y: 0, w: p.w, h }, m), folder.shape, folder.tabPosition);
+  const paging = (h: number) => nestedPaging(content(h), levels, contentSize, m.unitPx, count, 0);
+  const canShow = (h: number) =>
+    count > 0 ? !paging(h).noRoom : content(h).heightPx - levels * NESTED_LEVEL_Y_PX + 2 * NESTED_CHROME.padPx >= NO_ROOM_NOTE_PX;
+  const showsAll = (h: number) => canShow(h) && paging(h).pages === 1;
+  if (!(m.unitPx > 0) || !(m.rowPx > 0)) return p.h;
+  if (count > 0 && nestedContentBox(content(p.h), levels).widthPx + 0.5 < paging(p.h).itemPx) return p.h;
+  let h = p.h;
+  while (h < maxRows && !showsAll(h)) h++;
+  while (!canShow(h)) h++; // the floor: past the cap if it must be. It ends: the width fits one item.
+  return h;
+}
+
 /**
  * rule 3: an open folder on a tab whose STORED box is too short at THIS screen's cell (its
  * page cannot show one row, or one row plus the page bar it needs) is drawn taller, row by row, until
  * it can; everything below it in the columns it covers moves down by the same amount, transitively
  * (an item is pushed by the most any item above it in an overlapping column was pushed or grew).
  * Render-only: never saved, never in edit mode (edit mode shows the stored box and says it is taller
- * here). Proof of no new overlap: if A is above B in a shared column (A.y + A.h <= B.y) then
+ * here). A folder drilled into a sub-folder (`drill`, this browser's memory) is drawn taller the same
+ * way, to the larger of that and drilledFolderRows: the two are one height, never added, and each is
+ * measured at this cell. Proof of no new overlap: if A is above B in a shared column (A.y + A.h <= B.y) then
  * delta(B) >= delta(A) + extra(A), so B.y' >= A.y' + A.h'. Items in disjoint columns cannot meet.
  * Returns only the nodes whose drawn placement differs, by id, with `extra` rows of growth.
  */
-export function screenGrowth(kids: unknown[], m: ContainerMetrics): Map<string, { placement: Placement; extra: number }> {
+export function screenGrowth(
+  kids: unknown[], m: ContainerMetrics, drill?: { path: (f: FolderNode) => FolderNode[]; maxRows: () => number }
+): Map<string, { placement: Placement; extra: number }> {
   const out = new Map<string, { placement: Placement; extra: number }>();
   if (!(m.unitPx > 0) || m.flow) return out;
   type N = { id: string; p: Placement; extra: number; delta: number };
@@ -660,6 +702,13 @@ export function screenGrowth(kids: unknown[], m: ContainerMetrics): Map<string, 
       // Only height is grown: a box too NARROW for one item keeps its visible "too small" note.
       const narrow = content(p.h).widthPx + 0.5 < sizeSpan(f.contentSize) * m.unitPx;
       while (!narrow && extra < 24 && short(p.h + extra)) extra++;
+      const path = drill?.path(f) ?? [];
+      if (path.length > 0) {
+        const shown = path[path.length - 1];
+        const items = Array.isArray(shown.content?.children) ? shown.content.children.length : 0;
+        const wanted = { levels: path.length, contentSize: shown.contentSize, count: items };
+        extra = Math.max(extra, drilledFolderRows(f, p, m, wanted, drill!.maxRows()) - p.h);
+      }
     }
     nodes.push({ id: (k as { id: string }).id, p, extra, delta: 0 });
   }
