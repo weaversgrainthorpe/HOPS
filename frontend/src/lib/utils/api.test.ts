@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { getCSRFToken, withCSRFHeader, checkAuth, getConfig, getConfigFor, getDashboard, setSessionExpiredHandler } from './api';
+import { getCSRFToken, withCSRFHeader, checkAuth, getConfig, getConfigFor, getDashboard, setSessionExpiredHandler, AUTH_CHECK_TIMEOUT_MS } from './api';
 import { KEPT_HEADER, isKept } from './swCache';
 
 describe('getCSRFToken', () => {
@@ -155,6 +155,41 @@ describe('checkAuth', () => {
 		answer(401, { error: 'unauthorized' });
 		expect(await checkAuth()).toEqual({ authenticated: false, mustChangePassword: false });
 		expect(expired).toHaveBeenCalledTimes(1);
+	});
+	it('a wedged server: the check ends as unknown', async () => {
+		vi.useFakeTimers();
+		try {
+			let signal: AbortSignal | undefined;
+			vi.stubGlobal('fetch', vi.fn((_u: string, init: RequestInit) => {
+				signal = init.signal ?? undefined;
+				return new Promise((_res, rej) => signal!.addEventListener('abort', () => rej(new DOMException('Aborted', 'AbortError'))));
+			}));
+			const check = checkAuth();
+			await vi.advanceTimersByTimeAsync(AUTH_CHECK_TIMEOUT_MS);
+			expect(await check).toEqual({ authenticated: false, mustChangePassword: false, unknown: true });
+			expect(signal?.aborted).toBe(true);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+	it('an answer that stalls part way through: unknown too', async () => {
+		vi.useFakeTimers();
+		try {
+			let signal: AbortSignal | undefined;
+			vi.stubGlobal('fetch', vi.fn(async (_u: string, init: RequestInit) => {
+				signal = init.signal ?? undefined;
+				return {
+					ok: true, status: 200,
+					text: () => new Promise((_res, rej) => signal!.addEventListener('abort', () => rej(new DOMException('Aborted', 'AbortError'))))
+				};
+			}));
+			const check = checkAuth();
+			await vi.advanceTimersByTimeAsync(AUTH_CHECK_TIMEOUT_MS);
+			expect((await check).unknown).toBe(true);
+			expect(signal?.aborted).toBe(true);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 	it('signed in', async () => {
 		answer(200, { authenticated: true, mustChangePassword: true });

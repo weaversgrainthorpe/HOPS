@@ -34,6 +34,8 @@ import {
   configError,
   layoutStale,
   showingKept,
+  configReadRunning,
+  retryLoadForPage,
   applySavedLayout,
   loadConfig,
   otherDashboards,
@@ -539,6 +541,47 @@ describe('showing a kept copy', () => {
     await loadConfig({ background: true });
     expect(get(showingKept)).toBe(false);
     expect(get(config)?.dashboards[0].revision).toBe(2);
+  });
+
+  describe('a quiet retry and a one-dashboard read', () => {
+    beforeEach(async () => {
+      getConfig.mockImplementation(() => new Promise(() => {}));
+      getConfigFor.mockResolvedValueOnce(idx('r1', full('a', 1), index('b', 1)));
+      await loadConfig({ dashboard: 'a' });
+      resetRest();
+    });
+    // The background read of the rest is parked above: forget it, as if it had ended.
+    const resetRest = () => retryLoadForPage();
+
+    it('counts as a read running, so a retry waits for it', async () => {
+      getConfigFor.mockImplementation(() => new Promise(() => {}));
+      getDashboard.mockImplementation(() => new Promise(() => {}));
+      void fetchDashboard('b');
+      expect(get(dashboardFetches).b).toBe('loading');
+      expect(configReadRunning()).toBe(true);
+    });
+
+    for (const [how, finish] of [
+      ['answers', (d: ReturnType<typeof deferred<Awaited<ReturnType<typeof api.getDashboard>>>>) => d.resolve({ dashboard: full('b', 1), revision: 1, configRevision: 'r1' })],
+      ['fails', (d: ReturnType<typeof deferred<Awaited<ReturnType<typeof api.getDashboard>>>>) => d.reject(new Error('nope'))]
+    ] as const) {
+      it(`superseded by one, a read that ${how} isn't left loading for ever`, async () => {
+        const read = deferred<Awaited<ReturnType<typeof api.getDashboard>>>();
+        getDashboard.mockReturnValueOnce(read.promise);
+        const running = fetchDashboard('b');
+        getConfigFor.mockResolvedValueOnce(idx('r1', full('a', 1), index('b', 1)));
+        await retryLoadForPage();
+        finish(read);
+        await running;
+        expect(get(dashboardFetches).b).toBeUndefined();
+      });
+    }
+  });
+
+  it('a whole load always has a time limit: retries wait for a running load', async () => {
+    getConfig.mockResolvedValue(doc(full('a', 1)));
+    await loadConfig();
+    expect(getConfig).toHaveBeenCalledWith({ timeoutMs: WHOLE_LOAD_TIMEOUT_MS });
   });
 
   it('a failed migration leaves nothing held, so no saved-copy banner over it', async () => {

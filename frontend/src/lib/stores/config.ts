@@ -322,7 +322,9 @@ async function runLoad(seq: number, light: boolean, opts: LoadOptions) {
       if (hasPartialDashboards(answer.config)) void startRest(seq, opts.afterMismatch === true).catch(() => undefined);
       else otherDashboards.set('ready');
     } else {
-      const data = await (partialHeld ? getConfig({ timeoutMs: WHOLE_LOAD_TIMEOUT_MS }) : getConfig());
+      // Bounded even with nothing partial held: retries wait for a running load, so a stuck one
+      // would stop them all.
+      const data = await getConfig({ timeoutMs: WHOLE_LOAD_TIMEOUT_MS });
       if (seq !== loadSeq) return;
       adoptLoaded(data);
       heldConfigRevision = null;
@@ -356,9 +358,9 @@ export function retryLoadForPage(): Promise<void> {
   return loadConfig(viewer ? { quiet: true, background: true, dashboard: viewerKey() } : { quiet: true, background: true });
 }
 
-/** Whether a config read is running (the background one for the other dashboards included). */
+/** Whether a config read is running: a load, the background one for the other dashboards, or one dashboard's. */
 export function configReadRunning(): boolean {
-  return inFlight !== null || rest !== null;
+  return inFlight !== null || rest !== null || Object.values(get(dashboardFetches)).includes('loading');
 }
 
 function adoptLoaded(data: Config): void {
@@ -478,7 +480,12 @@ export async function fetchDashboard(id: string): Promise<void> {
     });
   try {
     const answer = await getDashboard(id);
-    if (seq !== loadSeq) return; // a newer load owns the store (and reset dashboardFetches)
+    if (seq !== loadSeq) {
+      // A newer load owns the store. A quiet one left this entry in place: end it, so the route
+      // can fetch again if the dashboard is still only an index entry.
+      settle();
+      return;
+    }
     const held = get(config);
     const entry = held?.dashboards.find((d) => d.id === id);
     if (!held || !entry || entry.partial !== true) {
@@ -499,7 +506,10 @@ export async function fetchDashboard(id: string): Promise<void> {
     config.set({ ...held, dashboards: held.dashboards.map((d) => (d.id === id ? answer.dashboard : d)) });
     if (isKept(answer)) showingKept.set(true);
   } catch (error) {
-    if (seq !== loadSeq) return;
+    if (seq !== loadSeq) {
+      settle();
+      return;
+    }
     logError('Dashboard load', error);
     settle({ error: message(error, 'the request failed') });
   }

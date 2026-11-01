@@ -385,12 +385,26 @@ export interface AuthStatus {
 const AUTH_CHECK_UNREADABLE =
   "The answer wasn't one HOPS understands. If HOPS is behind a proxy, it may be asking for its own sign-in.";
 
+/** How long the session check may take, answer included. A wedged server counts as out of reach. */
+export const AUTH_CHECK_TIMEOUT_MS = 10_000;
+
 /** The four outcomes differ: signed in, signed out (200 or a 401), can't reach it, reached and failed. */
 export async function checkAuth(): Promise<AuthStatus> {
+  // AbortController and a timer: see fetchWithin. Retry joins a running check, so it must end.
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), AUTH_CHECK_TIMEOUT_MS);
+  try {
+    return await readAuthCheck(abort.signal);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readAuthCheck(signal: AbortSignal): Promise<AuthStatus> {
   const none = { authenticated: false, mustChangePassword: false };
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}/auth/check`, { credentials: 'same-origin' });
+    response = await fetch(`${API_BASE}/auth/check`, { credentials: 'same-origin', signal });
   } catch {
     return { ...none, unknown: true };
   }
