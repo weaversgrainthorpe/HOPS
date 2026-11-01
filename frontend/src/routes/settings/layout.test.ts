@@ -33,7 +33,8 @@ import * as api from '$lib/utils/api';
 import { goto } from '$app/navigation';
 import { page } from '$app/stores';
 import { toast } from '$lib/stores/toast';
-import { isAuthenticated, authChecked, authUnknown, mustChangePassword, clearMustChangePassword } from '$lib/stores/auth';
+import { backendStatus } from '$lib/stores/backendStatus';
+import { isAuthenticated, authChecked, authUnknown, authFailure, mustChangePassword, clearMustChangePassword } from '$lib/stores/auth';
 import { config, migrationFailure, otherDashboards, resetPartialLoadingForTests } from '$lib/stores/config';
 import { confirmModalState, closeConfirmModal } from '$lib/stores/confirmModal';
 import { begin, apply, resetEditSessionForTests, dirty } from '$lib/stores/editSession';
@@ -107,6 +108,23 @@ describe("settings shell, can't reach the server", () => {
 		expect(childShown()).toBe(false);
 	});
 
+	it('one notice, one Retry, whatever else knows the backend is down', async () => {
+		backendStatus.reset();
+		vi.mocked(api.getBackendVersion).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+		await backendStatus.check();
+		renderShell();
+		await screen.findByRole('alert');
+		expect(screen.getAllByRole('alert')).toHaveLength(1);
+		expect(screen.getAllByRole('button', { name: 'Retry' })).toHaveLength(1);
+		backendStatus.reset();
+	});
+
+	it('a way to sign in is always there', async () => {
+		renderShell();
+		await fireEvent.click(await screen.findByRole('button', { name: 'Sign in' }));
+		expect(await screen.findByRole('dialog', { name: 'Sign in' })).toBeTruthy();
+	});
+
 	it('an answer ends it: a session shows Settings, none shows the sign-in', async () => {
 		renderShell();
 		await screen.findByRole('alert');
@@ -131,6 +149,39 @@ describe("settings shell, can't reach the server", () => {
 		} finally {
 			vi.unstubAllGlobals();
 		}
+	});
+});
+
+describe('settings shell, the check failed with the server reached', () => {
+	beforeEach(() => {
+		isAuthenticated.set(false);
+		authFailure.set('The server could not issue a CSRF token.');
+	});
+	afterEach(() => authFailure.set(null));
+
+	it("shows the server's words, never \"can't reach\"", async () => {
+		renderShell();
+		const alert = await screen.findByRole('alert');
+		expect(alert.textContent).toContain('The server could not issue a CSRF token.');
+		expect(alert.textContent).not.toMatch(/reach/i);
+		expect(childShown()).toBe(false);
+	});
+
+	it('Sign in opens the dialog, Cancel comes back to the notice, signing in opens Settings', async () => {
+		apiLogin.mockResolvedValue({ mustChangePassword: false });
+		renderShell();
+		await fireEvent.click(await screen.findByRole('button', { name: 'Sign in' }));
+		const dlg = await screen.findByRole('dialog', { name: 'Sign in' });
+		await fireEvent.click(within(dlg).getByRole('button', { name: 'Cancel' }));
+		await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Sign in' })).toBeNull());
+		expect(gotoMock).not.toHaveBeenCalled();
+		expect((await screen.findByRole('alert')).textContent).toContain('CSRF');
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+		const again = await screen.findByRole('dialog', { name: 'Sign in' });
+		expect(again).toBeTruthy();
+		await signIn();
+		await waitFor(() => expect(childShown()).toBe(true));
 	});
 });
 

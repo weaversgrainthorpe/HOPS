@@ -1,6 +1,6 @@
 import { get } from 'svelte/store';
-import { authUnknown, initAuth } from './auth';
-import { configError, configLoading, migrationFailure, reloadForPage, showingKept } from './config';
+import { authFailure, authUnknown, initAuth } from './auth';
+import { configError, configReadRunning, migrationFailure, retryLoadForPage, showingKept } from './config';
 import { pageUnsaved, session } from './editSession';
 
 /**
@@ -12,8 +12,8 @@ import { pageUnsaved, session } from './editSession';
  * saved-copy banner stays up, until the next probe after they are done.
  */
 export function recoverFromOutage(): void {
-  if (get(authUnknown)) void initAuth();
+  if (get(authUnknown) || get(authFailure) !== null) void initAuth();
   if (get(session) !== null || get(pageUnsaved) || get(migrationFailure) !== null) return;
-  if (get(configLoading)) return; // the first load is still running
-  if (get(showingKept) || get(configError) !== null) void reloadForPage();
+  if (configReadRunning()) return; // never a second read on top: a slow server has enough to do
+  if (get(showingKept) || get(configError) !== null) void retryLoadForPage();
 }

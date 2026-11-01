@@ -212,6 +212,13 @@ export function hasPartialDashboards(c: LayoutDoc | null | undefined): boolean {
 /** Per dashboard id: the one-dashboard read the route started for an index entry, while it runs or after it failed. */
 export const dashboardFetches = writable<Record<string, 'loading' | { error: string }>>({});
 
+interface LoadOptions {
+  background?: boolean;
+  dashboard?: string;
+  afterMismatch?: boolean;
+  quiet?: boolean;
+}
+
 // Every loadConfig takes a new number; an answer that comes back after a newer load started is
 // dropped (the newer one owns the store), so answers from two loads are never mixed.
 let loadSeq = 0;
@@ -268,7 +275,10 @@ function viewerKey(): string {
 // `dashboard` (a viewer page's route segment, "" for "/") loads only that dashboard in full plus
 // the index of the rest, then the rest in the background (see above). Without it, or once the
 // whole config is wanted, the whole document is loaded.
-export function loadConfig(opts: { background?: boolean; dashboard?: string; afterMismatch?: boolean } = {}): Promise<void> {
+//
+// `quiet` is a retry nobody asked for: what the page shows (an error card and its Retry included)
+// stays exactly as it is until an answer lands. A failed one changes nothing a viewer can see.
+export function loadConfig(opts: LoadOptions = {}): Promise<void> {
   const seq = ++loadSeq;
   // The light read only ever replaces nothing or another index: once the store holds every
   // dashboard (or something needs them, an edit session included) it is never downgraded.
@@ -284,17 +294,18 @@ export function loadConfig(opts: { background?: boolean; dashboard?: string; aft
   return promise;
 }
 
-async function runLoad(seq: number, light: boolean, opts: { background?: boolean; dashboard?: string; afterMismatch?: boolean }) {
+async function runLoad(seq: number, light: boolean, opts: LoadOptions) {
+  const quiet = opts.quiet === true;
   rest = null;
-  dashboardFetches.set({});
+  if (!quiet) dashboardFetches.set({});
   if (!opts.afterMismatch) mismatchReloaded.clear();
   const background = (opts.background === true || get(layoutStale)) && get(config) !== null;
-  if (!background) configLoading.set(true);
-  configError.set(null);
+  if (!background && !quiet) configLoading.set(true);
+  if (!quiet) configError.set(null);
   // Held index entries: the other dashboards are on their way again (this load brings them, or
   // starts their background load). Waiting on them is bounded, so it always ends visibly.
   const partialHeld = hasPartialDashboards(get(config));
-  if (partialHeld) otherDashboards.set('loading');
+  if (partialHeld && !quiet) otherDashboards.set('loading');
 
   try {
     if (light) {
@@ -322,30 +333,38 @@ async function runLoad(seq: number, light: boolean, opts: { background?: boolean
     if (error instanceof MigrationFailedError) {
       // Never keep showing an old config as if it were current.
       config.set(null);
+      showingKept.set(false);
       noteMigrationFailure(error);
     }
     logError('Config load', error);
-    configError.set(error instanceof Error ? error.message : 'Failed to load configuration');
+    // A quiet retry that fails over held data leaves it on show: it never swaps a page for a card.
+    if (!quiet || get(config) === null) configError.set(error instanceof Error ? error.message : 'Failed to load configuration');
     // A held index whose reload failed: the other dashboards are not coming either.
-    if (hasPartialDashboards(get(config))) otherDashboards.set({ error: message(error, 'the request failed') });
+    if (hasPartialDashboards(get(config)) && !quiet) otherDashboards.set({ error: message(error, 'the request failed') });
   } finally {
     if (seq === loadSeq) configLoading.set(false);
   }
 }
 
 /**
- * Read again what this page needs, keeping what it shows until the answer lands: a viewer page its
- * dashboard (plus the rest in the background), any other page the whole config.
+ * Read again, quietly, what this page needs: a viewer page its dashboard (plus the rest in the
+ * background), any other page the whole config.
  */
-export function reloadForPage(): Promise<void> {
+export function retryLoadForPage(): Promise<void> {
   const id = (get(page) as { route?: { id?: string | null } } | undefined)?.route?.id;
   const viewer = id === '/' || id === '/[dashboard]';
-  return loadConfig(viewer ? { background: true, dashboard: viewerKey() } : { background: true });
+  return loadConfig(viewer ? { quiet: true, background: true, dashboard: viewerKey() } : { quiet: true, background: true });
+}
+
+/** Whether a config read is running (the background one for the other dashboards included). */
+export function configReadRunning(): boolean {
+  return inFlight !== null || rest !== null;
 }
 
 function adoptLoaded(data: Config): void {
   config.set(withoutDismissed(data));
   showingKept.set(isKept(data));
+  configError.set(null);
   noticesStale.set(null);
   layoutStale.set(false);
   migrationFailure.set(null);

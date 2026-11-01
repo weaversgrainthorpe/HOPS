@@ -541,6 +541,15 @@ describe('showing a kept copy', () => {
     expect(get(config)?.dashboards[0].revision).toBe(2);
   });
 
+  it('a failed migration leaves nothing held, so no saved-copy banner over it', async () => {
+    getConfig.mockResolvedValue(keptWhole());
+    await loadConfig();
+    getConfig.mockRejectedValue(new api.MigrationFailedError('broken'));
+    await loadConfig();
+    expect(get(config)).toBeNull();
+    expect(get(showingKept)).toBe(false);
+  });
+
   it("a write's answer is the server's document: it ends it", async () => {
     getConfig.mockResolvedValue(keptWhole());
     await loadConfig();

@@ -140,6 +140,9 @@ test("a signed-in admin opening Settings with the server down isn't asked to sig
     await expect(page.getByRole('alert').filter({ hasText: "Can't reach the server" })).toBeVisible();
     await expect(page.getByRole('dialog', { name: 'Sign in' })).toHaveCount(0);
     await expect(sections).toHaveCount(0);
+    // One notice, one Retry: not the general banner and Settings' own as well.
+    await expect(page.getByRole('status').filter({ hasText: "You're offline" })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Retry' })).toHaveCount(1);
 
     await startServer();
 
@@ -156,6 +159,47 @@ test('signed out with the server up, Settings still asks for the password', asyn
   try {
     const page = await ctx.newPage();
     await page.goto('/settings/global');
+    await expect(page.getByRole('dialog', { name: 'Sign in' })).toBeVisible();
+  } finally {
+    await ctx.close();
+  }
+});
+
+test("the sign-in check fails with the server reached: its words, and a way to sign in", async ({ browser }) => {
+  const ctx = await newContext(browser, 'block');
+  try {
+    const page = await ctx.newPage();
+    await page.route('**/api/auth/check', (route) =>
+      route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Could not issue a CSRF token.' }) }));
+    await page.goto('/settings/global');
+    const notice = page.getByRole('alert').filter({ hasText: 'Could not issue a CSRF token.' });
+    await expect(notice).toBeVisible();
+    await expect(notice).not.toContainText('reach');
+
+    await notice.getByRole('button', { name: 'Sign in' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Sign in' });
+    await dialog.getByLabel('Username').fill(ADMIN_USERNAME);
+    await dialog.getByLabel('Password').fill(ADMIN_INITIAL_PASSWORD);
+    await dialog.getByLabel('Password').press('Enter');
+    await expect(page.getByRole('heading', { name: 'Set a New Password' })).toBeVisible();
+  } finally {
+    await ctx.close();
+  }
+});
+
+test("Add to HOPS with the server out of reach says so, and Retry carries on", async ({ browser }) => {
+  const ctx = await newContext(browser, 'block');
+  try {
+    const page = await ctx.newPage();
+    await page.route('**/api/auth/check', (route) => route.abort());
+    await page.goto('/add?url=https%3A%2F%2Fexample.lan%2F&title=Example');
+    const notice = page.getByRole('alert').filter({ hasText: "Can't reach the server" });
+    await expect(notice).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Sign in' })).toHaveCount(0);
+
+    await page.unroute('**/api/auth/check');
+    await notice.getByRole('button', { name: 'Retry' }).click();
+    await expect(notice).toHaveCount(0);
     await expect(page.getByRole('dialog', { name: 'Sign in' })).toBeVisible();
   } finally {
     await ctx.close();

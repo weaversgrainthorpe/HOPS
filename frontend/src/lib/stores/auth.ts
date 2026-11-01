@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { writable, derived } from 'svelte/store';
 import { login as apiLogin, logout as apiLogout, checkAuth, setSessionExpiredHandler, LoginError } from '$lib/utils/api';
 import { toast } from './toast';
 import { logError } from '$lib/utils/errors';
@@ -17,9 +17,18 @@ export const mustChangePassword = writable(false);
 // wait for this before deciding to redirect on !isAuthenticated — otherwise
 // they race the initial /api/auth/check call and bounce the user back to / .
 export const authChecked = writable(false);
-// True while the last check got no answer (usually the server can't be reached). That says nothing
-// about the session, so nobody is asked to sign in because of it; see initAuth.
+// True while the last check couldn't reach the server. That says nothing about the session, so
+// nobody is told they are signed out because of it; see initAuth.
 export const authUnknown = writable(false);
+// The last check reached something, which answered with an error: what it said. Also says nothing
+// about the session. Null when it answered properly.
+export const authFailure = writable<string | null>(null);
+// Not signed in as far as this page knows, and the last check couldn't say either way. Admin pages
+// show SessionCheckNotice instead of asking for the password, with Sign in there as a way through.
+export const sessionUnsettled = derived(
+  [isAuthenticated, authUnknown, authFailure],
+  ([$authenticated, $unknown, $failure]) => !$authenticated && ($unknown || $failure !== null)
+);
 
 /**
  * Block until initAuth() has resolved. Protected pages call this at the
@@ -76,6 +85,7 @@ export function sessionExpiredRedirect(path: string): string | null {
 // once, and leaves only a page that can't work signed out.
 setSessionExpiredHandler(() => {
   authUnknown.set(false);
+  authFailure.set(null);
   isAuthenticated.set(false);
   mustChangePassword.set(false);
   toast.info('You’ve been signed out — dashboards are still browseable. Click Sign in when you want to make changes.');
@@ -87,12 +97,23 @@ setSessionExpiredHandler(() => {
   }
 });
 
-// Check if user has a valid session on app load
-export async function initAuth() {
+let authCheck: Promise<void> | null = null;
+
+// Check if user has a valid session (on app load, and again after a check that got no answer).
+// Joins a check already running.
+export function initAuth(): Promise<void> {
+  authCheck ??= runAuthCheck().finally(() => {
+    authCheck = null;
+  });
+  return authCheck;
+}
+
+async function runAuthCheck() {
   try {
     const status = await checkAuth();
     authUnknown.set(status.unknown === true);
-    if (status.unknown) return; // what was known stays; recovery from the outage checks again
+    authFailure.set(status.failure ?? null);
+    if (status.unknown || status.failure !== undefined) return; // what was known stays; checked again later
     isAuthenticated.set(status.authenticated);
     mustChangePassword.set(status.mustChangePassword);
   } finally {
@@ -140,6 +161,7 @@ export async function login(username: string, password: string, opts: { quietErr
   try {
     const result = await apiLogin(username, password);
     authUnknown.set(false);
+    authFailure.set(null);
     isAuthenticated.set(true);
     mustChangePassword.set(result.mustChangePassword);
     if (result.mustChangePassword) {

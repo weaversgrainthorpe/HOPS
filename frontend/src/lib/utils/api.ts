@@ -7,6 +7,7 @@ import { parseLogsResponse, type LogsResponse, type LogLevel, type LineLimit } f
 import { parseUsageResponse, type IconUsage, type IconUse } from '$lib/icons/iconManage';
 import { parsePackagedResponse, type PackagedInfo } from '$lib/icons/packagedIcons';
 import { KEPT_HEADER, isKept, noteKept } from './swCache';
+import { isBackendDownStatus } from './errors';
 import { missingAssetsFromHeader, MISSING_ASSETS_HEADER, importWarningFromHeader, IMPORT_WARNING_HEADER, type MissingAsset } from './exportResult';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
@@ -49,6 +50,23 @@ let sessionExpiredFiring = false; // re-entrancy guard
 
 export function setSessionExpiredHandler(fn: () => void) {
   sessionExpiredHandler = fn;
+}
+
+/**
+ * Fire the registered handler (clears auth state, toasts, redirects to login) at most once per
+ * cascade: many in-flight fetches can all 401 at once when a session expires, and one toast + one
+ * navigation is what's wanted.
+ */
+function noteSessionExpired() {
+  if (sessionExpiredHandler && !sessionExpiredFiring) {
+    sessionExpiredFiring = true;
+    try {
+      sessionExpiredHandler();
+    } finally {
+      // Reset on next tick so a future fresh-session 401 still fires.
+      setTimeout(() => { sessionExpiredFiring = false; }, 1000);
+    }
+  }
 }
 
 /** 409 from a revision-checked save: the dashboard changed elsewhere. */
@@ -116,19 +134,7 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
 
   if (!response.ok) {
     if (response.status === 401) {
-      // Fire the registered global handler (clears auth state, toasts,
-      // redirects to login) at most once per cascade — many in-flight
-      // fetches can all 401 simultaneously when a session expires; we
-      // only want one toast + one navigation.
-      if (sessionExpiredHandler && !sessionExpiredFiring) {
-        sessionExpiredFiring = true;
-        try {
-          sessionExpiredHandler();
-        } finally {
-          // Reset on next tick so a future fresh-session 401 still fires.
-          setTimeout(() => { sessionExpiredFiring = false; }, 1000);
-        }
-      }
+      noteSessionExpired();
       throw new Error('SESSION_EXPIRED');
     }
     // Try to surface the server's own error message — HOPS handlers
@@ -370,22 +376,47 @@ export async function getStatus(entryId: string) {
 export interface AuthStatus {
   authenticated: boolean;
   mustChangePassword: boolean;
-  /** No answer about the session (can't reach the server, or it failed): not the same as signed out. */
+  /** The server can't be reached (fetch failed, or a proxy says 502/503/504): not the same as signed out. */
   unknown?: boolean;
+  /** Something answered, but not with the session's state: what went wrong, in words for the user. */
+  failure?: string;
 }
 
+const AUTH_CHECK_UNREADABLE =
+  "The answer wasn't one HOPS understands. If HOPS is behind a proxy, it may be asking for its own sign-in.";
+
+/** The four outcomes differ: signed in, signed out (200 or a 401), can't reach it, reached and failed. */
 export async function checkAuth(): Promise<AuthStatus> {
+  const none = { authenticated: false, mustChangePassword: false };
+  let response: Response;
   try {
-    const resp = await fetchAPI('/auth/check');
-    return {
-      authenticated: resp.authenticated === true,
-      mustChangePassword: resp.mustChangePassword === true,
-    };
-  } catch (e) {
-    // A 401 is the server's answer: signed out. Anything else says nothing about the session.
-    const signedOut = e instanceof Error && e.message === 'SESSION_EXPIRED';
-    return { authenticated: false, mustChangePassword: false, ...(signedOut ? {} : { unknown: true }) };
+    response = await fetch(`${API_BASE}/auth/check`, { credentials: 'same-origin' });
+  } catch {
+    return { ...none, unknown: true };
   }
+  if (response.status === 401) {
+    noteSessionExpired();
+    return none;
+  }
+  if (!response.ok && isBackendDownStatus(response.status)) return { ...none, unknown: true };
+
+  let text = '';
+  try {
+    text = await response.text();
+  } catch {
+    return { ...none, unknown: true }; // the connection went while reading: no answer
+  }
+  let body: unknown = null;
+  try {
+    body = JSON.parse(text);
+  } catch { /* not JSON: a proxy's page, handled below */ }
+  const fields = (body && typeof body === 'object' ? body : {}) as { authenticated?: unknown; mustChangePassword?: unknown; error?: unknown };
+  if (!response.ok) {
+    return { ...none, failure: typeof fields.error === 'string' && fields.error ? fields.error : `The server answered ${response.status}.` };
+  }
+  // A 200 that isn't the check's answer (a redirect to a proxy's login page, say) says nothing.
+  if (typeof fields.authenticated !== 'boolean') return { ...none, failure: AUTH_CHECK_UNREADABLE };
+  return { authenticated: fields.authenticated, mustChangePassword: fields.mustChangePassword === true };
 }
 
 export class LoginError extends Error {

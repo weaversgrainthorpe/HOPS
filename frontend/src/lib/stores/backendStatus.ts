@@ -1,5 +1,6 @@
 import { writable, derived } from 'svelte/store';
 import { getBackendVersion, HttpStatusError } from '$lib/utils/api';
+import { isBackendDownStatus } from '$lib/utils/errors';
 
 export type BackendStatusType = 'checking' | 'online' | 'offline' | 'error';
 
@@ -16,7 +17,7 @@ interface BackendState {
  * backend answered, with an error (degraded). The two are shown differently.
  */
 export function isServerDown(e: unknown): boolean {
-  return e instanceof TypeError || (e instanceof HttpStatusError && [502, 503, 504].includes(e.status));
+  return e instanceof TypeError || (e instanceof HttpStatusError && isBackendDownStatus(e.status));
 }
 
 const initialState: BackendState = {

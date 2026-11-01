@@ -16,7 +16,8 @@
   import { page } from '$app/stores';
   import { goto, afterNavigate } from '$app/navigation';
   import LoginDialog from '$lib/components/LoginDialog.svelte';
-  import { isAuthenticated, authChecked, authUnknown, mustChangePassword } from '$lib/stores/auth';
+  import SessionCheckNotice from '$lib/components/SessionCheckNotice.svelte';
+  import { isAuthenticated, authChecked, sessionUnsettled, mustChangePassword } from '$lib/stores/auth';
   import {
     config, configError, configLoading, layoutStale, sortedDashboards, findLayoutDashboard, layoutDoc,
     applySavedLayout, loadConfig, layoutFormProblem, showSaveWarning, dashboardHref,
@@ -89,6 +90,8 @@
   });
 
   const ready = $derived($authChecked && $isAuthenticated && !$mustChangePassword);
+  // The session check couldn't say: Sign in on its notice opens the dialog anyway.
+  let signInAnyway = $state(false);
 
   // Other tabs editing dashboards (asked on load, then kept current by their announcements).
   // `presenceChecked` false: still asking; `presence` null: this browser can't ask.
@@ -340,8 +343,8 @@
 
     {#if !$authChecked}
       <p class="muted" role="status">Checking sign-in…</p>
-    {:else if !$isAuthenticated && $authUnknown}
-      <p class="muted" role="alert">Can't reach the server. This page will carry on once HOPS can reach it.</p>
+    {:else if $sessionUnsettled}
+      <SessionCheckNotice waiting="This page will carry on once HOPS can reach it." onSignIn={() => (signInAnyway = true)} />
     {:else if !$isAuthenticated}
       <p class="muted">Sign in to add this page as a tile.</p>
     {:else if $mustChangePassword}
@@ -427,8 +430,8 @@
   </section>
 </main>
 
-{#if $authChecked && !$isAuthenticated && !$authUnknown}
-  <LoginDialog intro="Sign in to add this page to HOPS." onSuccess={() => {}} onCancel={leave} />
+{#if $authChecked && !$isAuthenticated && (!$sessionUnsettled || signInAnyway)}
+  <LoginDialog intro="Sign in to add this page to HOPS." onSuccess={() => {}} onCancel={() => ($sessionUnsettled ? (signInAnyway = false) : leave())} />
 {/if}
 
 <style>

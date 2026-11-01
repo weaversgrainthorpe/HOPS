@@ -12,7 +12,8 @@
 	import { guardNavigation, guardUnload } from '$lib/stores/editSession';
 	import { revealNavigation } from '$lib/stores/reveal';
 	import { page } from '$app/stores';
-	import { initAuth, mustChangePassword } from '$lib/stores/auth';
+	import { initAuth, isSettingsPath, mustChangePassword, sessionUnsettled } from '$lib/stores/auth';
+	import { isBackendOffline } from '$lib/stores/backendStatus';
 	import { initEditModeIdleWatcher } from '$lib/stores/editModeIdleWatcher';
 	import { initNetworkWatcher } from '$lib/stores/network';
 	import { recoverFromOutage } from '$lib/stores/outageRecovery';
@@ -36,6 +37,8 @@
 	let { children } = $props();
 
 	let showSearch = $state(false);
+	// Settings says it itself when the server can't be reached: one notice, not two.
+	let settingsHasNotice = $derived(isSettingsPath($page.url.pathname) && ($isBackendOffline || $sessionUnsettled));
 
 	// Unsaved edit-session changes: ask before leaving (leaving anyway discards
 	// them). The reveal bookkeeping below only runs for a navigation that goes ahead.
@@ -140,7 +143,9 @@
      banners leave, so a dashboard's tab panel can fill the rest. -->
 <div class="app-root">
 <Navbar onSearch={() => (showSearch = true)} />
-<OfflineBanner />
+{#if !settingsHasNotice}
+	<OfflineBanner />
+{/if}
 <VersionMismatchBanner />
 <ConflictBanner />
 <ParkedDraftBanner />

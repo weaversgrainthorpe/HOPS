@@ -12,8 +12,8 @@ vi.mock('$app/stores', async () => {
 
 import { get } from 'svelte/store';
 import * as api from '$lib/utils/api';
-import { authUnknown, isAuthenticated } from './auth';
-import { config, configError, configLoading, migrationFailure, showingKept, resetPartialLoadingForTests } from './config';
+import { authFailure, authUnknown, isAuthenticated } from './auth';
+import { config, configError, configLoading, loadConfig, migrationFailure, showingKept, resetPartialLoadingForTests } from './config';
 import { apply, begin, dirty, pageUnsaved, resetEditSessionForTests, session } from './editSession';
 import { recoverFromOutage } from './outageRecovery';
 import type { Config } from '$lib/types';
@@ -38,6 +38,7 @@ beforeEach(() => {
   migrationFailure.set(null);
   pageUnsaved.set(false);
   authUnknown.set(false);
+  authFailure.set(null);
   isAuthenticated.set(false);
 });
 
@@ -99,11 +100,53 @@ describe('recoverFromOutage', () => {
     expect(get(showingKept)).toBe(true);
   });
 
-  it('never races the first load, or reloads over a failed migration', async () => {
+  it('never stacks a read on one still running', async () => {
+    let finish!: (c: Config) => void;
+    getConfig.mockImplementationOnce(() => new Promise<Config>((r) => (finish = r)));
+    const running = loadConfig({ background: true });
     showingKept.set(true);
-    configLoading.set(true);
     recoverFromOutage();
-    configLoading.set(false);
+    await flush();
+    expect(getConfig).toHaveBeenCalledTimes(1);
+    finish(held());
+    await running;
+  });
+
+  it('a lasting failure keeps its card: no loading state, nothing cleared, no flicker', async () => {
+    config.set(null);
+    configError.set('HOPS hit an error');
+    getConfig.mockRejectedValueOnce(new Error('HOPS hit an error'));
+    const seen: unknown[] = [];
+    const stopE = configError.subscribe((v) => seen.push(v));
+    const stopL = configLoading.subscribe((v) => seen.push(v));
+    recoverFromOutage();
+    await flush();
+    stopE();
+    stopL();
+    expect(getConfig).toHaveBeenCalledTimes(1);
+    expect(seen).toEqual(['HOPS hit an error', false]);
+  });
+
+  it('a failed retry over held data leaves the page on show, not a card', async () => {
+    showingKept.set(true);
+    getConfig.mockRejectedValueOnce(new Error('HOPS hit an error'));
+    recoverFromOutage();
+    await flush();
+    expect(get(configError)).toBeNull();
+    expect(get(config)).not.toBeNull();
+    expect(get(showingKept)).toBe(true);
+  });
+
+  it('a check that failed is checked again too', async () => {
+    authFailure.set('The server answered 500.');
+    recoverFromOutage();
+    await flush();
+    expect(checkAuth).toHaveBeenCalledTimes(1);
+    expect(get(authFailure)).toBeNull();
+  });
+
+  it('never reloads over a failed migration', async () => {
+    showingKept.set(true);
     migrationFailure.set('broken');
     recoverFromOutage();
     await flush();

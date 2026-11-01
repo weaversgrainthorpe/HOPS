@@ -27,6 +27,8 @@ import {
 	isAuthenticated,
 	authChecked,
 	authUnknown,
+	authFailure,
+	sessionUnsettled,
 	isLoggingIn,
 	mustChangePassword,
 	initAuth,
@@ -67,6 +69,27 @@ describe('auth store', () => {
 			expect(get(isAuthenticated)).toBe(true);
 		});
 
+		it('a failed check keeps its reason, is unsettled, and is not called unreachable', async () => {
+			authUnknown.set(false);
+			authFailure.set(null);
+			isAuthenticated.set(false);
+			mockApi.checkAuth.mockResolvedValue({ authenticated: false, mustChangePassword: false, failure: 'broken' });
+			await initAuth();
+			expect(get(authFailure)).toBe('broken');
+			expect(get(authUnknown)).toBe(false);
+			expect(get(sessionUnsettled)).toBe(true);
+			mockApi.checkAuth.mockResolvedValue({ authenticated: false, mustChangePassword: false });
+			await initAuth();
+			expect(get(authFailure)).toBeNull();
+			expect(get(sessionUnsettled)).toBe(false);
+		});
+
+		it('checks at once join: one read, not two', async () => {
+			mockApi.checkAuth.mockResolvedValue({ authenticated: false, mustChangePassword: false });
+			await Promise.all([initAuth(), initAuth()]);
+			expect(mockApi.checkAuth).toHaveBeenCalledTimes(1);
+		});
+
 		it('a real answer after no answer ends the unknown state, either way', async () => {
 			for (const authenticated of [true, false]) {
 				authUnknown.set(true);
@@ -79,9 +102,11 @@ describe('auth store', () => {
 
 		it('signing in ends the unknown state', async () => {
 			authUnknown.set(true);
+			authFailure.set('broken');
 			mockApi.login.mockResolvedValue({ mustChangePassword: false });
 			await login('admin', 'pw');
 			expect(get(authUnknown)).toBe(false);
+			expect(get(authFailure)).toBeNull();
 		});
 
 		it('sets isAuthenticated from checkAuth result', async () => {

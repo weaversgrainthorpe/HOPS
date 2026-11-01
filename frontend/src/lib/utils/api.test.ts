@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { getCSRFToken, withCSRFHeader, checkAuth, getConfig, getConfigFor, getDashboard } from './api';
+import { getCSRFToken, withCSRFHeader, checkAuth, getConfig, getConfigFor, getDashboard, setSessionExpiredHandler } from './api';
 import { KEPT_HEADER, isKept } from './swCache';
 
 describe('getCSRFToken', () => {
@@ -116,17 +116,45 @@ describe('checkAuth', () => {
 		vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
 		expect(await checkAuth()).toEqual({ authenticated: false, mustChangePassword: false, unknown: true });
 	});
-	it('a failed answer (a proxy with the backend down, say): unknown', async () => {
-		answer(502, {});
-		expect((await checkAuth()).unknown).toBe(true);
+	it.each([502, 503, 504])('a proxy with the backend down (%i): unknown', async (status) => {
+		answer(status, {});
+		expect(await checkAuth()).toEqual({ authenticated: false, mustChangePassword: false, unknown: true });
+	});
+	it("HOPS's own 500: its sentence, and not called unreachable", async () => {
+		answer(500, { error: 'Signed in, but the server could not issue a CSRF token.' });
+		expect(await checkAuth()).toEqual({
+			authenticated: false, mustChangePassword: false, failure: 'Signed in, but the server could not issue a CSRF token.'
+		});
+	});
+	it.each([403, 404, 429])("a proxy's %i with no sentence of its own: reached, and failed", async (status) => {
+		vi.stubGlobal('fetch', vi.fn(async () => new Response('<html>nope</html>', { status })));
+		const r = await checkAuth();
+		expect(r.unknown).toBeUndefined();
+		expect(r.failure).toBe(`The server answered ${status}.`);
+	});
+	it('a 200 that is not the answer (a redirect to a login page): a failure, not a network fault', async () => {
+		vi.stubGlobal('fetch', vi.fn(async () => new Response('<html>Sign in to the proxy</html>', { status: 200 })));
+		const r = await checkAuth();
+		expect(r.unknown).toBeUndefined();
+		expect(r.authenticated).toBe(false);
+		expect(r.failure).toContain('proxy');
+	});
+	it('a 200 that is JSON without the answer, or empty: the same', async () => {
+		answer(200, { ok: true });
+		expect((await checkAuth()).failure).toBeTruthy();
+		vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 200 })));
+		expect((await checkAuth()).failure).toBeTruthy();
 	});
 	it('the server says signed out: signed out', async () => {
 		answer(200, { authenticated: false });
 		expect(await checkAuth()).toEqual({ authenticated: false, mustChangePassword: false });
 	});
-	it('a real 401: signed out', async () => {
+	it('a real 401: signed out, and the session-expired handler hears', async () => {
+		const expired = vi.fn();
+		setSessionExpiredHandler(expired);
 		answer(401, { error: 'unauthorized' });
 		expect(await checkAuth()).toEqual({ authenticated: false, mustChangePassword: false });
+		expect(expired).toHaveBeenCalledTimes(1);
 	});
 	it('signed in', async () => {
 		answer(200, { authenticated: true, mustChangePassword: true });
