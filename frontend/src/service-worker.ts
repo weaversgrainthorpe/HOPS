@@ -4,22 +4,24 @@
 /// <reference lib="webworker" />
 
 import { build, files, version } from '$service-worker';
-import { swMayCache, isCacheableApiPath, offlineFallbackFor } from '$lib/utils/swCache';
+import { swMayCache, isCacheableApiPath, offlineFallbackFor, precacheList, SHELL_PATH } from '$lib/utils/swCache';
 
 // HOPS PWA service worker.
 //
 // What we cache:
-//   - The SvelteKit build output (JS, CSS, fonts) — the SPA shell.
+//   - The SvelteKit build output (JS, CSS, fonts) and the HTML page — the SPA shell.
 //   - Static files (favicons, icons, backgrounds) referenced from /static.
 //   - /api/config, its ?dashboard= form and /api/config/dashboard/… — the
 //     dashboard data. When offline, the last-seen dashboard layout still
 //     renders (an index-plus-one read with no copy falls back to the whole
 //     config's copy).
-//   - /api/version + the dashboard's tile icons — so tiles look right
-//     offline rather than going blank.
+//   - The dashboard's tile icons — so tiles look right offline rather than
+//     going blank.
 //
 // What we don't cache:
 //   - Auth calls (/api/auth/*) — stale auth is worse than no auth.
+//   - /api/version — the app's reachability probe. A kept copy would say the
+//     server is up when it isn't, and old data would show with no banner.
 //   - Status checks (/api/status/*) — would freeze indicators at last
 //     known state, which the UI already does via the navigator.onLine
 //     hook on top of the SW, so the SW staying out of the way is right.
@@ -35,11 +37,9 @@ const sw = self as unknown as ServiceWorkerGlobalScope;
 const PRECACHE = `hops-precache-${version}`;
 const RUNTIME = `hops-runtime-${version}`;
 
-const PRECACHE_URLS = [...build, ...files];
-
 sw.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(PRECACHE).then((cache) => cache.addAll(PRECACHE_URLS)),
+    caches.open(PRECACHE).then((cache) => cache.addAll(precacheList(build, files, sw.location.origin))),
   );
   sw.skipWaiting();
 });
@@ -74,7 +74,7 @@ sw.addEventListener('fetch', (event) => {
           return await fetch(request);
         } catch {
           const cache = await caches.open(PRECACHE);
-          const shell = (await cache.match('/')) ?? (await cache.match('/index.html'));
+          const shell = await cache.match(SHELL_PATH);
           if (shell) return shell;
           return new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } });
         }
