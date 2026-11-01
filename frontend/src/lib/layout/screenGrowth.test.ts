@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   screenGrowth, clampPlacement, drilledFolderRows, minOpenFolderCells, nestedPaging, nodeBox, openFolderContentBox, screenRows, sizeSpan,
-  NAVBAR_PX, NESTED_CHROME, NESTED_LEVEL_Y_PX, REFERENCE_CELL_PX, type ContainerMetrics
+  NAVBAR_PX, REFERENCE_CELL_PX, type ContainerMetrics
 } from './geometry';
 import type { FolderNode, Placement } from '../types/layout';
 
@@ -164,12 +164,24 @@ describe('drilledFolderRows (the rows a drilled folder wants)', () => {
     expect(shown(4, 1, 4, 40, 'medium', thin).noRoom).toBe(true); // the note stays
   });
 
-  it('an empty sub-folder still gets room for its bars and its note, nothing more', () => {
+  it('an empty sub-folder is short of nothing while its body holds "Empty folder": no growth, no "no room"', () => {
+    expect(shown(4, 1, 0, 60)).toMatchObject({ noRoom: false, noRoomInside: false });
+    expect(rows(1, 0, 40, 60)).toBe(4);
+  });
+
+  it('an empty sub-folder so deep that the bars run out gets only the room for that text', () => {
     const short = p(0, 0, 24, 3);
     const h = rows(3, 0, 40, 40, 'medium', short);
-    const content = openFolderContentBox(nodeBox({ ...short, h }, m(40)), 'folder-flat');
-    expect(content.heightPx - 3 * NESTED_LEVEL_Y_PX + 2 * NESTED_CHROME.padPx).toBeGreaterThanOrEqual(24);
+    expect(h).toBeGreaterThan(3);
+    expect(shown(h, 3, 0, 40, 'medium', short).noRoom).toBe(false);
+    expect(shown(h - 1, 3, 0, 40, 'medium', short).noRoom).toBe(true);
     expect(h).toBeLessThan(rows(3, 1, 40, 40, 'medium', short));
+  });
+
+  it('an empty sub-folder too narrow for one item is still too narrow: stored rows, and the note', () => {
+    const thin = p(0, 0, 2, 4);
+    expect(shown(4, 1, 0, 40, 'medium', thin).noRoom).toBe(true);
+    expect(rows(1, 0, 40, 40, 'medium', thin)).toBe(4);
   });
 
   it('every contents size, every shape: the wanted box shows every item', () => {

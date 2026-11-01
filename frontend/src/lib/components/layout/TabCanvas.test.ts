@@ -4,6 +4,7 @@ import { tick } from 'svelte';
 import TabCanvas from './TabCanvas.svelte';
 import { layoutStale } from '$lib/stores/config';
 import { editMode } from '$lib/stores/editMode';
+import { resetFolderViewsForTests, setFolderDrill } from '$lib/stores/folderView';
 import type { LayoutDashboard, LayoutTab } from '$lib/types/layout';
 
 let width = 1440;
@@ -45,6 +46,28 @@ beforeEach(() => {
   vi.stubGlobal('ResizeObserver', FakeRO);
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+describe('a drilled folder and the window height', () => {
+  const realHeight = window.innerHeight;
+  afterEach(() => {
+    window.innerHeight = realHeight;
+    resetFolderViewsForTests();
+  });
+  it('the cap follows the window: a resize re-draws the box at the new height', async () => {
+    const kids = Array.from({ length: 60 }, (_, i) => kid(`k${i}`, `K${i}`));
+    const { dash, tab } = mk([folder('f', 'F', 0, 0, 12, 4, [sub('s', 'S', kids)])]);
+    setFolderDrill('d1', 'f', ['s']);
+    window.innerHeight = 791; // (791 - 71) / 60 = 12 rows, 4 stored
+    const { container } = render(TabCanvas, { dashboard: dash, tab });
+    await tick();
+    const box = container.querySelector('[data-node-id="f"]') as HTMLElement;
+    expect(box.getAttribute('data-render-grown')).toBe('8');
+    window.innerHeight = 491; // 7 rows
+    window.dispatchEvent(new Event('resize'));
+    await tick();
+    expect(box.getAttribute('data-render-grown')).toBe('3');
+  });
+});
 
 describe('TabCanvas', () => {
   it('renders the migrated v2_basic dashboard as folders and tiles at 1440px', async () => {

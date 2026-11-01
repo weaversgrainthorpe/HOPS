@@ -375,6 +375,18 @@ describe('drilling into a sub-folder: a folder inside a folder, one inset box a 
     expect(note?.textContent).toBe('Not enough room to show this folder.');
     expect(container.querySelector('[data-node-id="wide"]')).toBeNull();
   });
+  it('an empty sub-folder says "Empty folder", never "Not enough room", viewing and editing', async () => {
+    const tree = () => [folder('f', [sub('s', [])], { placement: { x: 0, y: 0, w: 24, h: 4 } })];
+    setFolderDrill('d1', 'f', ['s']);
+    const viewing = await renderTab(tree());
+    expect(nested(viewing.container, 's').querySelector('.empty-note')?.textContent).toBe('Empty folder');
+    expect(el(viewing.container, 'f').querySelector('[data-folder-no-room]')).toBeNull();
+    expect(el(viewing.container, 'f').hasAttribute('data-render-grown')).toBe(false);
+    viewing.unmount();
+    const { container } = await renderEditing(tree());
+    expect(nested(container, 's').querySelector('.empty-note')?.textContent).toBe('Empty folder');
+    expect(el(container, 'f').querySelector('[data-folder-no-room]')).toBeNull();
+  });
   it('an untitled sub-folder\'s inset bar says "Untitled folder" (muted), and an outer one goes up', async () => {
     setFolderDrill('d1', 'f', ['s', 's2']);
     const { container } = await renderTab([folder('f', [sub('s', [sub('s2', [kid('z')])], { showTitle: false })])]);

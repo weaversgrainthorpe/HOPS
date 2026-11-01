@@ -417,7 +417,8 @@ export const NO_ROOM_NOTE_PX = 24;
  * The page of the innermost box, `levels` deep inside an open folder whose content box is `content`
  * (folderPaging in nestedContentBox). `noRoom`: a drilled level whose box cannot show its page — not
  * even one item at its contents size, or not the page bar its items need (tooSmall) — so Folder.svelte
- * says "Not enough room" and draws no clipped items. `noRoomInside`: the innermost box's body is tall
+ * says "Not enough room" and draws no clipped items. An empty level only needs the height of its
+ * "Empty folder" line (the width rule still applies). `noRoomInside`: the innermost box's body is tall
  * enough to hold that note; otherwise (the inset bars themselves run out of room) the note goes on the
  * folder's own body, where it is always seen. Opening a sub-folder never resizes the saved box: outside
  * edit mode the box is drawn taller instead (drilledFolderRows, screenGrowth), so this note is left for
@@ -430,9 +431,11 @@ export function nestedPaging(
   const g = folderPaging(inner, contentSize, cellPx, count, page);
   const eps = 0.5;
   const n = isNum(levels) && levels >= 1 ? Math.floor(levels) : 0;
-  const noRoom = n > 0 && (g.tooSmall || inner.widthPx + eps < g.itemPx || inner.heightPx + eps < g.itemPx);
   // The innermost body as drawn: its content height (unclamped) plus its padding.
   const bodyPx = content.heightPx - n * NESTED_LEVEL_Y_PX + 2 * NESTED_CHROME.padPx;
+  // An empty folder needs no item's height: only room to say "Empty folder", a line like the note.
+  const short = count > 0 ? inner.heightPx + eps < g.itemPx : bodyPx + eps < NO_ROOM_NOTE_PX;
+  const noRoom = n > 0 && (g.tooSmall || inner.widthPx + eps < g.itemPx || short);
   return { ...g, noRoom, noRoomInside: noRoom && bodyPx + eps >= NO_ROOM_NOTE_PX };
 }
 
@@ -649,7 +652,6 @@ export function screenRows(viewportHeightPx: number, rowPx: number): number {
  * drilled into shows: every one of `count` items at `contentSize`, `levels` inset boxes in. Above
  * `maxRows` it stops and the page bar pages the rest, though never below one row of items and the page
  * bar they need. Too narrow for one item: height can't help, so the stored rows (its note stays).
- * Empty: room for the inset bars and the note saying so.
  * Reads only the stored box and this width (a box's content width does not depend on its height), so
  * growing can never change what is wanted. The test is nestedPaging itself: what is drawn agrees.
  */
@@ -660,11 +662,10 @@ export function drilledFolderRows(
   const { levels, contentSize, count } = drill;
   const content = (h: number) => openFolderContentBox(nodeBox({ x: 0, y: 0, w: p.w, h }, m), folder.shape, folder.tabPosition);
   const paging = (h: number) => nestedPaging(content(h), levels, contentSize, m.unitPx, count, 0);
-  const canShow = (h: number) =>
-    count > 0 ? !paging(h).noRoom : content(h).heightPx - levels * NESTED_LEVEL_Y_PX + 2 * NESTED_CHROME.padPx >= NO_ROOM_NOTE_PX;
+  const canShow = (h: number) => !paging(h).noRoom;
   const showsAll = (h: number) => canShow(h) && paging(h).pages === 1;
   if (!(m.unitPx > 0) || !(m.rowPx > 0)) return p.h;
-  if (count > 0 && nestedContentBox(content(p.h), levels).widthPx + 0.5 < paging(p.h).itemPx) return p.h;
+  if (nestedContentBox(content(p.h), levels).widthPx + 0.5 < paging(p.h).itemPx) return p.h;
   let h = p.h;
   while (h < maxRows && !showsAll(h)) h++;
   while (!canShow(h)) h++; // the floor: past the cap if it must be. It ends: the width fits one item.

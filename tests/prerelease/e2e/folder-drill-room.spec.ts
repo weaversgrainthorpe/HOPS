@@ -214,7 +214,7 @@ test.describe('a folder opened inside a folder makes room', () => {
     expect((await rect(node(page, d.id('below')))).y).toBeGreaterThanOrEqual(home.y + home.height - 1);
   });
 
-  test('on a narrow screen it adds to the narrow-screen growth with no overlap', async ({ page, context }) => {
+  test('on a narrow screen the narrow-screen growth and the drill are one height: the larger, with no overlap', async ({ page, context }) => {
     await page.setViewportSize({ width: 1000, height: 900 });
     const d = await importDash(page, context, (id) => [
       folder(id('home'), 'Home', { x: 0, y: 0, w: 24, h: 4 }, [folder(id('sub'), 'Sub', null, kids(id, 12))]),
