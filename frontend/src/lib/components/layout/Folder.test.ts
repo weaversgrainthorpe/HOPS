@@ -460,6 +460,12 @@ describe('a minimised folder can show its own icon', () => {
     expect(own.style.backgroundColor).toBe('rgb(51, 102, 153)');
     expect(own.classList.contains('has-bg')).toBe(true);
   });
+  it('with both an uploaded image and an iconify icon, the image wins (as in the header)', async () => {
+    const { container } = await renderTab([min({ minimisedIcon: 'own', iconUrl: '/icons/f.png', icon: 'mdi:home' })]);
+    const own = tileOf(container).querySelector('[data-own-icon]')!;
+    expect(own.querySelector('img')!.getAttribute('src')).toBe('/icons/f.png');
+    expect(own.querySelector('svg')).toBeNull();
+  });
   it('own without an icon falls back to the previews, and in edit mode says so', async () => {
     const { container, unmount } = await renderTab([min({ minimisedIcon: 'own' })]);
     expect(tileOf(container).querySelector('.preview-grid')).not.toBeNull();

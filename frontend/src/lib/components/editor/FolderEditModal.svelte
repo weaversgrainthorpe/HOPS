@@ -32,6 +32,7 @@
   import { gateSetting, type GateSetting, type StatusContext } from '$lib/editor/statusChecks';
   import { FOLDER_SHAPES, TAB_POSITIONS, hasTab, isFolderShape, sizeOf } from '$lib/layout/geometry';
   import { MIN_TEXT_CONTRAST, deriveFolderColours } from '$lib/layout/folderColours';
+  import { NO_OWN_ICON_NOTE } from '$lib/layout/folderIcon';
   import LookPreview from './LookPreview.svelte';
   import type { FolderShape, ItemSize, TabPosition } from '$lib/types/layout';
 
@@ -242,7 +243,7 @@
         </label>
       </div>
       {#if minimisedIcon === 'own' && !icon && !iconUrl}
-        <p class="hint" role="status" data-own-icon-hint>No icon set, so it shows the icons inside.</p>
+        <p class="hint" role="status" data-own-icon-hint>{NO_OWN_ICON_NOTE}</p>
       {/if}
     </div>
 

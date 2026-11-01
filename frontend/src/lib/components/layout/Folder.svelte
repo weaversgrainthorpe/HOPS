@@ -30,7 +30,7 @@
   import { deriveFolderColours } from '$lib/layout/folderColours';
   import { MINI_NAME_MIN_TILE_PX, shapeParts, tabWantPx } from '$lib/layout/folderShapePaths';
   import FolderShape from './FolderShape.svelte';
-  import { minimisedShowsOwnIcon } from '$lib/layout/folderIcon';
+  import { minimisedShowsOwnIcon, NO_OWN_ICON_NOTE } from '$lib/layout/folderIcon';
   import { getTextColorValue } from '$lib/utils/colorContrast';
   import Icon from '@iconify/svelte';
   import ColoredIcon from '../ColoredIcon.svelte';
@@ -445,34 +445,31 @@
         <Icon icon={f.icon} width="16" class="tab-icon" />
       {/if}
     {:else}
-      <span class="folder-icon-backing" class:has-bg={f.iconBgColor} style:background-color={f.iconBgColor}>
-        {#if f.iconUrl}
-          <img src={f.iconUrl} alt="" class="folder-icon-img" />
-        {:else if f.icon}
-          <Icon icon={f.icon} width={compact ? '18' : '24'} />
-        {/if}
-      </span>
+      {@render iconBacking(f, { width: compact ? '18' : '24', imgClass: 'folder-icon-img' })}
     {/if}
   {/if}
 {/snippet}
 
-<!-- A minimised folder's one large icon (its own, not its items'), in the same box as the previews grid.
-     The optional backing colour applies; an uploaded image that won't load shows a folder glyph. -->
-{#snippet minimisedOwnIcon(f: FolderNode)}
+<!-- The backing (its optional colour) around a folder's icon: the image if it has one, else the iconify icon.
+     Shared by the header (small) and the minimised own icon (large, in the previews' box). `own` draws the
+     large form: brand-coloured, and an uploaded image that won't load shows a folder glyph, never nothing. -->
+{#snippet iconBacking(f: FolderNode, o: { width: string; imgClass?: string; own?: boolean })}
+  {@const failed = !!o.own && !!f.iconUrl && ownIconFailed === f.iconUrl}
   <span
-    class="own-icon folder-icon-backing"
+    class="folder-icon-backing"
+    class:own-icon={o.own}
     class:has-bg={f.iconBgColor}
     style:background-color={f.iconBgColor}
-    style:max-width={miniGridPx !== undefined ? `${miniGridPx}px` : undefined}
-    data-own-icon
-    data-own-icon-fallback={f.iconUrl && ownIconFailed === f.iconUrl ? '' : undefined}
+    style:max-width={o.own && miniGridPx !== undefined ? `${miniGridPx}px` : undefined}
+    data-own-icon={o.own ? '' : undefined}
+    data-own-icon-fallback={failed ? '' : undefined}
   >
-    {#if f.iconUrl && ownIconFailed !== f.iconUrl}
-      <img src={f.iconUrl} alt="" onerror={() => (ownIconFailed = f.iconUrl ?? null)} />
-    {:else if f.icon && !f.iconUrl}
-      <ColoredIcon icon={f.icon} width="100%" />
-    {:else}
+    {#if failed}
       <ColoredIcon icon="mdi:folder" width="100%" />
+    {:else if f.iconUrl}
+      <img src={f.iconUrl} alt="" class={o.imgClass} onerror={o.own ? () => (ownIconFailed = f.iconUrl ?? null) : undefined} />
+    {:else if f.icon}
+      {#if o.own}<ColoredIcon icon={f.icon} width={o.width} />{:else}<Icon icon={f.icon} width={o.width} />{/if}
     {/if}
   </span>
 {/snippet}
@@ -733,7 +730,7 @@
       {#if unreadable}
         <span class="empty-note unreadable">Can't display this folder's contents</span>
       {:else if ownIcon}
-        {@render minimisedOwnIcon(folder)}
+        {@render iconBacking(folder, { width: '100%', own: true })}
       {:else if previews.length === 0}
         <span class="empty-note">Empty folder</span>
       {:else}
@@ -759,7 +756,7 @@
       <span class="tile-notes">
         {@render lookNotes(folder, 'tile-note')}
         {#if noOwnIcon}
-          <span class="look-note tile-note" role="status" data-own-icon-missing={folder.id}>No icon set, so it shows the icons inside.</span>
+          <span class="look-note tile-note" role="status" data-own-icon-missing={folder.id}>{NO_OWN_ICON_NOTE}</span>
         {/if}
       </span>
     {/if}
