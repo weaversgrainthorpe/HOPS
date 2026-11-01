@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io/fs"
+	"strings"
 	"time"
 
 	"github.com/weaversgrainthorpe/HOPS/internal/assets"
@@ -15,7 +16,17 @@ import (
 
 // Initialize creates and initializes the SQLite database
 func Initialize(dbPath string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", dbPath)
+	// A path is opened as an escaped file: URI, so a ? or # in a folder name
+	// is part of the path, not the start of a query or fragment.
+	dsn := dbPath
+	if dbPath != ":memory:" && !strings.HasPrefix(dbPath, "file:") {
+		uri, err := sqliteFileURI(dbPath, "")
+		if err != nil {
+			return nil, fmt.Errorf("failed to open database: %w", err)
+		}
+		dsn = uri
+	}
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}

@@ -9,6 +9,8 @@ func TestSqliteURI(t *testing.T) {
 		{"/home/x/data/hops.db", "file:///home/x/data/hops.db?mode=ro"},
 		{"C:/Temp/data/backups/hops-backup.db", "file:///C:/Temp/data/backups/hops-backup.db?mode=ro"},
 		{"C:/My Data/a#b.db", "file:///C:/My%20Data/a%23b.db?mode=ro"},
+		{"/home/x/a?b/hops.db", "file:///home/x/a%3Fb/hops.db?mode=ro"},
+		{"/home/x/100%/hops.db", "file:///home/x/100%25/hops.db?mode=ro"},
 	}
 	for _, c := range cases {
 		if got := sqliteURI(c.in, "mode=ro"); got != c.want {
