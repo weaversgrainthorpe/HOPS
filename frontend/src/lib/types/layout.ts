@@ -54,6 +54,8 @@ export interface FolderNode {
   shape?: FolderShape;
   /** Tab shapes only; missing = left. */
   tabPosition?: TabPosition;
+  /** What the folder shows as its icon while minimised. Missing = 'contents'. */
+  minimisedIcon?: 'contents' | 'own';
   showTitle?: boolean;
   /** Folder background; missing or inherit form = none of its own. */
   background?: Background;

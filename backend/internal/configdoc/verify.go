@@ -715,7 +715,8 @@ func (v *verifier) checkContainer(owner string, c Obj, note func(string, Obj) st
 }
 
 // checkFolderShape requires a folder's shape, when present, to be one of
-// FolderShapes and its tabPosition, when present, one of FolderTabPositions.
+// FolderShapes and its tabPosition, when present, one of FolderTabPositions and
+// its minimisedIcon, when present, one of FolderMinimisedIcons.
 // Anything else (a retired name such as "folder-tab", a typo, a non-string,
 // markup) is refused with a message naming the field, the value
 // and the allowed names: the renderer's "unknown shape" note is only a
@@ -737,6 +738,7 @@ func (v *verifier) checkFolderShape(n string, f Obj) {
 	}
 	check("shape", FolderShapes)
 	check("tabPosition", FolderTabPositions)
+	check("minimisedIcon", FolderMinimisedIcons)
 }
 
 // quoteList is names as "a", "b" or "c".

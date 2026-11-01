@@ -23,7 +23,8 @@ import (
 //     `layout`, and its content has no `columns`: its children are an
 //     ordered list with no placements;
 //   - a folder's `shape`, when present, is one of FolderShapes and its
-//     `tabPosition`, when present, one of FolderTabPositions;
+//     `tabPosition`, when present, one of FolderTabPositions; its
+//     `minimisedIcon`, when present, one of FolderMinimisedIcons;
 //   - a tab-level folder's open box is at least FolderMinCellsOf, which
 //     counts a tab-height allowance for every shape.
 //
@@ -151,6 +152,11 @@ var FolderShapes = []string{"rounded", "simple-tab", "folder-flat", "folder-pape
 // FolderTabPositions is where a tab shape's tab sits. Absent means
 // left.
 var FolderTabPositions = []string{"left", "centre", "right"}
+
+// FolderMinimisedIcons is what a minimised folder shows as its icon:
+// "contents" (the mini-grid of what is inside) or "own" (the folder's own
+// icon). Absent means "contents". Twin of the frontend's FolderNode field.
+var FolderMinimisedIcons = []string{"contents", "own"}
 
 // Default shapes: folders made in HOPS (new, merge, Discovery
 // promote) start Flat; converted folders (v2, Homer, Dashy, Heimdall) are

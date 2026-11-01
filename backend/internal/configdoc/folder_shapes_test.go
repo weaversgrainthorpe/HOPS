@@ -186,3 +186,44 @@ func TestConvert_RealV2FolderStyleBecomesFlat(t *testing.T) {
 		})
 	}
 }
+
+func minimisedIconDash(v any, nested bool) Obj {
+	f := currentFolder("f1", 0, 0, 6, 8, inner(currentTile("t1", "medium", 0, 0)))
+	target := f
+	if nested {
+		sub := inner(currentFolder("f2", 0, 0, 0, 0))
+		f["content"].(Obj)["children"] = append(f["content"].(Obj)["children"].([]any), sub)
+		target = sub
+	}
+	if v != nil {
+		target["minimisedIcon"] = v
+	}
+	return currentDash(f)
+}
+
+func TestFolderMinimisedIcon_AcceptsKnownAndAbsent(t *testing.T) {
+	for _, nested := range []bool{false, true} {
+		for _, v := range []any{nil, "contents", "own"} {
+			if err := VerifyDashboard(minimisedIconDash(v, nested)); err != nil {
+				t.Errorf("nested=%v minimisedIcon %v refused: %v", nested, v, err)
+			}
+		}
+	}
+}
+
+func TestFolderMinimisedIcon_RefusesUnknown(t *testing.T) {
+	for _, nested := range []bool{false, true} {
+		for _, bad := range []any{"big", 7.0, "<b>"} {
+			err := VerifyDashboard(minimisedIconDash(bad, nested))
+			if err == nil {
+				t.Errorf("nested=%v minimisedIcon %v accepted", nested, bad)
+				continue
+			}
+			for _, part := range []string{"minimisedIcon", `"contents" or "own"`} {
+				if !strings.Contains(err.Error(), part) {
+					t.Errorf("%v does not mention %q", err, part)
+				}
+			}
+		}
+	}
+}
