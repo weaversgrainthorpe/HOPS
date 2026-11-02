@@ -1,8 +1,10 @@
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 import { login as apiLogin, logout as apiLogout, checkAuth, setSessionExpiredHandler, LoginError } from '$lib/utils/api';
 import { toast } from './toast';
 import { logError } from '$lib/utils/errors';
 import { end as endEditSession } from './editSession';
+import { signedOutButtonsHidden } from './config';
+import { isInstalledApp } from '$lib/utils/installedApp';
 
 // Auth state
 export const isAuthenticated = writable(false);
@@ -90,6 +92,16 @@ export function sessionExpiredRedirect(path: string): string | null {
   return isAdminOnlyPath(path) ? '/settings' : null;
 }
 
+/**
+ * What the toast says when a session ends: the real way back in. The gear while it shows; with the
+ * signed-out buttons hidden (and no installed app, which keeps its gear), the /settings address.
+ */
+export function signedOutMessage(gearShown: boolean): string {
+  return gearShown
+    ? 'You’ve been signed out — dashboards are still browseable. Sign in again from the gear to make changes.'
+    : 'You’ve been signed out — dashboards are still browseable. To make changes, sign in again at /settings on your HOPS address.';
+}
+
 // Register the global session-expired handler with the API layer.
 // Fires when any fetchAPI call hits 401 — clears auth state, toasts
 // once, and leaves only a page that can't work signed out.
@@ -98,7 +110,7 @@ setSessionExpiredHandler(() => {
   authFailure.set(null);
   isAuthenticated.set(false);
   mustChangePassword.set(false);
-  toast.info('You’ve been signed out — dashboards are still browseable. Click Sign in when you want to make changes.');
+  toast.info(signedOutMessage(!get(signedOutButtonsHidden) || isInstalledApp()));
   const target = typeof window !== 'undefined' ? sessionExpiredRedirect(window.location.pathname) : null;
   if (target) {
     // Defer slightly so any pending per-page error handling can show

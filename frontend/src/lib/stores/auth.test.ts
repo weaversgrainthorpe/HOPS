@@ -320,3 +320,27 @@ describe('pageHasOutageNotice', () => {
 		expect(pageHasOutageNotice('/address', true, true)).toBe(false);
 	});
 });
+
+describe('the signed-out toast (a session that ended)', () => {
+	it('names the gear while it shows, and /settings when it is hidden', async () => {
+		const { signedOutMessage } = await import('./auth');
+		expect(signedOutMessage(true)).toContain('Sign in again from the gear');
+		expect(signedOutMessage(true)).not.toContain('Click Sign in');
+		expect(signedOutMessage(false)).toContain('/settings on your HOPS address');
+		expect(signedOutMessage(false)).not.toContain('gear');
+	});
+
+	it('the handler reads the setting: hidden buttons send the viewer to /settings', async () => {
+		const { config } = await import('./config');
+		const handler = (api.setSessionExpiredHandler as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0] as () => void;
+		const info = vi.spyOn(toast, 'info');
+		config.set({ schemaVersion: 3, dashboards: [], signedOutButtons: false } as never);
+		handler();
+		expect(info).toHaveBeenLastCalledWith(expect.stringContaining('/settings on your HOPS address'));
+		config.set({ schemaVersion: 3, dashboards: [], signedOutButtons: true } as never);
+		handler();
+		expect(info).toHaveBeenLastCalledWith(expect.stringContaining('from the gear'));
+		info.mockRestore();
+		config.set(null);
+	});
+});
