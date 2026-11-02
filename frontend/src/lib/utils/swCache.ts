@@ -106,7 +106,8 @@ export async function networkOrKept(
     const kept = await keptCopy().catch(() => undefined);
     return kept ? markKept(kept) : await network;
   } catch {
-    const kept = await keptCopy();
+    // A copy that can't be read is the same as none: the app's offline answer, never a rejection.
+    const kept = await keptCopy().catch(() => undefined);
     if (kept) return markKept(kept);
     return new Response(JSON.stringify({ error: 'offline' }), {
       status: 503,
@@ -115,6 +116,51 @@ export async function networkOrKept(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** The part of a Cache that fetchAndKeep uses. */
+export interface KeepCache {
+  put(request: Request, response: Response): Promise<void>;
+  delete(request: Request): Promise<boolean>;
+}
+
+/**
+ * Read from the server and keep the answer. Resolves only once the whole body has arrived: a body
+ * that stalls halfway counts as not answered yet, and one whose connection drops partway rejects,
+ * so networkOrKept answers from the kept copy rather than handing the app a body that then fails.
+ * A copy that can't be kept drops the older one, so a later outage can never show a copy older
+ * than the last one seen; the app still gets its answer. A no-store answer (admin notices) is
+ * never kept and drops any copy kept earlier.
+ */
+export async function fetchAndKeep(
+  request: Request,
+  fetcher: (request: Request) => Promise<Response>,
+  openCache: () => Promise<KeepCache>
+): Promise<Response> {
+  const fresh = await fetcher(request);
+  if (swMayCache(fresh)) {
+    const body = await fresh.arrayBuffer();
+    const answer = () => new Response(body, { status: fresh.status, statusText: fresh.statusText, headers: fresh.headers });
+    try {
+      await (await openCache()).put(request, answer());
+    } catch (e) {
+      console.warn('HOPS could not keep an offline copy; the older one is dropped', e);
+      try {
+        await (await openCache()).delete(request);
+      } catch (e2) {
+        console.warn('HOPS could not drop the older offline copy', e2);
+      }
+    }
+    return answer();
+  }
+  if (fresh.ok) {
+    try {
+      await (await openCache()).delete(request);
+    } catch (e) {
+      console.warn('HOPS could not drop an offline copy of a no-store answer', e);
+    }
+  }
+  return fresh;
 }
 
 // The answers that came from a kept copy. Beside the data, not in it: a config can be saved back

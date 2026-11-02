@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { swMayCache, isCacheableApiPath, isKeptConfigRead, offlineFallbackFor, precacheList, shellRequest, isAppShell, SHELL_PATH, KEPT_HEADER, KEPT_WAIT_MS, networkOrKept, markKept, noteKept, isKept } from './swCache';
+import { swMayCache, isCacheableApiPath, isKeptConfigRead, offlineFallbackFor, precacheList, shellRequest, isAppShell, SHELL_PATH, KEPT_HEADER, KEPT_WAIT_MS, networkOrKept, markKept, noteKept, isKept, fetchAndKeep } from './swCache';
 
 const res = (ok: boolean, cc?: string) => ({ ok, headers: new Headers(cc ? { 'Cache-Control': cc } : {}) });
 
@@ -191,6 +191,15 @@ describe('networkOrKept', () => {
     expect(await res.text()).toBe('kept');
   });
 
+  it('a network failure whose kept copy cannot be read is the offline answer, never a rejection', async () => {
+    const net = deferred();
+    const answer = networkOrKept(net.promise, async () => { throw new Error('cache broken'); }, KEPT_WAIT_MS);
+    net.reject(new TypeError('failed'));
+    const res = await answer;
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: 'offline' });
+  });
+
   it('an error answer from the server is passed on, not swapped for a kept copy', async () => {
     const res = await networkOrKept(Promise.resolve(new Response('no', { status: 500 })), kept(), KEPT_WAIT_MS);
     expect(res.status).toBe(500);
@@ -205,5 +214,74 @@ describe('networkOrKept', () => {
     expect(read).not.toHaveBeenCalled();
     net.resolve(new Response('fresh'));
     expect(await (await answer).text()).toBe('fresh');
+  });
+});
+
+describe('fetchAndKeep', () => {
+  const req = () => new Request('http://hops.test/api/config');
+  /** A body that sends some bytes, then its connection drops. */
+  const droppingBody = () =>
+    new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(new TextEncoder().encode('{"dashb'));
+        c.error(new TypeError('connection dropped'));
+      }
+    });
+  function fakeCache(opts: { putFails?: boolean } = {}) {
+    const stored = new Map<string, Response>();
+    return {
+      stored,
+      put: vi.fn(async (r: Request, res: Response) => {
+        if (opts.putFails) throw new DOMException('full', 'QuotaExceededError');
+        stored.set(r.url, res);
+      }),
+      delete: vi.fn(async (r: Request) => stored.delete(r.url))
+    };
+  }
+
+  it('keeps the whole answer and hands the app the same body', async () => {
+    const cache = fakeCache();
+    const res = await fetchAndKeep(req(), async () => new Response('{"ok":1}', { headers: { 'Content-Type': 'application/json' } }), async () => cache);
+    expect(await res.text()).toBe('{"ok":1}');
+    expect(res.headers.get('Content-Type')).toBe('application/json');
+    expect(await cache.stored.get('http://hops.test/api/config')!.text()).toBe('{"ok":1}');
+  });
+
+  it('a body that fails partway is a failed read: nothing kept, and networkOrKept answers from the kept copy, marked', async () => {
+    const cache = fakeCache();
+    const network = fetchAndKeep(req(), async () => new Response(droppingBody()), async () => cache);
+    await expect(network).rejects.toThrow();
+    expect(cache.put).not.toHaveBeenCalled();
+    const res = await networkOrKept(fetchAndKeep(req(), async () => new Response(droppingBody()), async () => cache), async () => new Response('kept'), KEPT_WAIT_MS);
+    expect(res.headers.get(KEPT_HEADER)).toBe('1');
+    expect(await res.text()).toBe('kept');
+  });
+
+  it('a copy that cannot be kept drops the older one, and the app still gets its answer', async () => {
+    const cache = fakeCache({ putFails: true });
+    cache.stored.set('http://hops.test/api/config', new Response('older'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const res = await fetchAndKeep(req(), async () => new Response('fresh'), async () => cache);
+    expect(await res.text()).toBe('fresh');
+    // A later outage must not show a copy older than the one last seen.
+    expect(cache.stored.has('http://hops.test/api/config')).toBe(false);
+    warn.mockRestore();
+  });
+
+  it('a no-store answer is never kept, and drops any copy kept earlier', async () => {
+    const cache = fakeCache();
+    cache.stored.set('http://hops.test/api/config', new Response('older'));
+    const res = await fetchAndKeep(req(), async () => new Response('admin', { headers: { 'Cache-Control': 'no-store' } }), async () => cache);
+    expect(await res.text()).toBe('admin');
+    expect(cache.put).not.toHaveBeenCalled();
+    expect(cache.stored.size).toBe(0);
+  });
+
+  it('a failed server answer is passed on and keeps nothing', async () => {
+    const cache = fakeCache();
+    const res = await fetchAndKeep(req(), async () => new Response('no', { status: 500 }), async () => cache);
+    expect(res.status).toBe(500);
+    expect(cache.put).not.toHaveBeenCalled();
+    expect(cache.delete).not.toHaveBeenCalled();
   });
 });

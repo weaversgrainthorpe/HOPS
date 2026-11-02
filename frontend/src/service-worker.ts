@@ -4,7 +4,7 @@
 /// <reference lib="webworker" />
 
 import { build, files, version } from '$service-worker';
-import { swMayCache, isCacheableApiPath, isKeptConfigRead, offlineFallbackFor, networkOrKept, precacheList, shellRequest, isAppShell, KEPT_WAIT_MS, SHELL_PATH } from '$lib/utils/swCache';
+import { isCacheableApiPath, isKeptConfigRead, offlineFallbackFor, networkOrKept, fetchAndKeep, precacheList, shellRequest, isAppShell, KEPT_WAIT_MS, SHELL_PATH } from '$lib/utils/swCache';
 
 // HOPS PWA service worker.
 //
@@ -41,26 +41,6 @@ const sw = self as unknown as ServiceWorkerGlobalScope;
 
 const PRECACHE = `hops-precache-${version}`;
 const RUNTIME = `hops-runtime-${version}`;
-
-/**
- * Read from the server and keep the answer. Resolves once the answer is kept: that is the whole
- * body, so one that stalls halfway counts as not answered yet, not as an answer that then fails.
- */
-async function fetchAndKeep(request: Request): Promise<Response> {
-  const fresh = await fetch(request);
-  // no-store responses (admin-only notices) are never kept.
-  if (swMayCache(fresh)) {
-    const cache = await caches.open(RUNTIME);
-    // The app still gets its answer when the copy can't be kept. The older copy stays, and is only
-    // ever shown marked as kept.
-    await cache.put(request, fresh.clone()).catch((e) => console.warn('HOPS could not keep an offline copy', e));
-  } else if (fresh.ok) {
-    // A no-store answer (admin notices): drop any copy kept earlier too.
-    const cache = await caches.open(RUNTIME);
-    await cache.delete(request);
-  }
-  return fresh;
-}
 
 /** The kept answer to this read: its own copy, or another that serves it (offlineFallbackFor). */
 async function keptCopyOf(request: Request, url: URL): Promise<Response | undefined> {
@@ -129,7 +109,7 @@ sw.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/api/')) {
     if (!isCacheableApiPath(url.pathname)) return;
 
-    const network = fetchAndKeep(request);
+    const network = fetchAndKeep(request, (r) => fetch(r), () => caches.open(RUNTIME));
     // Answered from a kept copy, the worker must still live to see this read refresh it.
     event.waitUntil(network.then(() => undefined, () => undefined));
     event.respondWith(networkOrKept(network, () => keptCopyOf(request, url), isKeptConfigRead(url.pathname) ? KEPT_WAIT_MS : null));
