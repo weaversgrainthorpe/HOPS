@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { promotableRows, hiddenTickedCount, hiddenTickedMessage } from './discoverySelection';
+import { promotableRows, hiddenTickedCount, hiddenTickedMessage, untickUnchangedDefaults } from './discoverySelection';
 
 const all = [
   { id: 'a' },
@@ -28,5 +28,16 @@ describe('discovery selection with a filter', () => {
   it('words the line for one and many', () => {
     expect(hiddenTickedMessage(1)).toBe("1 ticked result isn't shown by this filter and won't be added.");
     expect(hiddenTickedMessage(16)).toBe("16 ticked results aren't shown by this filter and won't be added.");
+  });
+});
+
+describe('default ticks after the comparison loads', () => {
+  it('unticks only rows ticked by default that are unchanged since the last scan', () => {
+    const selected: Record<string, boolean> = { a: true, b: true, c: true, d: true };
+    const autoTicked = new Set(['a', 'b', 'd']); // c was ticked by the admin
+    const states = { a: 'unchanged', b: 'new', c: 'unchanged', d: 'changed' };
+    untickUnchangedDefaults(selected, autoTicked, states);
+    expect(selected).toEqual({ a: false, b: true, c: true, d: true });
+    expect([...autoTicked].sort()).toEqual(['b', 'd']);
   });
 });

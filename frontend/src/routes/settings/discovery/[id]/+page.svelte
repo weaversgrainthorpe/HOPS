@@ -18,7 +18,7 @@
   } from '$lib/utils/api';
   import DetectorEditModal from '$lib/components/admin/DetectorEditModal.svelte';
   import PromoteDialog from '$lib/components/admin/PromoteDialog.svelte';
-  import { promotableRows, hiddenTickedCount, hiddenTickedMessage } from '$lib/settings/discoverySelection';
+  import { promotableRows, hiddenTickedCount, hiddenTickedMessage, untickUnchangedDefaults } from '$lib/settings/discoverySelection';
 
   const scanId = $derived(page.params.id ?? '');
 
@@ -45,6 +45,8 @@
   // We sync to the server via PATCH on blur so a half-curated draft
   // survives a reload.
   let selected = $state<Record<string, boolean>>({});
+  // Rows ticked only because they are high confidence; the admin has not touched them.
+  let autoTicked = new Set<string>();
   let nameDrafts = $state<Record<string, string>>({});
   let urlDrafts = $state<Record<string, string>>({});
 
@@ -74,6 +76,7 @@
     getScanDiff(id).then((d) => {
       if (scan?.id !== id) return;
       diff = d;
+      if (d.comparable) untickUnchangedDefaults(selected, autoTicked, d.states);
       // Default to the changes when there is something to compare against.
       diffFilter = d.comparable ? 'new' : 'all';
     }).catch((e) => {
@@ -130,6 +133,7 @@
     diffError = '';
     diffLoadedFor = '';
     selected = {};
+    autoTicked = new Set();
     nameDrafts = {};
     urlDrafts = {};
     categoryDrafts = {};
@@ -194,6 +198,7 @@
             selected[r.id] = true;
           } else if (r.curateState === 'pending' && r.confidence === 'high') {
             selected[r.id] = true;
+            autoTicked.add(r.id);
           } else {
             selected[r.id] = false;
           }
@@ -430,12 +435,14 @@
     for (const r of visibleResults) {
       if (r.curateState === 'promoted') continue;
       selected[r.id] = state;
+      autoTicked.delete(r.id);
     }
   }
   function selectAllHigh() {
     for (const r of visibleResults) {
       if (r.curateState === 'promoted') continue;
       selected[r.id] = r.confidence === 'high';
+      autoTicked.delete(r.id);
     }
   }
 
@@ -444,6 +451,7 @@
   );
 
   async function persistCurateState(r: DiscoveryResult) {
+    autoTicked.delete(r.id);
     if (!scan) return;
     // Locked rows are read-only — the server rejects writes to them
     // anyway but skipping here avoids spurious error toasts on blur.
@@ -640,7 +648,7 @@
               since the {fmtDay(diff.baseline.createdAt)} scan{#if diff.baseline.label} ({diff.baseline.label}){/if}
             </div>
             <div class="diff-filter" role="group" aria-label="Show">
-              <button class:active={diffFilter === 'new'} onclick={() => (diffFilter = 'new')}>New only ({diff.counts.new + diff.counts.changed})</button>
+              <button class:active={diffFilter === 'new'} onclick={() => (diffFilter = 'new')}>New or changed ({diff.counts.new + diff.counts.changed})</button>
               <button class:active={diffFilter === 'all'} onclick={() => (diffFilter = 'all')}>All ({results.length})</button>
               <button class:active={diffFilter === 'gone'} onclick={() => (diffFilter = 'gone')}>Gone ({diff.counts.gone})</button>
             </div>

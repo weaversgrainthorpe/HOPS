@@ -120,6 +120,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   results the filter hid, so Promote could add tiles you hadn't seen. Now
   only the rows shown count and are added; ticks on hidden rows are kept, and
   a line says how many there are, with **Show all**.
+- **A re-scan no longer calls domain names "changed" when they aren't.**
+  Names found through your domain often share one proxy's address, and the
+  comparison with the last scan mixed them up. Each name is now compared
+  with itself. The filter is called **New or changed**, and results already
+  on offer in the last scan are no longer ticked for you.
 - **Notices sit above the edit toolbar,** so an error never covers Save.
 - **Add to HOPS shows one notice** when HOPS can't be reached, not several.
 - **Settings › Dashboards no longer runs off the right-hand edge** with a long

@@ -36,3 +36,20 @@ export function hiddenTickedMessage(n: number): string {
     ? "1 ticked result isn't shown by this filter and won't be added."
     : `${n} ticked results aren't shown by this filter and won't be added.`;
 }
+
+/**
+ * Once the comparison with the last scan arrives, untick the rows that were
+ * only ticked by default and are unchanged since then: they were on offer last
+ * time too. Rows the admin ticked themselves are left alone.
+ */
+export function untickUnchangedDefaults(
+  selected: Record<string, boolean>,
+  autoTicked: Set<string>,
+  states: Record<string, string>
+): void {
+  for (const id of [...autoTicked]) {
+    if (states[id] !== 'unchanged') continue;
+    selected[id] = false;
+    autoTicked.delete(id);
+  }
+}

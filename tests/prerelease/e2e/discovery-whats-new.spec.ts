@@ -91,7 +91,7 @@ c.commit()
 		await page.goto('/settings/discovery/rescan');
 		await expect(page.getByTestId('diff-summary')).toContainText('3 new, 2 gone, 1 changed');
 		await expect(page.getByTestId('diff-summary')).toContainText('since the');
-		// Default filter: New only = new + changed rows (3 new + 1 changed), the unchanged one is hidden.
+		// Default filter: New or changed = rows (3 new + 1 changed), the unchanged one is hidden.
 		const rows = page.locator('table.results tbody tr');
 		await expect(rows).toHaveCount(4);
 		await expect(page.getByText('192.0.2.1', { exact: true })).toHaveCount(0);
@@ -111,10 +111,20 @@ c.commit()
 
 	test('with the New filter only the rows you can see are counted, and hidden ticks are called out', async () => {
 		await page.goto('/settings/discovery/rescan');
-		// 4 rows shown (all ticked, high confidence); the 5th, unchanged, is hidden but also ticked.
+		// 4 rows shown (all ticked, high confidence); the 5th is unchanged since the last scan, so it is
+		// hidden and not ticked by default — it was on offer last time too.
 		await expect(page.locator('table.results tbody tr')).toHaveCount(4);
 		await expect(page.getByText('4 selected', { exact: true })).toBeVisible();
 		await expect(page.getByRole('button', { name: 'Promote 4 to dashboard' })).toBeVisible();
+		await expect(page.getByTestId('hidden-ticked')).toHaveCount(0);
+		await page.getByRole('button', { name: 'All (5)' }).click();
+		await expect(page.locator('table.results tbody tr')).toHaveCount(5);
+		await expect(page.getByText('4 selected', { exact: true })).toBeVisible();
+		// Ticking it yourself, then filtering back, is called out.
+		await page.locator('table.results tbody tr:not(.selected) input[type="checkbox"]').check();
+		await expect(page.getByText('5 selected', { exact: true })).toBeVisible();
+		await page.getByRole('button', { name: /^New or changed/ }).click();
+		await expect(page.getByText('4 selected', { exact: true })).toBeVisible();
 		await expect(page.getByTestId('hidden-ticked')).toContainText("1 ticked result isn't shown by this filter and won't be added.");
 		await page.getByTestId('hidden-ticked').getByRole('button', { name: 'Show all' }).click();
 		await expect(page.locator('table.results tbody tr')).toHaveCount(5);

@@ -65,7 +65,8 @@ type Diff struct {
 	Counts   DiffCounts              `json:"counts"`
 }
 
-// ComputeDiff compares cur against prev. Identity is host:port; a row is
+// ComputeDiff compares cur against prev. Identity is host:port, plus the name
+// for a forward-DNS row (many names share one proxy's address); a row is
 // unchanged if the baseline has the same detector at that host:port (and the
 // same name), changed if the baseline has the host:port but not this
 // detector, or the name differs, new otherwise. A baseline host:port with no
@@ -75,17 +76,24 @@ func ComputeDiff(prev, cur []*Result) (states map[string]string, previous map[st
 	previous = map[string]DiffPrevious{}
 	gone = []DiffGone{}
 	type hp struct {
-		h string
-		p int
+		h    string
+		p    int
+		name string
+	}
+	key := func(r *Result) hp {
+		if r.DetectorID == "dns/forward" {
+			return hp{r.Host, r.Port, r.Hostname}
+		}
+		return hp{r.Host, r.Port, ""}
 	}
 	prevBy := map[hp][]*Result{}
 	for _, r := range prev {
-		k := hp{r.Host, r.Port}
+		k := key(r)
 		prevBy[k] = append(prevBy[k], r)
 	}
 	curKeys := map[hp]bool{}
 	for _, r := range cur {
-		k := hp{r.Host, r.Port}
+		k := key(r)
 		curKeys[k] = true
 		ps := prevBy[k]
 		if len(ps) == 0 {
@@ -111,7 +119,7 @@ func ComputeDiff(prev, cur []*Result) (states map[string]string, previous map[st
 		}
 	}
 	for _, r := range prev {
-		if curKeys[hp{r.Host, r.Port}] {
+		if curKeys[key(r)] {
 			continue
 		}
 		gone = append(gone, DiffGone{
