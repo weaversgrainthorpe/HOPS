@@ -29,7 +29,7 @@ COPY --from=frontend-builder /app/frontend/build ./internal/web/build
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -ldflags="-s -w -X github.com/weaversgrainthorpe/HOPS/internal/version.Prerelease=${PRERELEASE}" -o hops ./cmd/hops
 
 # Stage 3: Runtime — just the self-contained binary.
-FROM alpine:3.21
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates
 RUN adduser -D -h /app hops
 WORKDIR /app
