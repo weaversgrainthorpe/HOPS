@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
+	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 )
 
 // seedTwo stores two dashboards, d1 at /first (order 1) and d2 at /second
@@ -319,5 +320,39 @@ func TestConfigIndex_CarriesHeader(t *testing.T) {
 	got := dashByID(part)["d2"]
 	if got["partial"] != true || !reflect.DeepEqual(got["header"], dashByID(full)["d2"]["header"]) {
 		t.Fatalf("index entry header: %v", got)
+	}
+}
+
+// A global display setting reaches every dashboard's display block with no
+// revision of its own, so the fingerprint has to follow it: a one-dashboard read
+// taken after the change must not pass as matching an index read before it.
+func TestConfigRevision_FollowsGlobalDisplay(t *testing.T) {
+	r, h, db := setupTestRouterInDir(t, t.TempDir())
+	seedTwo(t, db)
+	rev := func() string {
+		_, light := anonJSON(t, h, "/api/config?dashboard=first")
+		_, one := anonJSON(t, h, "/api/config/dashboard/d1")
+		if light["configRevision"] != one["configRevision"] {
+			t.Fatalf("index %v and one-dashboard read %v disagree on one state", light["configRevision"], one["configRevision"])
+		}
+		s, _ := light["configRevision"].(string)
+		return s
+	}
+	before := rev()
+	if rev() != before {
+		t.Fatal("configRevision is not stable between identical reads")
+	}
+	if err := r.settings.Set(settings.KeyDisplayAnimations, "off"); err != nil {
+		t.Fatal(err)
+	}
+	offRev := rev()
+	if offRev == before {
+		t.Fatal("configRevision did not change with the global Animations setting")
+	}
+	if err := r.settings.Set(settings.KeyFoldersAnimatedBackgrounds, "false"); err != nil {
+		t.Fatal(err)
+	}
+	if rev() == offRev {
+		t.Fatal("configRevision did not change with the global animated folder backgrounds setting")
 	}
 }

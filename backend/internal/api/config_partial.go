@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"math"
 	"sort"
 	"strconv"
@@ -126,8 +127,10 @@ func orderKey(d configdoc.Obj) float64 {
 // configRevision identifies the set of dashboards and their revisions as a
 // whole. The stored document has no counter of its own (revisions are per
 // dashboard), so this is a short fingerprint of each dashboard's id, path,
-// order, name and revision in document order: it changes when any dashboard is
-// saved, added, removed, renamed or reordered. Compare for equality only.
+// order, name, revision and computed display block in document order: it
+// changes when any dashboard is saved, added, removed, renamed or reordered, and
+// when a global display setting changes what a dashboard shows (no revision
+// moves for those). Compare for equality only.
 func configRevision(view map[string]interface{}) string {
 	h := sha256.New()
 	list, _ := view["dashboards"].([]any)
@@ -144,6 +147,10 @@ func configRevision(view map[string]interface{}) string {
 				h.Write([]byte(strconv.FormatFloat(v, 'g', -1, 64)))
 			}
 			h.Write([]byte{0})
+		}
+		// json.Marshal sorts map keys, so one state always hashes the same.
+		if b, err := json.Marshal(dm["display"]); err == nil {
+			h.Write(b)
 		}
 		h.Write([]byte{1})
 	}
