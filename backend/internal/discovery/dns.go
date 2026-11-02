@@ -2,7 +2,11 @@ package discovery
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +14,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -62,6 +67,14 @@ type axfrDialError struct{ err error }
 
 func (e *axfrDialError) Error() string { return "dial: " + e.err.Error() }
 func (e *axfrDialError) Unwrap() error { return e.err }
+
+// forwardLookupHost and forwardEnumFetch are the forward-enumeration DNS
+// lookup and page fetch (vars so tests can stub them, like lookupAddr).
+var forwardLookupHost = func(ctx context.Context, host string) ([]string, error) {
+	return (&net.Resolver{}).LookupHost(ctx, host)
+}
+
+var forwardEnumFetch = httpFollowRedirects
 
 // axfrWarning is the scan warning for a failed zone transfer, or "" when
 // there is nothing to report. A refusal by policy is already nil (a real
@@ -226,7 +239,7 @@ func attemptAXFR(ctx context.Context, resolverIP, zone string, allow hostAllowli
 	}
 	frame := make([]byte, 2+len(pkt))
 	frame[0] = byte(len(pkt) >> 8) // #nosec G115 -- value bounded by construction or masked/shifted to one byte (parsing/encoding), no overflow possible
-	frame[1] = byte(len(pkt)) // #nosec G115 -- value bounded by construction or masked/shifted to one byte (parsing/encoding), no overflow possible
+	frame[1] = byte(len(pkt))      // #nosec G115 -- value bounded by construction or masked/shifted to one byte (parsing/encoding), no overflow possible
 	copy(frame[2:], pkt)
 	if _, err := conn.Write(frame); err != nil {
 		return fmt.Errorf("write: %w", err)
@@ -387,6 +400,98 @@ func allowHostList(allow hostAllowlist) []string {
 	return out
 }
 
+// forwardSig identifies a forward-enum response so a made-up name's page
+// can be recognised when a wildcard proxy serves it for real names too.
+type forwardSig struct {
+	ip     string
+	status int
+	path   string
+	hash   [32]byte
+	length int
+	title  string
+}
+
+var forwardTitleRE = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
+
+func forwardSigOf(ip string, d probeForwardEnumDecision) (forwardSig, bool) {
+	if d.snap == nil {
+		return forwardSig{}, false
+	}
+	sg := forwardSig{ip: ip, status: d.snap.Status, hash: sha256.Sum256(d.snap.Body), length: len(d.snap.Body)}
+	if u, err := url.Parse(d.finalURL); err == nil {
+		sg.path = u.EscapedPath()
+		if sg.path == "" {
+			sg.path = "/"
+		}
+	}
+	if m := forwardTitleRE.FindSubmatch(d.snap.Body); m != nil {
+		sg.title = strings.TrimSpace(string(m[1]))
+	}
+	return sg, true
+}
+
+// matches is the drop rule: same IP, status, final path and body hash.
+func (a forwardSig) matches(b forwardSig) bool {
+	return a.ip == b.ip && a.status == b.status && a.path == b.path && a.hash == b.hash
+}
+
+// firstUsableIPv4 picks the first resolved address HOPS may probe.
+func firstUsableIPv4(ips []string) string {
+	for _, ipStr := range ips {
+		if v4 := net.ParseIP(ipStr).To4(); v4 != nil && !isBlockedIP(v4) {
+			return v4.String()
+		}
+	}
+	return ""
+}
+
+func randomForwardLabel() (string, error) {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return "hops-probe-" + hex.EncodeToString(b), nil
+}
+
+// wildcardCanary looks up two random labels under domain. resolved is true
+// when any of them resolves (wildcard DNS). sigs holds the signature of each
+// canary page that could be loaded; failed is true when a canary resolved
+// but no page could be loaded to compare against.
+func wildcardCanary(ctx context.Context, domain string) (resolved bool, sigs []forwardSig, failed bool) {
+	var (
+		mu sync.Mutex
+		wg sync.WaitGroup
+	)
+	var tried int
+	for i := 0; i < 2; i++ {
+		label, err := randomForwardLabel()
+		if err != nil {
+			continue
+		}
+		wg.Add(1)
+		go func(fqdn string) {
+			defer wg.Done()
+			lctx, lcancel := context.WithTimeout(ctx, forwardEnumPerQueryTO)
+			ips, err := forwardLookupHost(lctx, fqdn)
+			lcancel()
+			ip := firstUsableIPv4(ips)
+			if err != nil || ip == "" {
+				return
+			}
+			d := probeForwardEnumURL(ctx, fqdn)
+			sg, ok := forwardSigOf(ip, d)
+			mu.Lock()
+			defer mu.Unlock()
+			tried++
+			if ok {
+				sigs = append(sigs, sg)
+			}
+		}(label + "." + domain)
+	}
+	wg.Wait()
+	return tried > 0, sigs, tried > 0 && len(sigs) == 0
+}
+
 // enumerateForwardDomain queries each curated subdomain under `domain`
 // against the system resolver, probes each that resolves, and returns
 // the candidate Results. **Does not persist anything** — the caller is
@@ -401,15 +506,26 @@ func enumerateForwardDomain(
 	ctx context.Context,
 	scanID, domain string,
 	registry *Registry,
-) (candidates []*Result, err error) {
+) (candidates []*Result, warnings []string, err error) {
 	domain = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(domain)), ".")
 	if domain == "" || registry == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	// Overall budget so the goroutine can't wedge if DNS or upstream
 	// HTTP hangs. Per-query timeouts still apply inside this.
 	ctx, cancel := context.WithTimeout(ctx, forwardEnumOverallBudget)
 	defer cancel()
+
+	// Wildcard canary: if made-up names resolve, every curated name will
+	// too, so only names whose page differs from a made-up name's count.
+	wild, canarySigs, canaryFailed := wildcardCanary(ctx, domain)
+	if wild {
+		if canaryFailed {
+			warnings = append(warnings, domain+" answers every name (wildcard DNS), and HOPS couldn't load a made-up name's page to compare, so these results may include names that aren't real services.")
+		} else {
+			warnings = append(warnings, domain+" answers every name (wildcard DNS), so HOPS only kept names whose page differs from a made-up name's.")
+		}
+	}
 
 	subs := curatedForwardSubdomains()
 	type job struct {
@@ -433,27 +549,12 @@ func enumerateForwardDomain(
 				}
 				fqdn := j.sub + "." + domain
 				lctx, lcancel := context.WithTimeout(ctx, forwardEnumPerQueryTO)
-				ips, err := (&net.Resolver{}).LookupHost(lctx, fqdn)
+				ips, err := forwardLookupHost(lctx, fqdn)
 				lcancel()
 				if err != nil || len(ips) == 0 {
 					continue
 				}
-				var resolved string
-				for _, ipStr := range ips {
-					ip := net.ParseIP(ipStr)
-					if ip == nil {
-						continue
-					}
-					v4 := ip.To4()
-					if v4 == nil {
-						continue
-					}
-					if isBlockedIP(v4) {
-						continue
-					}
-					resolved = v4.String()
-					break
-				}
+				resolved := firstUsableIPv4(ips)
 				if resolved == "" {
 					continue
 				}
@@ -464,6 +565,18 @@ func enumerateForwardDomain(
 				probed := probeForwardEnumURL(ctx, fqdn)
 				if probed.skip {
 					continue
+				}
+				if sg, ok := forwardSigOf(resolved, probed); ok {
+					same := false
+					for _, c := range canarySigs {
+						if sg.matches(c) {
+							same = true
+							break
+						}
+					}
+					if same {
+						continue
+					}
 				}
 				// Run the bundled detectors against the probed response.
 				// If one matches, it OVERRIDES the curated subdomain
@@ -479,7 +592,7 @@ func enumerateForwardDomain(
 					}
 				}
 				r := buildForwardEnumResult(scanID, j.sub, domain, detectorID, resolved, registry)
-				if probed.confirmed {
+				if probed.confirmed && !canaryFailed {
 					r.Confidence = ConfidenceHigh
 				}
 				// If the probe ended at a different URL than the bare
@@ -507,7 +620,7 @@ func enumerateForwardDomain(
 	}
 	close(jobs)
 	wg.Wait()
-	return out, nil
+	return out, warnings, nil
 }
 
 // probeForwardEnumDecision is the outcome of probing a forward-enum
@@ -519,6 +632,7 @@ func enumerateForwardDomain(
 type probeForwardEnumDecision struct {
 	skip      bool
 	confirmed bool
+	reached   bool // a response came back (even one judged noise)
 	finalURL  string
 	snap      *HTTPSnapshot
 }
@@ -546,15 +660,16 @@ func probeForwardEnumURL(ctx context.Context, fqdn string) probeForwardEnumDecis
 		tls    bool
 	}{{"https", true}, {"http", false}} {
 		startURL := attempt.scheme + "://" + fqdn + "/"
-		snap, finalURL, err := httpFollowRedirects(pctx, startURL, attempt.tls, probeTimeout, 5)
+		snap, finalURL, err := forwardEnumFetch(pctx, startURL, attempt.tls, probeTimeout, 5)
 		if err != nil || snap == nil {
 			continue
 		}
 		if isForwardEnumNoise(snap) {
-			return probeForwardEnumDecision{skip: true}
+			return probeForwardEnumDecision{skip: true, reached: true, finalURL: finalURL, snap: snap}
 		}
 		return probeForwardEnumDecision{
 			skip:      false,
+			reached:   true,
 			confirmed: true,
 			finalURL:  finalURL,
 			snap:      snap,
@@ -570,6 +685,7 @@ func probeForwardEnumURL(ctx context.Context, fqdn string) probeForwardEnumDecis
 // substring filter would catch.
 //
 // Rules:
+//   - 2xx with an empty or whitespace-only body → noise: wildcard proxy.
 //   - 5xx (any) → noise: the proxy is configured but the upstream is
 //     dead/unreachable. Common case: admin set up a proxy host in NPM
 //     for an app that doesn't exist or was removed.
@@ -583,6 +699,11 @@ func probeForwardEnumURL(ctx context.Context, fqdn string) probeForwardEnumDecis
 func isForwardEnumNoise(snap *HTTPSnapshot) bool {
 	if snap == nil {
 		return false
+	}
+	// 2xx with nothing in it — a wildcard proxy's answer for a name it
+	// has no upstream for. Nothing a person could open.
+	if snap.Status >= 200 && snap.Status < 300 && len(bytes.TrimSpace(snap.Body)) == 0 {
+		return true
 	}
 	// 5xx — proxy is alive but upstream isn't. Always noise.
 	if snap.Status >= 500 {
@@ -794,44 +915,44 @@ func curatedForwardSubdomains() map[string]string {
 		// Calibre-web, Audiobookshelf, Kavita, Komga, BookStack, …).
 		// The forward-enum probe will detect the actual service via
 		// the response body and pick the right detector.
-		"navidrome":      "core/navidrome",
-		"music":          "core/navidrome",
-		"mealie":         "core/mealie",
-		"recipes":        "core/mealie",
-		"linkding":       "core/linkding",
-		"bookmarks":      "core/linkding",
-		"freshrss":       "core/freshrss",
-		"rss":            "core/freshrss",
-		"miniflux":       "core/miniflux",
-		"feeds":          "core/miniflux",
-		"mattermost":     "core/mattermost",
-		"chat":           "core/mattermost",
-		"rocketchat":     "core/rocketchat",
-		"seafile":        "core/seafile",
-		"owncloud":       "core/owncloud",
-		"vikunja":        "core/vikunja",
-		"tasks":          "core/vikunja",
-		"wiki":           "core/wikijs",
-		"wikijs":         "core/wikijs",
-		"bookstack":      "core/bookstack",
-		"docs":           "core/bookstack",
-		"minio":          "core/minio",
-		"s3":             "core/minio",
-		"prometheus":     "core/prometheus",
-		"prom":           "core/prometheus",
-		"alertmanager":   "core/alertmanager",
-		"loki":           "core/loki",
-		"traefik":        "core/traefik",
-		"caddy":          "core/caddy",
-		"jenkins":        "core/jenkins",
-		"gitlab":         "core/gitlab",
-		"woodpecker":     "core/woodpecker",
-		"n8n":            "core/n8n",
-		"workflow":       "core/n8n",
-		"guac":           "core/guacamole",
-		"guacamole":      "core/guacamole",
-		"filebrowser":    "core/filebrowser",
-		"files":          "core/filebrowser",
+		"navidrome":    "core/navidrome",
+		"music":        "core/navidrome",
+		"mealie":       "core/mealie",
+		"recipes":      "core/mealie",
+		"linkding":     "core/linkding",
+		"bookmarks":    "core/linkding",
+		"freshrss":     "core/freshrss",
+		"rss":          "core/freshrss",
+		"miniflux":     "core/miniflux",
+		"feeds":        "core/miniflux",
+		"mattermost":   "core/mattermost",
+		"chat":         "core/mattermost",
+		"rocketchat":   "core/rocketchat",
+		"seafile":      "core/seafile",
+		"owncloud":     "core/owncloud",
+		"vikunja":      "core/vikunja",
+		"tasks":        "core/vikunja",
+		"wiki":         "core/wikijs",
+		"wikijs":       "core/wikijs",
+		"bookstack":    "core/bookstack",
+		"docs":         "core/bookstack",
+		"minio":        "core/minio",
+		"s3":           "core/minio",
+		"prometheus":   "core/prometheus",
+		"prom":         "core/prometheus",
+		"alertmanager": "core/alertmanager",
+		"loki":         "core/loki",
+		"traefik":      "core/traefik",
+		"caddy":        "core/caddy",
+		"jenkins":      "core/jenkins",
+		"gitlab":       "core/gitlab",
+		"woodpecker":   "core/woodpecker",
+		"n8n":          "core/n8n",
+		"workflow":     "core/n8n",
+		"guac":         "core/guacamole",
+		"guacamole":    "core/guacamole",
+		"filebrowser":  "core/filebrowser",
+		"files":        "core/filebrowser",
 
 		// Database web-admin subdomains. HOPS surfaces the *web admin*
 		// for a database (pgAdmin / phpMyAdmin / Adminer), not the
