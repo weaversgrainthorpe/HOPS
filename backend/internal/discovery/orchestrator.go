@@ -340,7 +340,10 @@ func (o *Orchestrator) runScan(scanID string) {
 			// Don't override the active-loop phase text — set it only
 			// when the active loop has finished and forward-enum is the
 			// remaining work (handled below after scanWG.Wait).
-			candidates, err := enumerateForwardDomain(ctx, scanID, scan.InternalDomain, o.registry)
+			candidates, fwdWarnings, err := enumerateForwardDomain(ctx, scanID, scan.InternalDomain, o.registry)
+			for _, w := range fwdWarnings {
+				o.addWarning(scanID, w)
+			}
 			if err != nil {
 				slog.Info("discovery: forward enum failed",
 					"component", "discovery", "scan_id", scanID, "error", err)
