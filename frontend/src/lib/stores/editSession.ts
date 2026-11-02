@@ -81,7 +81,8 @@ export const dirty: Readable<boolean> = derived(state, isDirty);
 /**
  * True while a page other than the editor holds unsaved changes (the Tab order page). It is
  * part of the same leave decision as the edit session: one dialog, one answer, so the user is
- * never asked twice. The page keeps this up to date; leaving anyway clears it.
+ * never asked twice. The page keeps this up to date; leaving anyway clears it, and a page that is
+ * still there once the navigation is done (one that stayed on it) sets it again.
  */
 export const pageUnsaved = writable(false);
 
@@ -581,7 +582,8 @@ export function guardNavigation(
     confirmStyle: 'danger'
   }).then(async (leave) => {
     if (!leave) return;
-    abandon();
+    // Only a draft with changes goes: with just the page unsaved, a clean session stays open.
+    if (get(dirty)) abandon();
     pageUnsaved.set(false);
     try {
       // Back/forward: repeat the same history step rather than pushing a new

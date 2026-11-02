@@ -6,6 +6,7 @@
   // dashboard changed elsewhere the user's arrangement is kept and re-applied to the latest version.
   import { tick, onDestroy } from 'svelte';
   import { get } from 'svelte/store';
+  import { afterNavigate } from '$app/navigation';
   import Icon from '@iconify/svelte';
   import { config, configError, layoutFormProblem, noteMigrationFailure, applySavedLayout, showSaveWarning, loadConfig, findLayoutDashboard } from '$lib/stores/config';
   import { session, parkedDraft, pageUnsaved } from '$lib/stores/editSession';
@@ -90,6 +91,7 @@
     if (!history.length) return;
     order = history[history.length - 1];
     history = history.slice(0, -1);
+    say('Last change undone.');
   }
   function discard() {
     order = saved;
@@ -103,15 +105,22 @@
     pageUnsaved.set(dirty);
   });
   onDestroy(() => pageUnsaved.set(false));
+  // Leaving clears the flag, and a navigation that keeps this page open (same page, another query)
+  // leaves the arrangement here still unsaved: guard it again.
+  afterNavigate(() => pageUnsaved.set(dirty));
 
-  /** What a screen reader hears after a move: where the tab(s) went. */
+  /** What a screen reader hears. Only a change of text is read out, so a repeat differs by a space. */
   let announcement = $state('');
+  function say(text: string) {
+    announcement = announcement === text ? `${text}\u00A0` : text;
+  }
+  /** After a move: where the tab(s) went. */
   function announce(ids: Set<string>) {
     const total = order.length;
     const first = order.findIndex((x) => ids.has(x)) + 1;
-    announcement = ids.size === 1
+    say(ids.size === 1
       ? `${nameOf.get([...ids][0]) ?? [...ids][0]} moved to position ${first} of ${total}.`
-      : `${ids.size} tabs moved to position ${first} of ${total}.`;
+      : `${ids.size} tabs moved to position ${first} of ${total}.`);
   }
 
   // Drag and drop. Dragging a ticked row moves every ticked row.

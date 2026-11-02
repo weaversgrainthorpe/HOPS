@@ -6,8 +6,8 @@ vi.mock('$lib/utils/api', async () => ({
   saveDashboardV3: vi.fn()
 }));
 // The leave guard lives in the layout (editSession's guardNavigation); tests play navigations through it.
-const nav = vi.hoisted(() => ({ goto: vi.fn(async (_h?: string) => {}) }));
-vi.mock('$app/navigation', () => ({ goto: nav.goto, beforeNavigate: () => {}, afterNavigate: () => {} }));
+const nav = vi.hoisted(() => ({ goto: vi.fn(async (_h?: string) => {}), after: [] as (() => void)[] }));
+vi.mock('$app/navigation', () => ({ goto: nav.goto, beforeNavigate: () => {}, afterNavigate: (fn: () => void) => nav.after.push(fn) }));
 vi.mock('$lib/stores/confirmModal', async () => ({
   ...(await vi.importActual<object>('$lib/stores/confirmModal')),
   confirm: vi.fn()
@@ -20,7 +20,7 @@ vi.mock('$lib/stores/config', async () => ({
 import * as api from '$lib/utils/api';
 import { get } from 'svelte/store';
 import { loadConfig, config, configError, OLD_LAYOUT_FORM, migrationFailure, migrationFailureKind } from '$lib/stores/config';
-import { guardNavigation, guardUnload, pageUnsaved, dirty, apply } from '$lib/stores/editSession';
+import { guardNavigation, guardUnload, pageUnsaved, dirty, session, apply } from '$lib/stores/editSession';
 import { confirm } from '$lib/stores/confirmModal';
 import { toast } from '$lib/stores/toast';
 import { setLayout, resetEditor, startSession } from '$lib/components/editor/editorTestKit';
@@ -46,6 +46,7 @@ beforeEach(() => {
   load.mockReset();
   ask.mockReset();
   nav.goto.mockClear();
+  nav.after.length = 0;
   configError.set(null);
   setLayout([dash(SIX)]);
 });
@@ -328,7 +329,7 @@ describe('Tab order page', () => {
   describe('leaving with unsaved changes', () => {
     const navTo = (path: string, extra: object = {}) => {
       const cancel = vi.fn();
-      guardNavigation({ willUnload: false, to: { url: new URL(`http://hops.test${path}`) }, cancel, type: 'link', ...extra }, async (h) => { await nav.goto(h as never); });
+      guardNavigation({ willUnload: false, to: { url: new URL(`http://hops.test${path}`) }, cancel, type: 'link', ...extra }, async (h) => { await nav.goto(h); });
       return cancel;
     };
     const dirtyEdit = () => {
@@ -404,13 +405,45 @@ describe('Tab order page', () => {
       expect(get(pageUnsaved)).toBe(false);
     });
 
+    it('Leave with only this page unsaved keeps a clean edit session open', async () => {
+      ask.mockResolvedValue(true);
+      render(TabOrder, { dashboardId: 'd1' });
+      await fireEvent.click(btn('Move t1 down'));
+      startSession('d1');
+      navTo('/settings');
+      await waitFor(() => expect(nav.goto).toHaveBeenCalledWith('/settings'));
+      expect(get(session)?.dashboardId).toBe('d1');
+    });
+
+    it('a navigation that leaves the page open puts the guard back on the order still unsaved', async () => {
+      ask.mockResolvedValue(true);
+      render(TabOrder, { dashboardId: 'd1' });
+      await fireEvent.click(btn('Move t1 down'));
+      navTo('/settings/dashboards/tab-order/d1?x=1');
+      await waitFor(() => expect(nav.goto).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(get(pageUnsaved)).toBe(false));
+      nav.after.forEach((fn) => fn());
+      expect(get(pageUnsaved)).toBe(true);
+      ask.mockClear();
+      ask.mockResolvedValue(false);
+      expect(navTo('/settings').mock.calls.length).toBe(1);
+      await waitFor(() => expect(ask).toHaveBeenCalledTimes(1));
+      expect(rows()[0]).toBe('t2');
+    });
+
+    it('a navigation that leaves a clean page open sets nothing', async () => {
+      render(TabOrder, { dashboardId: 'd1' });
+      nav.after.forEach((fn) => fn());
+      expect(get(pageUnsaved)).toBe(false);
+    });
+
     it("going back to the edit session's own dashboard still asks while the order is unsaved", async () => {
       ask.mockResolvedValue(false);
       render(TabOrder, { dashboardId: 'd1' });
       await fireEvent.click(btn('Move t1 down'));
       dirtyEdit();
       const cancel = vi.fn();
-      guardNavigation({ willUnload: false, to: { url: new URL('http://hops.test/home') }, cancel }, async (h) => { await nav.goto(h as never); }, 'd1');
+      guardNavigation({ willUnload: false, to: { url: new URL('http://hops.test/home') }, cancel }, async (h) => { await nav.goto(h); }, 'd1');
       expect(cancel).toHaveBeenCalled();
       await waitFor(() => expect(ask).toHaveBeenCalledTimes(1));
     });
@@ -444,6 +477,33 @@ describe('Tab order page', () => {
       await tickRow('t4');
       await fireEvent.click(btn('Move ticked to bottom'));
       expect(said()).toBe('2 tabs moved to position 5 of 6.');
+    });
+
+    it('the same words twice still change the text, or a screen reader stays silent', async () => {
+      render(TabOrder, { dashboardId: 'd1' });
+      await tickRow('t3');
+      await fireEvent.click(btn('Move ticked to top'));
+      const first = said();
+      expect(first).toBe('t3 moved to position 1 of 6.');
+      await fireEvent.click(btn('Move ticked to top'));
+      const second = said();
+      expect(second).not.toBe(first);
+      expect(second!.trim()).toBe(first);
+      await fireEvent.click(btn('Move ticked to top'));
+      expect(said()).not.toBe(second);
+      expect(said()!.trim()).toBe(first);
+    });
+
+    it('says when a change is undone, each time', async () => {
+      render(TabOrder, { dashboardId: 'd1' });
+      await fireEvent.click(btn('Move t1 down'));
+      await fireEvent.click(btn('Move t1 down'));
+      await fireEvent.click(btn('Undo'));
+      const first = said();
+      expect(first).toBe('Last change undone.');
+      await fireEvent.click(btn('Undo'));
+      expect(said()).not.toBe(first);
+      expect(said()!.trim()).toBe(first);
     });
   });
 
