@@ -266,7 +266,8 @@ var Definitions = []Definition{
 		Key: KeyDisplaySignedOutButtons, Type: "bool", Default: "true",
 		Description: "The pencil and the gear in the top bar, for someone who isn't signed in. Off, they stay out of sight " +
 			"until you sign in: a tidier bar on a shared screen. It only tidies: who can sign in and what they can do stay " +
-			"the same. To sign in when they're hidden, go to /settings on your HOPS address. Bookmark it.",
+			"the same. To sign in when they're hidden, go to /settings on your HOPS address. Bookmark it. " +
+			"An installed HOPS app always keeps the gear, since it has no address bar.",
 	},
 }
 

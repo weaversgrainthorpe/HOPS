@@ -58,7 +58,8 @@ dashboard*) or the **gear** (**Settings**). The first sign-in is `admin` /
 out** button sits at the right of the top bar. If the buttons are hidden
 (**Show the edit and Settings buttons when signed out**, under Settings ›
 Global settings › General), go to `/settings` on your HOPS address: it always
-asks for the password.
+asks for the password. An installed HOPS app always keeps the gear, since it
+has no address bar.
 
 Old addresses from HOPS 2 still work where it makes sense: anything under
 `/admin/discovery` goes to the matching page under
@@ -677,7 +678,7 @@ The right of the top bar is always there. From left to right it can hold:
 | **pencil** / **Editing** | on dashboards, not on phones (signed out, unless hidden by the setting below) | Sign in, or enter and leave edit mode. |
 | **Help** | signed in | Keyboard shortcuts and features. |
 | **About HOPS** | signed in | The version, the data folder and what HOPS can do. |
-| **Settings** (gear) | always, unless hidden while signed out by **Show the edit and Settings buttons when signed out** | Settings (asks you to sign in). |
+| **Settings** (gear) | always, unless hidden while signed out by **Show the edit and Settings buttons when signed out** (an installed HOPS app always keeps it) | Settings (asks you to sign in). |
 | **Log out** | signed in (on a phone, in Settings) | Signs this browser out. |
 
 **Show recently used** adds a row above the tabs with the tiles you open

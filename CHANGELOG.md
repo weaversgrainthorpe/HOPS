@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   signed in don't see the pencil or the gear, and the bar stays that way until
   you sign in. To sign in when they're hidden, go to `/settings` on your HOPS
   address. Bookmark it. That address always asks for the password, on or off.
+  An installed HOPS app always keeps the gear, since it has no address bar.
   If HOPS can't read the setting, the buttons show. This only tidies the bar:
   who can sign in and what they can do stay the same.
 

@@ -158,7 +158,8 @@ settings › General**, turn off **Show the edit and Settings buttons when
 signed out**. The pencil and the gear then stay hidden until you sign in. To
 sign in when they're hidden, go to `/settings` on your HOPS address (for
 example `http://<your-server-address>:8080/settings`). Bookmark it. That
-address always works and always asks for the password, on or off. This only
+address always works and always asks for the password, on or off. An
+installed HOPS app always keeps the gear, since it has no address bar. This only
 tidies the bar: who can sign in and what they can do stay the same.
 
 ## Step 3: Look around the Sample

@@ -673,6 +673,10 @@ func TestSignedOutButtonsSettingDefaultsOn(t *testing.T) {
 	if !strings.Contains(def.Description, want) {
 		t.Fatalf("description %q lacks %q", def.Description, want)
 	}
+	// An installed app has no address bar to type /settings into.
+	if app := "An installed HOPS app always keeps the gear, since it has no address bar."; !strings.Contains(def.Description, app) {
+		t.Fatalf("description %q lacks %q", def.Description, app)
+	}
 	s := newTestService(t)
 	if !s.GetBool(KeyDisplaySignedOutButtons) {
 		t.Fatal("fresh install: want on")

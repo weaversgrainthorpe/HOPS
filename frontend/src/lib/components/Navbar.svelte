@@ -12,6 +12,7 @@
   import { triggerHopAnimation } from '$lib/stores/easterEggs';
   import { awayMode, setAway } from '$lib/stores/awayMode';
   import { dashboardHasAway } from '$lib/utils/tileUrl';
+  import { isInstalledApp } from '$lib/utils/installedApp';
   import Icon from '@iconify/svelte';
   import ThemePickerModal from './admin/ThemePickerModal.svelte';
   import ExportModal from './admin/ExportModal.svelte';
@@ -81,6 +82,9 @@
   // the way out of edit mode.
   let buttonsHidden = $derived($signedOutButtonsHidden && !$isAuthenticated && !$sessionUnsettled);
   let showPencil = $derived(isDashboardPage && (!buttonsHidden || $editMode));
+  // An installed app has no address bar, so /settings can't be typed there: its gear always stays.
+  const installedApp = isInstalledApp();
+  let showGear = $derived(!buttonsHidden || installedApp);
 
   // The pencil is on every dashboard page. Logged out, it signs in first, in
   // place (no trip to the admin page), then starts editing this dashboard.
@@ -393,7 +397,7 @@
 
   // What the bar holds: edit mode, signed in or not, the page, the title, the text size.
   $effect(() => {
-    void [$editMode, $isAuthenticated, buttonsHidden, isDashboardPage, showLeft, showCenter, leftText, titleText, showSwitcher, $textSize, showAway, $awayMode];
+    void [$editMode, $isAuthenticated, buttonsHidden, showGear, isDashboardPage, showLeft, showCenter, leftText, titleText, showSwitcher, $textSize, showAway, $awayMode];
     untrack(() => void fitBar());
   });
 </script>
@@ -619,7 +623,7 @@
       {/if}
 
       <!-- Settings is the admin home; logged out, it asks for the password in place. -->
-      {#if !buttonsHidden}
+      {#if showGear}
         <a href="/settings" class="admin-link" title="Settings" aria-label="Settings">
           <Icon icon="mdi:cog" width="32" height="32" />
           {#if $isAuthenticated}

@@ -312,6 +312,22 @@ describe('Navbar with the signed-out buttons off', () => {
 		expect(gear()).toBeTruthy();
 	});
 
+	// An installed app has no address bar, so /settings can't be typed: the gear stays.
+	it('in an installed app (display-mode standalone) the gear stays; the pencil may hide', () => {
+		const real = window.matchMedia;
+		window.matchMedia = ((query: string) => ({
+			...real(query),
+			matches: query === '(display-mode: standalone)'
+		})) as typeof window.matchMedia;
+		try {
+			render(Navbar, {});
+			expect(gear()).toBeTruthy();
+			expect(pencil()).toBeNull();
+		} finally {
+			window.matchMedia = real;
+		}
+	});
+
 	it('a session that ended mid-edit keeps the way out of edit mode', async () => {
 		editMode.set(true);
 		render(Navbar, {});
