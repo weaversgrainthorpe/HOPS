@@ -125,6 +125,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   comparison with the last scan mixed them up. Each name is now compared
   with itself. The filter is called **New or changed**, and results already
   on offer in the last scan are no longer ticked for you.
+- **An outlined folder no longer offers settings it can't use.** It is
+  see-through, so its colour draws only the outline: Opacity and Text colour
+  are hidden for it, with a line saying why, and an opacity saved under
+  another look no longer fades the outline.
 - **Notices sit above the edit toolbar,** so an error never covers Save.
 - **Add to HOPS shows one notice** when HOPS can't be reached, not several.
 - **Settings › Dashboards no longer runs off the right-hand edge** with a long

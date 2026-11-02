@@ -69,7 +69,10 @@
     return p.tab && tabRect && variant !== 'minimised' ? shapeParts(look.shape, look.tabPosition, variant, box, tabRect.widthPx) : p;
   });
   const colours = $derived(deriveFolderColours(look.color, look.textColor));
-  const opacity = $derived(typeof look.opacity === 'number' && Number.isFinite(look.opacity) ? look.opacity : 0.95);
+  // An outline is see-through already: no opacity, so a value saved under another look can't fade the line.
+  const opacity = $derived(
+    look.shape === 'folder-outline' ? 1 : typeof look.opacity === 'number' && Number.isFinite(look.opacity) ? look.opacity : 0.95
+  );
   const ownBackground = $derived(!!(look.background && !look.background.inherit && look.background.type));
   const pos = $derived(look.tabPosition === 'centre' || look.tabPosition === 'right' ? look.tabPosition : 'left');
   const strokeColour = $derived(parts.stroke === 'dark' ? '#0b1020' : parts.stroke === 'colour' ? (colours.themed ? 'var(--text-secondary)' : colours.base) : 'none');

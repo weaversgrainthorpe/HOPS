@@ -284,6 +284,9 @@
     <section class="dialog-section" aria-labelledby="folder-colour-heading">
       <h3 id="folder-colour-heading" class="part-title">Colour</h3>
       <ColorPicker label="Folder colour" selectedColor={color} onSelect={(c) => { color = c; colourNote = ''; }} />
+      {#if shape === 'folder-outline'}
+        <p class="hint" data-outline-note>An outlined folder is see-through: its colour draws the outline only, so it has no opacity or text colour.</p>
+      {:else}
       <OpacitySlider {opacity} onSelect={(o) => (opacity = o)} />
 
       <fieldset class="form-group">
@@ -303,6 +306,7 @@
           </p>
         {/if}
       </fieldset>
+      {/if}
     </section>
 
     <section class="dialog-section" aria-labelledby="folder-display-heading">

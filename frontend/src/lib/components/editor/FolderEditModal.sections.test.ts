@@ -78,6 +78,17 @@ describe('look previews on a light card', () => {
 });
 
 describe('the Background section at folder level', () => {
+  it('an outlined folder hides Opacity and Text colour and says why; other looks keep them', () => {
+    const { unmount } = render(FolderEditModal, { folder: f({ shape: 'folder-outline' }), onSave: vi.fn(), onCancel: vi.fn() });
+    expect(screen.queryByText('Text colour')).toBeNull();
+    expect(screen.queryByText(/^Opacity/)).toBeNull();
+    expect(document.querySelector('[data-outline-note]')?.textContent).toMatch(/see-through/);
+    unmount();
+    render(FolderEditModal, { folder: f({ shape: 'folder-flat' }), onSave: vi.fn(), onCancel: vi.fn() });
+    expect(screen.getByText('Text colour')).toBeTruthy();
+    expect(screen.getByText(/^Opacity/)).toBeTruthy();
+    expect(document.querySelector('[data-outline-note]')).toBeNull();
+  });
   it('no picture of its own says so in the new words', () => {
     render(FolderEditModal, { folder: f(), onSave: vi.fn(), onCancel: vi.fn() });
     expect(screen.getByText(/No picture of its own — shows what's behind/)).toBeInTheDocument();

@@ -300,6 +300,10 @@ describe('FolderShape alone (the picker previews use it too)', () => {
     expect(ring.closest('[data-shape-paint]')).toBeNull();
     expect((r.container.querySelector('[data-folder-shape]') as HTMLElement).style.opacity).toBe('');
   });
+  it('an outlined folder ignores a stored opacity: the see-through line is drawn solid', () => {
+    const r = render(FolderShape, { look: { shape: 'folder-outline', color: '#2563eb', opacity: 0.2 }, variant: 'open', dashboardId: 'd1' });
+    expect((r.container.querySelector('[data-shape-paint]') as HTMLElement).style.opacity).toBe('1');
+  });
   it('a background picture fills the front panel, clipped to it', () => {
     const r = render(FolderShape, {
       look: { shape: 'folder-open', color: '#2563eb', background: { type: 'color', value: '#ff0000' } as any },
