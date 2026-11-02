@@ -1,7 +1,7 @@
 // Settings widths:
 //  - Discovery and every settings page use the full content width; one rule for all of them:
-//    prose and boxes alike use the full width (no 75ch cap); only a Global settings row's
-//    description column keeps its measure (below).
+//    prose and boxes alike use the full width (no 75ch cap), a Global settings row's
+//    description too: it takes all the room left of the control (below).
 //  - Discovery's sub-pages have a "‹ Discovery" link back at the top.
 //  - The sidebar is always there, at the left edge, on Discovery pages (no sideways shift).
 //  - Factory reset is an emergency-stop button (CSS/SVG only) and still asks for confirmation.
@@ -53,7 +53,8 @@ async function measure(page: Page) {
 		let widest = 0;
 		const tooWide: string[] = [];
 		const isPara = (el: Element) => el.matches('p, .lede, .lede-aside, .hint, .desc');
-		const isRowDesc = (el: Element) => el.matches('.row .desc');
+		// A Global settings row's description uses the room left of its control: no measure cap.
+		const isRowDesc = (_el: Element) => false;
 		for (const el of Array.from(body.querySelectorAll('*')) as HTMLElement[]) {
 			const r = el.getBoundingClientRect();
 			if (!r.width || !r.height) continue;
@@ -91,57 +92,79 @@ test.describe('settings widths', () => {
 		}
 	}
 
-	// Each Global settings row is two columns — the description (<= 75ch) with its control
-	// right beside it, never ~500 px away at 1920; one column on a narrow screen.
+	// Each Global settings row has the same shape: the label and description on the left, using the
+	// room; the control in a column of its own; then Reset/Revert/Save right beside it. The control
+	// column and the Revert/Save column sit at the same x on every row.
 	for (const width of [1280, 1920]) {
-		test(`Global settings at ${width}: every control sits right beside its description`, async ({ page }) => {
+		test(`Global settings at ${width}: label | control | buttons, in the same columns on every row`, async ({ page }) => {
 			await page.setViewportSize({ width, height: 900 });
 			await open(page, '/settings/global', 'Global settings');
 			const rows = await page.locator('.row').evaluateAll((els) =>
 				els.map((row) => {
 					const label = row.querySelector('.row-label')!.getBoundingClientRect();
-					const desc = row.querySelector('.desc')!.getBoundingClientRect();
-					const input = row.querySelector('.row-input')!.getBoundingClientRect();
-					const probe = document.createElement('span');
-					probe.textContent = '0'.repeat(100);
-					probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap';
-					probe.style.font = getComputedStyle(row.querySelector('.desc')!).font;
-					document.body.appendChild(probe);
-					const ch = probe.getBoundingClientRect().width / 100;
-					probe.remove();
+					const control = row.querySelector('.row-control')!.getBoundingClientRect();
+					const actions = row.querySelector('.row-actions')!.getBoundingClientRect();
+					const save = Array.from(row.querySelectorAll('.row-actions button')).find((b) => b.textContent?.trim() === 'Save')!.getBoundingClientRect();
+					const num = row.querySelector('input[type=number]') as HTMLElement | null;
 					return {
 						name: row.querySelector('.label-text')!.textContent!.trim(),
-						gap: input.left - Math.max(desc.right, label.left),
-						labelWidth: label.width,
-						maxLabel: 76 * ch,
-						sideBySide: Math.abs(input.top - label.top) < 4
+						labelRight: label.right,
+						controlLeft: control.left,
+						actionsLeft: actions.left,
+						saveRight: save.right,
+						controlTop: control.top,
+						labelTop: label.top,
+						actionsTop: actions.top,
+						numWidth: num ? num.getBoundingClientRect().width : 0
 					};
 				})
 			);
 			expect(rows.length).toBeGreaterThan(5);
+			const first = rows[0];
 			for (const r of rows) {
-				expect(r.sideBySide, `${r.name}: control beside its description`).toBe(true);
-				expect(r.gap, `${r.name}: gap between description and control`).toBeLessThanOrEqual(40);
-				expect(r.gap, `${r.name}: no overlap`).toBeGreaterThanOrEqual(8);
-				expect(r.labelWidth, `${r.name}: description column <= 75ch`).toBeLessThanOrEqual(r.maxLabel);
+				expect(Math.abs(r.controlTop - r.labelTop), `${r.name}: control beside its label`).toBeLessThan(4);
+				expect(Math.abs(r.actionsTop - r.controlTop), `${r.name}: buttons on the control's line`).toBeLessThan(4);
+				expect(r.controlLeft, `${r.name}: control column is where it is on every row`).toBeCloseTo(first.controlLeft, 0);
+				expect(r.actionsLeft, `${r.name}: button column is where it is on every row`).toBeCloseTo(first.actionsLeft, 0);
+				expect(r.saveRight, `${r.name}: Save is where it is on every row`).toBeCloseTo(first.saveRight, 0);
+				expect(r.controlLeft, `${r.name}: the label does not run under the control`).toBeGreaterThanOrEqual(r.labelRight);
+				// A number box is sized to its largest value, never the whole column (14rem = 224px).
+				if (r.numWidth) expect(r.numWidth, `${r.name}: number box fits its value`).toBeLessThan(150);
 			}
 		});
 	}
 
-	test('Global settings on a phone: one column, the control under its description', async ({ page }) => {
+	test('Global settings on a phone: the text, then the control and its buttons under it', async ({ page }) => {
 		await page.setViewportSize({ width: 390, height: 800 });
 		await open(page, '/settings/global', 'Global settings');
 		const rows = await page.locator('.row').evaluateAll((els) =>
 			els.map((row) => {
 				const label = row.querySelector('.row-label')!.getBoundingClientRect();
 				const input = row.querySelector('.row-input')!.getBoundingClientRect();
-				return { below: input.top >= label.bottom - 1 };
+				return { below: input.top >= label.bottom - 1, right: input.right };
 			})
 		);
 		expect(rows.length).toBeGreaterThan(5);
 		expect(rows.every((r) => r.below)).toBe(true);
+		expect(rows.every((r) => r.right <= 390)).toBe(true);
 		expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 	});
+
+	// Settings > Dashboards: the header buttons and every row's buttons stay inside the page.
+	for (const width of [320, 390, 1340, 1920]) {
+		test(`Dashboards at ${width}: nothing runs past the right edge`, async ({ page }) => {
+			await page.setViewportSize({ width, height: 900 });
+			await open(page, '/settings/dashboards', 'Dashboards');
+			expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+			const beyond = await page.evaluate(() => {
+				const edge = document.documentElement.clientWidth;
+				return Array.from(document.querySelectorAll('.dashboard-list button, .dashboard-list a'))
+					.filter((el) => el.getBoundingClientRect().right > edge + 0.5)
+					.map((el) => el.getAttribute('aria-label') || el.textContent?.trim());
+			});
+			expect(beyond).toEqual([]);
+		});
+	}
 
 	test('the empty Discovery list box uses the full width', async ({ page }) => {
 		await page.setViewportSize({ width: 1920, height: 900 });
