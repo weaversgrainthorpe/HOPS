@@ -4,7 +4,7 @@
 /// <reference lib="webworker" />
 
 import { build, files, version } from '$service-worker';
-import { swMayCache, isCacheableApiPath, offlineFallbackFor, precacheList, markKept, SHELL_PATH } from '$lib/utils/swCache';
+import { swMayCache, isCacheableApiPath, offlineFallbackFor, precacheList, shellRequest, isAppShell, markKept, SHELL_PATH } from '$lib/utils/swCache';
 
 // HOPS PWA service worker.
 //
@@ -40,7 +40,15 @@ const RUNTIME = `hops-runtime-${version}`;
 
 sw.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(PRECACHE).then((cache) => cache.addAll(precacheList(build, files, sw.location.origin))),
+    (async () => {
+      // Checked first, so a proxy's sign-in page keeps nothing at all. A failed install is shown by
+      // the page (lib/stores/offlineCopy.ts).
+      const shell = await fetch(shellRequest(sw.location.origin));
+      if (!(await isAppShell(shell.clone()))) throw new Error("The server's answer is not the HOPS page");
+      const cache = await caches.open(PRECACHE);
+      await cache.addAll(precacheList(build, files));
+      await cache.put(shellRequest(sw.location.origin), shell);
+    })(),
   );
   sw.skipWaiting();
 });

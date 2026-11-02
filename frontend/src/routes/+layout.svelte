@@ -17,6 +17,7 @@
 	import { initEditModeIdleWatcher } from '$lib/stores/editModeIdleWatcher';
 	import { initNetworkWatcher } from '$lib/stores/network';
 	import { recoverFromOutage } from '$lib/stores/outageRecovery';
+	import { startOfflineCopy } from '$lib/stores/offlineCopy';
 	import Navbar from '$lib/components/Navbar.svelte';
 	import OfflineBanner from '$lib/components/OfflineBanner.svelte';
 	import VersionMismatchBanner from '$lib/components/VersionMismatchBanner.svelte';
@@ -84,6 +85,7 @@
 		else if (here.route.id === '/[dashboard]') loadConfig({ dashboard: here.params.dashboard ?? '' });
 		else loadConfig();
 		initNetworkWatcher(recoverFromOutage);
+		void startOfflineCopy();
 		initEditModeIdleWatcher();
 		return stopPresence;
 	});

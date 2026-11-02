@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { swMayCache, isCacheableApiPath, offlineFallbackFor, precacheList, SHELL_PATH, KEPT_HEADER, markKept, noteKept, isKept } from './swCache';
+import { swMayCache, isCacheableApiPath, offlineFallbackFor, precacheList, shellRequest, isAppShell, SHELL_PATH, KEPT_HEADER, markKept, noteKept, isKept } from './swCache';
 
 const res = (ok: boolean, cc?: string) => ({ ok, headers: new Headers(cc ? { 'Cache-Control': cc } : {}) });
 
@@ -33,18 +33,42 @@ describe('isCacheableApiPath / offlineFallbackFor', () => {
 });
 
 describe('precacheList', () => {
-  const entries = precacheList(['/_app/a.js'], ['/favicon.svg'], 'http://h:1/');
-  const shell = entries.filter((e): e is Request => e instanceof Request);
+  it('keeps the build and the static files', () => {
+    expect(precacheList(['/_app/a.js'], ['/favicon.svg'])).toEqual(['/_app/a.js', '/favicon.svg']);
+  });
+});
 
-  it('keeps the build, the static files and the page itself', () => {
-    // SvelteKit's build and files lists never name the fallback page: it has to be added here.
-    expect(entries.slice(0, 2)).toEqual(['/_app/a.js', '/favicon.svg']);
-    expect(shell.map((r) => r.url)).toEqual(['http://h:1/']);
-    expect(new URL(shell[0].url).pathname).toBe(SHELL_PATH);
+describe('shellRequest', () => {
+  it('asks for the page itself, which SvelteKit never lists', () => {
+    expect(new URL(shellRequest('http://h:1/').url).pathname).toBe(SHELL_PATH);
   });
   it('takes the page from the server, never an old copy in the browser cache', () => {
     // An old page names old chunks, which this version does not keep.
-    expect(shell[0].cache).toBe('reload');
+    expect(shellRequest('http://h:1/').cache).toBe('reload');
+  });
+});
+
+describe('isAppShell', () => {
+  const html = (body: string, init: ResponseInit = {}) =>
+    new Response(body, { headers: { 'Content-Type': 'text/html; charset=utf-8' }, ...init });
+  const page = '<script src="/_app/immutable/entry/start.js"></script>';
+
+  it('takes the real page', async () => {
+    expect(await isAppShell(html(page))).toBe(true);
+  });
+  it("refuses a proxy's 200 sign-in page", async () => {
+    expect(await isAppShell(html('<form action="/login"><input type="password"></form>'))).toBe(false);
+  });
+  it('refuses a failed answer, even with the right body', async () => {
+    expect(await isAppShell(html(page, { status: 500 }))).toBe(false);
+  });
+  it('refuses something that is not a page', async () => {
+    expect(await isAppShell(new Response(page, { headers: { 'Content-Type': 'application/json' } }))).toBe(false);
+  });
+  it('refuses a redirect to somewhere else', async () => {
+    const res = html(page);
+    Object.defineProperty(res, 'redirected', { value: true });
+    expect(await isAppShell(res)).toBe(false);
   });
 });
 

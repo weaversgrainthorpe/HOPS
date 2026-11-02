@@ -17,7 +17,9 @@ const config = {
 			fallback: 'index.html',
 			precompress: false,
 			strict: true
-		})
+		}),
+		// Registered by lib/stores/offlineCopy.ts, which shows a failure instead of only logging it.
+		serviceWorker: { register: false }
 	}
 };
 

@@ -4,6 +4,7 @@
   import { onMount } from 'svelte';
   import { focusTrap } from '$lib/utils/focusTrap';
   import { getAbout, getBackendVersion } from '$lib/utils/api';
+  import { offlineCopy, type OfflineCopyState } from '$lib/stores/offlineCopy';
 
   interface Props {
     onClose: () => void;
@@ -14,6 +15,13 @@
   let backendVersion = $state('...');
   let dataDir = $state('...');
   const frontendVersion = __APP_VERSION__;
+  const OFFLINE_COPY_TEXT: Record<OfflineCopyState, string> = {
+    checking: 'Setting up…',
+    ready: 'Ready',
+    'needs-https': 'Needs https:// or localhost',
+    unavailable: 'Not available in this browser',
+    failed: "Couldn't be saved"
+  };
 
   onMount(async () => {
     try {
@@ -65,6 +73,10 @@
       <div class="version-item">
         <span class="label">Backend</span>
         <span class="value">{backendVersion}</span>
+      </div>
+      <div class="version-item">
+        <span class="label">Offline copy</span>
+        <span class="value">{OFFLINE_COPY_TEXT[$offlineCopy]}</span>
       </div>
     </div>
 

@@ -37,14 +37,28 @@ export function offlineFallbackFor(url: URL): string | null {
 /** The address of the app's one HTML page: every path the server doesn't know serves the same page. */
 export const SHELL_PATH = '/';
 
+/** What the service worker keeps at install, beside the page itself (see shellRequest). */
+export function precacheList(build: string[], files: string[]): string[] {
+  return [...build, ...files];
+}
+
 /**
- * What the service worker keeps at install. SvelteKit's `build` and `files` lists never name the
- * fallback page (index.html), so it is added here; without it no offline navigation has a page to
- * show. The page is always taken from the server (`reload`): a copy from the browser's own cache
- * could be the previous version, naming chunks this version doesn't keep.
+ * SvelteKit's `build` and `files` lists never name the fallback page (index.html); without it no
+ * offline navigation has a page to show. The page is always taken from the server (`reload`): a
+ * copy from the browser's own cache could be the previous version, naming chunks this version
+ * doesn't keep.
  */
-export function precacheList(build: string[], files: string[], origin: string): (string | Request)[] {
-  return [...build, ...files, new Request(new URL(SHELL_PATH, origin), { cache: 'reload' })];
+export function shellRequest(origin: string): Request {
+  return new Request(new URL(SHELL_PATH, origin), { cache: 'reload' });
+}
+
+/**
+ * Whether `res` really is HOPS's page. A proxy in front can answer 200 with its own sign-in page,
+ * which must never be kept and shown as the app during an outage.
+ */
+export async function isAppShell(res: Response): Promise<boolean> {
+  if (!res.ok || res.redirected || !/html/i.test(res.headers.get('Content-Type') ?? '')) return false;
+  return (await res.text()).includes('/_app/immutable/');
 }
 
 /** Set by the service worker on an answer it gave from a kept copy, not from the server. */
