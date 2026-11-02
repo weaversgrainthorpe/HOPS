@@ -362,6 +362,62 @@ describe('consistency', () => {
   });
 });
 
+describe('consistency: paths the first RED run missed', () => {
+  it('a one-dashboard read at the index state but another dashboard revision is not taken', async () => {
+    vi.mocked(api.getConfigFor).mockResolvedValue(idx('r1', full('a', 3), index('b', 7)));
+    vi.mocked(api.getConfig).mockImplementation(() => new Promise(() => {}));
+    // Same configRevision as the index, but B at 6 where the index says 7.
+    vi.mocked(api.getDashboard).mockResolvedValue({ dashboard: full('b', 6), revision: 6, configRevision: 'r1' });
+    await loadConfig({ dashboard: 'a' });
+    pageStore.set!({ url: new URL('http://localhost/b'), params: { dashboard: 'b' }, route: { id: '/[dashboard]' } });
+    await fetchDashboard('b');
+    await flush();
+    expect(api.getConfigFor).toHaveBeenCalledTimes(2); // reloaded instead of taken
+    expect(get(config)!.dashboards.find((d) => d.id === 'b')!.revision).not.toBe(6);
+  });
+
+  it('an index answer that arrives after a newer load started is dropped', async () => {
+    const first = deferred<ReturnType<typeof idx>>();
+    vi.mocked(api.getConfig).mockImplementation(() => new Promise(() => {}));
+    vi.mocked(api.getConfigFor).mockImplementationOnce(() => first.promise);
+    const older = loadConfig({ dashboard: 'a' });
+    vi.mocked(api.getConfigFor).mockResolvedValueOnce(idx('r2', index('a', 4), full('b', 8)));
+    await loadConfig({ dashboard: 'b' });
+    first.resolve(idx('r1', full('a', 3), index('b', 7)));
+    await older;
+    const b = get(config)!.dashboards.find((d) => d.id === 'b')!;
+    expect(b.revision).toBe(8);
+    expect(b.partial).toBeUndefined();
+  });
+
+  it('the rest of a superseded load is dropped: it neither replaces the store nor starts a reload', async () => {
+    const rest1 = deferred<Config>();
+    vi.mocked(api.getConfig).mockReturnValueOnce(rest1.promise).mockImplementation(() => new Promise(() => {}));
+    vi.mocked(api.getConfigFor)
+      .mockResolvedValueOnce(idx('r1', full('a', 3), index('b', 7)))
+      .mockResolvedValueOnce(idx('r2', full('a', 4), index('b', 8)));
+    await loadConfig({ dashboard: 'a' });
+    await loadConfig({ dashboard: 'a' }); // a newer load, its own rest still on its way
+    rest1.resolve(doc(full('a', 3), full('b', 7)));
+    await flush();
+    expect(get(layoutStale)).toBe(false);
+    expect(api.getConfigFor).toHaveBeenCalledTimes(2);
+    expect(get(config)!.dashboards.find((d) => d.id === 'a')!.revision).toBe(4);
+    expect(hasPartialDashboards(get(config))).toBe(true);
+  });
+
+  it('a quiet retry that fails over held dashboards shows no error card', async () => {
+    config.set(doc(full('a', 3)));
+    vi.mocked(api.getConfig).mockRejectedValue(new Error('the server went away'));
+    await loadConfig({ quiet: true, background: true });
+    expect(get(config)).not.toBeNull();
+    expect(get(configError)).toBeNull();
+    // A load that is not quiet says it.
+    await loadConfig({ background: true });
+    expect(get(configError)).toBe('the server went away');
+  });
+});
+
 describe('a held whole document is never downgraded', () => {
   it('loadConfig({dashboard}) with the whole document held reads the whole document', async () => {
     config.set(doc(full('a', 3), full('b', 7)));
