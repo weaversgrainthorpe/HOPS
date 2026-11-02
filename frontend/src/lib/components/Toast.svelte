@@ -56,8 +56,9 @@
 <style>
   .toast-container {
     position: fixed;
-    /* Keep toasts above the iOS home indicator on standalone PWA installs. */
-    bottom: max(1.5rem, env(safe-area-inset-bottom, 0));
+    /* Keep toasts above the iOS home indicator on standalone PWA installs, and above the edit
+       toolbar while it shows (EditToolbar sets --edit-toolbar-reach): never over its Save. */
+    bottom: calc(max(1.5rem, env(safe-area-inset-bottom, 0px)) + var(--edit-toolbar-reach, 0px));
     right: max(1.5rem, env(safe-area-inset-right, 0));
     display: flex;
     flex-direction: column;

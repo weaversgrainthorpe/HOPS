@@ -59,6 +59,14 @@ describe('EditToolbar', () => {
     expect(buttons.at(-2)).toBe(screen.getByRole('button', { name: /^Discard/ }));
   });
 
+  it('tells the page how far up it reaches, so toasts sit above it, and forgets it when gone', () => {
+    const root = document.documentElement;
+    const { unmount } = render(EditToolbar, { tabId: 't1', onAddTab: vi.fn() });
+    expect(root.style.getPropertyValue('--edit-toolbar-reach')).toMatch(/^\d+px$/);
+    unmount();
+    expect(root.style.getPropertyValue('--edit-toolbar-reach')).toBe('');
+  });
+
   it('Undo / Redo buttons step the draft', async () => {
     render(EditToolbar, { tabId: 't1', onAddTab: vi.fn() });
     rename('a', 'Changed');

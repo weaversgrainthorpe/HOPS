@@ -31,6 +31,7 @@
   }
   let { tabId, onAddTab, onEditDashboard, dashboardBackground, tabBackground, onReach }: Props = $props();
 
+  const TOOLBAR_REACH_VAR = '--edit-toolbar-reach';
   let barEl = $state<HTMLElement | null>(null);
   $effect(() => {
     const el = barEl;
@@ -44,6 +45,23 @@
     return () => {
       ro?.disconnect();
       window.removeEventListener('resize', measure);
+    };
+  });
+  // Toasts sit above the toolbar (Toast.svelte reads this): an error left by a failed save must
+  // never cover Save, the button that tries again.
+  $effect(() => {
+    const el = barEl;
+    if (!el) return;
+    const root = document.documentElement;
+    const measure = () => root.style.setProperty(TOOLBAR_REACH_VAR, `${Math.max(0, window.innerHeight - el.getBoundingClientRect().top)}px`);
+    measure();
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    window.addEventListener('resize', measure);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', measure);
+      root.style.removeProperty(TOOLBAR_REACH_VAR);
     };
   });
 
