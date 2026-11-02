@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   minimised folder shows the icon you gave it instead of a preview of what is
   inside. If the folder has no icon yet, it keeps showing the icons inside, and
   the dialog says so.
+- **An eye on every password field** shows or hides what you typed, in every
+  browser. It goes back to dots when you submit.
+- **About shows whether this browser has the offline copy,** and why not. If
+  the copy can't be saved, HOPS now says so on screen instead of only in the
+  browser's console. See HTTPS in DEPLOY.md: browsers only allow the copy on
+  `https://` addresses and `localhost`.
 
 ### Changed
 - **Opening a folder inside a folder makes room for all its items.** Before,
@@ -34,6 +40,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tab bar:** the `«` `‹` `›` `»` arrows are bigger (44 px) and easier to hit
   on a touch screen, and the Tab key stops once on the row of tabs, then Left,
   Right, Home and End move between them, in edit mode as well.
+- **Save is in the same place everywhere:** Cancel, then the main action, at
+  the right-hand end. In the edit toolbar, the add buttons and Dashboard moved
+  to the left and Save to the right. On a phone, Save stays in view while the
+  toolbar scrolls. Each setting in Settings, the dashboard list, Add to HOPS and
+  renaming an icon category now match.
 - **Tab order** (Settings) says what it did when you move tabs, for screen
   readers, warns about unsaved changes once when you leave, and checks the
   result when you save.
@@ -46,6 +57,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   comes up when HOPS can't be reached but your own network is fine: before,
   old data could show with no warning. Settings no longer asks you to sign in
   because the server can't be reached.
+- **A saved copy that can't be updated says why,** with **Retry**, instead of
+  a general notice.
+- **A sign-in page from a proxy can no longer be saved as the offline page.**
+  HOPS checks that it really got its own page first.
+- **The status tick in the header changes with the offline banner,** instead of
+  staying green for up to 30 seconds.
+- **Search says "the loaded dashboards"** until they have all arrived, and a
+  failed retry can no longer leave "Loading the other dashboards" on screen.
 - **A folder opened inside another folder lost its icon.** It now shows its
   icon in its title bar, and the icon fits the bar.
 - **A white line along the tab bar in the light theme** is gone.

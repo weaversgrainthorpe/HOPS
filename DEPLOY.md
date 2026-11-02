@@ -493,6 +493,12 @@ wrapper that runs it as an auto-restarting service.
 
 Assuming HOPS lives in `C:\hops` (the program plus a `data` folder):
 
+> When you quote a folder path on Windows, leave off the final backslash:
+> `--data "C:\hops test\data"`, not `--data "C:\hops test\data\"`. Windows
+> reads `\"` as a quote that is part of the name, and HOPS stops with a
+> "syntax is incorrect" error. Pressing Tab in PowerShell often adds that
+> backslash.
+
 1. Download NSSM from [nssm.cc/download](https://nssm.cc/download), unzip
    it, and put `win64\nssm.exe` somewhere handy, such as `C:\hops`.
 
@@ -600,6 +606,13 @@ services:
 HOPS does not handle TLS itself. Use a reverse proxy (Caddy, nginx,
 Traefik) for HTTPS. This is strongly recommended for anything reachable
 from outside your home network.
+
+HOPS's offline copy also needs HTTPS. It lets a browser open your dashboards
+as last seen, with a warning, while the server is down. Browsers only allow it
+on `https://` addresses and `localhost`, so on a plain `http://` address the
+page simply won't open during an outage. **About** shows whether this browser
+has the copy. If a sign-in proxy guards HOPS, the copy can't be saved until you
+are signed in, and HOPS says so if it couldn't save it.
 
 ---
 

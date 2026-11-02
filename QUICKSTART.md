@@ -455,6 +455,10 @@ name to go back up. In edit mode, drag a folder onto another folder to put
 it inside, or make one with **Add folder here** (right-click inside the
 folder).
 
+If an opened sub-folder needs more room, its outer folder is drawn taller, up
+to about one screen, and whatever is below moves down. Past that, the page bar
+pages the rest. Only the view changes: the saved layout stays as it is.
+
 ### Minimised folders
 
 The minimise button on a folder's title bar shrinks it to a folder tile.
@@ -462,6 +466,11 @@ Click the tile to open it again. This is a viewer's choice, remembered by
 each browser, so minimising on your phone doesn't change anyone else's
 view. To set how a folder starts for everyone, use **Starts** in its
 dialog.
+
+**When minimised, show** in the same dialog chooses what the tile shows:
+**Icons inside** (a preview of the contents) or **Its own icon** (the
+folder's icon, large). A folder with no icon of its own shows the icons
+inside, and the dialog says so.
 
 ### Move or copy anywhere
 

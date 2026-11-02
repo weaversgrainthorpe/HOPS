@@ -21,6 +21,7 @@ if [[ ! -x "$BIN" ]] || [[ -n "$(find "$REPO/backend/cmd" "$REPO/backend/interna
   log "Building the release binary"
   (cd "$REPO" && ./scripts/build.sh) >&2
 fi
+source "$REPO/scripts/lib/node.sh" || exit 1
 [[ -d "$HERE/node_modules" ]] || (cd "$HERE" && npm install --no-audit --no-fund) >&2
 
 DATA="$(mktemp -d -t hops-demo-XXXXXX)"
