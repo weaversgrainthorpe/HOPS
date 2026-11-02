@@ -193,7 +193,11 @@ func scanTableRefs(db *sql.DB, table string, refs map[string]bool) error {
 // sqliteURI is a SQLite "file:" URI for an absolute path (slashes as
 // filepath.ToSlash gives them). A Windows path needs the leading slash
 // (file:///C:/…): without it "C:" was read as a host, SQLite couldn't open
-// the file, and every backup failed on Windows.
+// the file, and every backup failed on Windows. A network share
+// (\\server\share\…, //server/share/… here) keeps its host in the path:
+// file:////server/share/…, an empty authority and the path //server/share/….
+// SQLite refuses a host as the authority (file://server/…), and on Windows
+// GetFullPathName turns the // back into \\server\share.
 func sqliteURI(slashPath, query string) string {
 	if !strings.HasPrefix(slashPath, "/") {
 		slashPath = "/" + slashPath
