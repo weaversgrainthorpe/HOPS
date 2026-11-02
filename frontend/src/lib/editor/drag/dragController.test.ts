@@ -19,7 +19,7 @@ import { tick } from 'svelte';
 import TabCanvas from '$lib/components/layout/TabCanvas.svelte';
 import DragLayer from './DragLayer.svelte';
 import {
-  drag, dragSource, resizeSource, tabSource, resolveDrop, setDragEnv, resetDragForTests, setActiveTab, switchTabWithinDrag, railEdgeStep,
+  drag, dragSource, resizeSource, tabSource, resolveDrop, setDragEnv, resetDragForTests, setActiveTab, setTabSwitcher, switchTabWithinDrag, railEdgeStep, OPEN_DWELL_MS,
   type DragState
 } from './dragController';
 import * as api from '$lib/utils/api';
@@ -614,7 +614,7 @@ describe('the tab rail scrolls sideways during a drag', () => {
    * A rail whose strip shows 500 of 3000 px, and a stub that puts the pointer over a tab in it (by
    * default 80 px wide, 20 px left of the pointer; `tabAt` places it otherwise).
    */
-  function railEnv(scrollLeft: number, tabAt: (x: number) => { left: number; width: number } = (x) => ({ left: x - 20, width: 80 })) {
+  function railEnv(scrollLeft: number, tabAt: (x: number) => { left: number; width: number } = (x) => ({ left: x - 20, width: 80 }), tabUnder: () => string = () => 't2') {
     const strip = document.createElement('div');
     strip.setAttribute('data-drag-tabbar', '');
     const rail = document.createElement('div');
@@ -624,7 +624,7 @@ describe('the tab rail scrolls sideways during a drag', () => {
     const scrollElByX = vi.fn();
     setDragEnv({
       hitTest: (x) => ({
-        container: null, dx: 0, dy: 0, tabId: 't2', tabRect: { ...tabAt(x), top: 0, height: 40 }, tabRail: rail
+        container: null, dx: 0, dy: 0, tabId: tabUnder(), tabRect: { ...tabAt(x), top: 0, height: 40 }, tabRail: rail
       }),
       raf: (cb) => {
         frames.push(cb);
@@ -698,26 +698,72 @@ describe('the tab rail scrolls sideways during a drag', () => {
     expect(get(drag)?.dwell?.key).toBe('tab:t2');
   });
 
-  it('no tab dwell on a tab that opening would scroll into view (the open tab never walks under a still pointer)', () => {
-    setActiveTab('t1');
-    // Mid-rail (no edge-scroll), but the tab's right end is 4 px from the strip's: opening it would
-    // scroll the row, putting another tab under the pointer.
-    railEnv(1000, () => ({ left: 380, width: 100 }));
-    const { el } = source('a');
-    startMouseDrag(el, 100, 20);
-    moveTo(400, 20);
-    flush();
-    expect(get(drag)?.dwell).toBeUndefined();
-    drop(400, 20);
-    // The same tab well inside the strip: holding there opens it as before.
-    resetDragForTests();
-    env();
-    setActiveTab('t1');
-    railEnv(1000, () => ({ left: 200, width: 100 }));
-    const { el: el2 } = source('b');
-    startMouseDrag(el2, 100, 20);
-    moveTo(250, 20);
-    flush();
-    expect(get(drag)?.dwell?.key).toBe('tab:t2');
+  it('a tab near the strip\'s edge can be held open: its reveal never walks the open tab under a still pointer', () => {
+    vi.useFakeTimers();
+    try {
+      const switched: string[] = [];
+      setActiveTab('t1');
+      setTabSwitcher((id) => {
+        switched.push(id);
+        setActiveTab(id);
+        return true;
+      });
+      // Mid-rail (no edge-scroll), and the tab's right end is 4 px from the strip's: opening it scrolls the row.
+      let tabId = 't2';
+      railEnv(1000, () => ({ left: 380, width: 100 }), () => tabId);
+      const { el } = source('a');
+      startMouseDrag(el, 100, 20);
+      moveTo(400, 20);
+      flush();
+      expect(get(drag)?.dwell?.key).toBe('tab:t2');
+      vi.advanceTimersByTime(OPEN_DWELL_MS);
+      expect(switched).toEqual(['t2']);
+
+      // The row scrolled: another tab is now under the still pointer. Held there, nothing happens.
+      tabId = 't3';
+      moveTo(402, 21); // a shaking hand is not a move
+      flush();
+      expect(get(drag)?.dwell).toBeUndefined();
+      vi.advanceTimersByTime(OPEN_DWELL_MS * 3);
+      expect(switched).toEqual(['t2']);
+
+      // A real move is a new choice: that tab can be held open too.
+      moveTo(430, 20);
+      flush();
+      expect(get(drag)?.dwell?.key).toBe('tab:t3');
+      vi.advanceTimersByTime(OPEN_DWELL_MS);
+      expect(switched).toEqual(['t2', 't3']);
+      drop(430, 20);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a new drag starts free to hold over the same spot', () => {
+    vi.useFakeTimers();
+    try {
+      const switched: string[] = [];
+      setActiveTab('t1');
+      setTabSwitcher((id) => {
+        switched.push(id);
+        setActiveTab(id);
+        return true;
+      });
+      let tabId = 't2';
+      railEnv(1000, () => ({ left: 380, width: 100 }), () => tabId);
+      const first = source('a').el;
+      startMouseDrag(first, 100, 20);
+      moveTo(400, 20);
+      flush();
+      vi.advanceTimersByTime(OPEN_DWELL_MS);
+      drop(400, 20);
+      tabId = 't3';
+      startMouseDrag(source('b').el, 100, 20);
+      moveTo(400, 20);
+      flush();
+      expect(get(drag)?.dwell?.key).toBe('tab:t3');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

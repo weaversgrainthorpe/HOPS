@@ -55,7 +55,7 @@ import { toast } from '$lib/stores/toast';
 import { clearSelection, selectionInDraft, toggleNode } from '$lib/stores/nodeSelection';
 import { hitTest as domHitTest, type HitResult } from './hitTest';
 import { crumbDwellKey, dwellArgs, flowIndex, flowMarker, pageDwellKey } from './targets';
-import { railState, revealScrollLeft, type RailMetrics } from '$lib/components/tabbar/tabRail';
+import { railState, type RailMetrics } from '$lib/components/tabbar/tabRail';
 import { drillUpTo, setFolderPage } from '$lib/stores/folderView';
 import {
   cancelDropAnimations, claimFlourish, outStarts, playDropAnimation, playOutOfFolders, sayAnimationFailure,
@@ -935,6 +935,8 @@ let pending: { x: number; y: number } | null = null;
 let frameId = 0;
 let lastHit: HitResult | null = null;
 let dwellTimer: ReturnType<typeof setTimeout> | null = null;
+/** Where the pointer was when a hold last opened a tab; the next tab hold waits until it moves away. */
+let tabHeldAt: { x: number; y: number } | null = null;
 
 function setState(s: DragState | null) {
   current = s;
@@ -1216,18 +1218,6 @@ function railEdge(x: number, rail: Element): { strip: Element; dx: number } | nu
 }
 
 /**
- * Whether opening the tab drawn at `tab` (viewport px) would scroll the rail's strip: the same sum
- * TabRail's reveal does (revealScrollLeft), with the tab's place measured inside the strip's content.
- */
-function switchWouldScroll(rail: Element, tab: { left: number; width: number }): boolean {
-  const strip = rail.querySelector('[data-drag-tabbar]');
-  if (!strip) return false;
-  const m = env.scrollMetrics(strip);
-  const to = revealScrollLeft({ left: tab.left - env.measure(strip).left + m.scrollLeft, width: tab.width }, m);
-  return to !== null && Math.abs(to - m.scrollLeft) > 1;
-}
-
-/**
  * Near an edge, scroll (and keep scrolling while held there): the tab rail sideways when the pointer
  * is at either end of it, else the panel under the pointer, else the page.
  */
@@ -1275,9 +1265,9 @@ function dwellKey(s: DragState, hit: HitResult, d: LayoutDashboard): { key: stri
   if (hit.tabRail && (railEdge(s.pointer.x, hit.tabRail)?.dx ?? 0) !== 0) return null;
   if (hit.tabId !== undefined) {
     if (hit.tabId === activeTab) return null;
-    // Switching reveals the new open tab (TabRail scrolls it fully into view). A tab that reveal
-    // would scroll could walk the open tab along the row under a still pointer: no hold there.
-    if (hit.tabRail && hit.tabRect && switchWouldScroll(hit.tabRail, hit.tabRect)) return null;
+    // Switching reveals the new open tab (TabRail scrolls it fully into view), which can put the next
+    // tab under a still pointer. Only a move opens that one, so the open tab never walks along the row.
+    if (tabHeldAt) return null;
     return { key: `tab:${hit.tabId}`, ms: OPEN_DWELL_MS };
   }
   // An open folder's page bar: ‹ / › flips the page (none at that end); an outer box's title goes back up.
@@ -1304,6 +1294,7 @@ function clearDwell() {
 
 /** Keep the running dwell while its key holds; start a new timer when it changes; none when nothing to wait for. */
 function dwellFor(s: DragState, hit: HitResult, d: LayoutDashboard, prev: DragState['dwell']): DragState['dwell'] {
+  if (tabHeldAt && Math.hypot(s.pointer.x - tabHeldAt.x, s.pointer.y - tabHeldAt.y) > TOUCH_SLOP_PX) tabHeldAt = null;
   const k = dwellKey(s, hit, d);
   if (!k) {
     clearDwell();
@@ -1337,8 +1328,10 @@ function ripen(key: string) {
   setState({ ...s, dwell: { ...s.dwell, ripe: true } });
   const [kind, ...rest] = key.split(':');
   const arg = rest.join(':');
-  if (kind === 'tab') switchDragTab(arg);
-  else if (kind === 'crumb') crumbAction(arg)?.();
+  if (kind === 'tab') {
+    tabHeldAt = { ...s.pointer };
+    switchDragTab(arg);
+  } else if (kind === 'crumb') crumbAction(arg)?.();
   else if (kind === 'page') flipPage(d, arg);
   else if (kind === 'fcrumb') goUpCrumb(d, arg);
   if (current) {
@@ -1398,6 +1391,7 @@ function stopDrag() {
   if (frameId) env.cancelRaf(frameId);
   frameId = 0;
   clearDwell();
+  tabHeldAt = null;
   allowedTab = null;
   pending = null;
   lastHit = null;

@@ -214,6 +214,50 @@ test.describe('one-row tab bar', () => {
     expect(errors).toEqual([]);
   });
 
+  test('dragging a tile: a tab at the end of the visible row opens when held, once, and the row still edge-scrolls', async ({ page, context }) => {
+    const many = await seed(page, context, 60, undefined, 0);
+    await page.goto(many);
+    await page.locator('[aria-label="Enter Edit Mode"]').click();
+    await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
+    const strip = page.locator('[data-drag-tabbar]');
+    const stripBox = (await strip.boundingBox())!;
+    const right = stripBox.x + stripBox.width;
+    // The last tab that starts inside the row: it ends within reveal's margin of the row's end, or past it.
+    const index = await strip.evaluate((el, end) => {
+      const tabs = [...el.querySelectorAll<HTMLElement>('[data-tab-button]')];
+      return tabs.findLastIndex((t) => t.getBoundingClientRect().left < end - 20) + 1;
+    }, right);
+    const edge = (await tab(page, index).boundingBox())!;
+    expect(edge.x + edge.width, 'the tab is in the last 24 px of the row').toBeGreaterThan(right - 24);
+
+    const item = page.locator(`[data-node-id$="-far"]`);
+    const from = (await item.boundingBox())!;
+    const x = edge.x + Math.min(10, (right - edge.x) / 2);
+    const y = edge.y + edge.height / 2;
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i++) {
+      await page.mouse.move(from.x + from.width / 2 + ((x - from.x - from.width / 2) * i) / 10, from.y + from.height / 2 + ((y - from.y - from.height / 2) * i) / 10);
+      await page.waitForTimeout(16);
+    }
+    await expect(tab(page, index)).toHaveAttribute('aria-selected', 'true', { timeout: 3_000 });
+    const scrolled = await strip.evaluate((el) => el.scrollLeft);
+    expect(scrolled, 'opening it scrolled the row').toBeGreaterThan(0);
+
+    // Still held: another tab is under the pointer now, and it does not open by itself.
+    await page.waitForTimeout(1_500);
+    await expect(tab(page, index)).toHaveAttribute('aria-selected', 'true');
+    expect(await strip.evaluate((el) => el.scrollLeft)).toBe(scrolled);
+
+    // The rail's ends still edge-scroll.
+    const r = (await rail(page).boundingBox())!;
+    await page.mouse.move(r.x + r.width - 40, y, { steps: 3 });
+    await page.mouse.move(r.x + r.width - 20, y, { steps: 3 });
+    await expect.poll(() => strip.evaluate((el) => el.scrollLeft)).toBeGreaterThan(scrolled + 100);
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+  });
+
   test('the open tab stands out (style D)', async ({ page, context }) => {
     const plain = await seed(page, context, 3);
     await page.goto(plain);
