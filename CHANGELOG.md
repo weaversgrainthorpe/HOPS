@@ -59,6 +59,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   because the server can't be reached.
 - **A saved copy that can't be updated says why,** with **Retry**, instead of
   a general notice.
+- **On a very slow connection a dashboard opens from its saved copy.** If HOPS
+  hasn't answered after 45 seconds and this browser has a copy, it shows the
+  copy with the banner, instead of failing at 60 seconds. HOPS's late answer
+  still updates the copy. With no copy, it keeps waiting as before.
 - **A sign-in page from a proxy can no longer be saved as the offline page.**
   HOPS checks that it really got its own page first.
 - **The status tick in the header changes with the offline banner,** instead of
@@ -68,6 +72,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A folder opened inside another folder lost its icon.** It now shows its
   icon in its title bar, and the icon fits the bar.
 - **A white line along the tab bar in the light theme** is gone.
+- **A backup holding incomplete dashboards is refused,** when uploaded and when
+  restored, and says why. Your current data stays as it was. Such a file can't
+  come from HOPS, but restored it would have stopped the dashboards loading.
 - **A `?` in the data folder's path stopped HOPS starting.** It starts, and
   keeps its database there.
 
