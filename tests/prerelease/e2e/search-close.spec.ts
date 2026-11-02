@@ -1,10 +1,9 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import { getCsrfToken } from '../helpers';
 
-// Search closes (Esc, wherever focus is; the Esc hint) -- reuses the inside-folders fixture.
-// Search reaches every tile on the dashboard (other tabs, any folder depth, minimised and paged
-// folders), shows the path as text, Enter opens, Shift+Enter shows where it lives, and a folder is a
-// result too. Needs Chromium (real layout, real popups).
+// Search closes: Esc closes it from the text field, after a click on a blank part of the panel,
+// with focus on a result, and with focus on the page behind; the Esc hint is a button that closes
+// it too. Needs Chromium (real layout, real focus).
 
 let seq = 0;
 const made: string[] = [];
@@ -19,8 +18,7 @@ const folder = (id: string, name: string, box: Child | null, children: Child[], 
   ...(box ? { placement: box } : {}), content: { children }, ...extra
 });
 
-// Tab "Main": a plain tile. Tab "Media": Downloads (minimised) > Archive > Sonarr, with enough
-// fillers that Sonarr sits on a later page of Archive.
+// Tab "Main": a plain tile. Tab "Media": Downloads (minimised) > Archive > Sonarr.
 async function setup(page: Page, context: BrowserContext) {
   const p = `srchc${Date.now().toString(36)}${(seq++).toString(36)}`;
   const id = (s: string) => `${p}-${s}`;
@@ -33,10 +31,7 @@ async function setup(page: Page, context: BrowserContext) {
         id: id('t2'), name: 'Media', order: 1,
         root: { columns: 24, children: [
           folder(id('dl'), 'Downloads', { x: 0, y: 0, w: 12, h: 9 }, [
-            folder(id('arch'), 'Archive', null, [
-              ...Array.from({ length: 15 }, (_, i) => kid(id(`f${i}`), `Filler${i}`)),
-              kid(id('sonarr'), 'Sonarr')
-            ])
+            folder(id('arch'), 'Archive', null, [kid(id('sonarr'), 'Sonarr')])
           ], { display: 'collapsed' })
         ] }
       }
@@ -87,9 +82,11 @@ test.describe('search closes', () => {
   test('Esc closes after clicking a blank part of the panel', async ({ page, context }) => {
     const f = await setup(page, context);
     await page.goto(f.path);
-    await search(page, 'sonarr');
+    const input = await search(page, 'sonarr');
     await expect(page.getByRole('button', { name: /Sonarr/ })).toHaveCount(1);
+    await expect(input).toBeFocused();
     await panel(page).locator('.search-input-row').click({ position: { x: 150, y: 5 } });
+    await expect(input).not.toBeFocused(); // the click really left the field, so Esc is tested from elsewhere
     await page.keyboard.press('Escape');
     await expect(panel(page)).toHaveCount(0);
   });

@@ -381,7 +381,12 @@ test.describe('one-row tab bar', () => {
     expect(isWhite(colours.left), `border-left ${colours.left}`).toBe(false);
     expect(isWhite(colours.strip), `top strip ${colours.strip}`).toBe(false);
     // And the pixels: 1px below the open tab's top edge, across its middle, none are white.
+    // The clip is in viewport coordinates, so bring the tab into view first and check it is there.
+    await open.scrollIntoViewIfNeeded();
     const box = (await open.boundingBox())!;
+    const vp = page.viewportSize()!;
+    expect(box.y >= 0 && box.y + box.height <= vp.height && box.x >= 0 && box.x + box.width <= vp.width,
+      `the open tab is inside the viewport (${JSON.stringify(box)})`).toBe(true);
     const png = await page.screenshot({ clip: { x: box.x + box.width / 4, y: box.y + 1, width: box.width / 2, height: 1 } });
     const px = await page.evaluate(async (b64) => {
       const img = new Image();
