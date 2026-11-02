@@ -28,12 +28,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   An installed HOPS app always keeps the gear, since it has no address bar.
   If HOPS can't read the setting, the buttons show. This only tidies the bar:
   who can sign in and what they can do stay the same.
-- **Tile content size.** Each dashboard has a **Tile content size** slider
-  (Edit Dashboard › Settings), from 75% to 125% in steps of 5. It makes the
-  icon, name and description in every tile and minimised folder on that
-  dashboard bigger or smaller. Tiles and folders keep their size and place.
-  Small tiles change least: their text is already at its smallest readable
-  size.
 
 ### Changed
 - **Tiles use their space.** The name sits at the top and the icon takes the
