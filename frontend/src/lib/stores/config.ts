@@ -149,6 +149,41 @@ export const migrationNoticesDismissed = writable(false);
  */
 export const noticesStale = writable<string | null>(null);
 
+// "Show the edit and Settings buttons when signed out", off. This is what the navbar hides by, and
+// it is a tidy-up only: /settings still asks for the password and the server's auth never reads it.
+// The buttons hide only on the server's own word. A failed read, a kept copy (the server did not
+// answer) or a re-read that failed all show them: a read failure never leaves someone with no
+// visible way in. While the first read runs there is no answer either way, so this browser's last
+// one stands in, which spares an off dashboard a flash of buttons on every page load; with nothing
+// remembered they show, as they always have.
+const BUTTONS_HINT_KEY = 'hops_signed_out_buttons_hidden';
+
+function rememberedButtonsHidden(): boolean {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem(BUTTONS_HINT_KEY) === '1';
+  } catch {
+    return false; // storage blocked: as with nothing remembered
+  }
+}
+
+function rememberButtons(c: Config): void {
+  try {
+    if (c.signedOutButtons === false) localStorage.setItem(BUTTONS_HINT_KEY, '1');
+    else localStorage.removeItem(BUTTONS_HINT_KEY);
+  } catch {
+    // Not remembered in this browser: the next page load may show them until its read lands.
+  }
+}
+
+export const signedOutButtonsHidden = derived(
+  [config, configLoading, configError, showingKept, noticesStale],
+  ([$config, $loading, $error, $kept, $stale]) => {
+    if ($error !== null || $kept || $stale !== null) return false;
+    if ($config === null) return $loading && rememberedButtonsHidden();
+    return $config.signedOutButtons === false;
+  }
+);
+
 // Server notices dismissed in this page session. A re-read that began before the dismissal
 // succeeded must not bring one back.
 const dismissedNotices = new Set<string>();
@@ -377,6 +412,7 @@ function adoptLoaded(data: Config): void {
   for (const d of data.dashboards ?? []) if (d.partial !== true) mismatchReloaded.delete(d.id);
   config.set(withoutDismissed(data));
   showingKept.set(isKept(data));
+  if (!isKept(data)) rememberButtons(data);
   keptFailure.set(isKept(data) ? KEPT_READ_FAILED : null);
   configError.set(null);
   noticesStale.set(null);
@@ -551,6 +587,7 @@ export function applySavedLayout(fresh: FreshLayout | undefined): void {
       schemaVersion: 3,
       // The marker comes from the fresh document only: a response without it blocks the next save.
       ...(layout.layoutVersion !== undefined ? { layoutVersion: layout.layoutVersion } : {}),
+      ...(layout.signedOutButtons !== undefined ? { signedOutButtons: layout.signedOutButtons } : {}),
       dashboards: layout.dashboards,
       ...(notices ? { migrationNotices: notices } : {}),
       ...(serverNotices ? { notices: serverNotices } : {}),
@@ -569,9 +606,9 @@ export function applySavedLayout(fresh: FreshLayout | undefined): void {
 }
 
 /**
- * Re-read the server-computed parts of the document after a write: the notices and each
- * dashboard's read-only `display` block (computed from the global values when a dashboard has no
- * override -- so a global Settings save changes it). The rest of the document came with
+ * Re-read the server-computed parts of the document after a write: the notices, the signed-out
+ * buttons and each dashboard's read-only `display` block (computed from the global values when a
+ * dashboard has no override -- so a global Settings save changes it). The rest of the document came with
  * the write and is not taken. A failed read is visible: a toast, and the held notices are marked
  * "may be out of date" (noticesStale) until a later read succeeds.
  *
@@ -606,11 +643,13 @@ async function refreshNotices(): Promise<void> {
     if (isKept(fresh)) {
       showingKept.set(true);
       keptFailure.set(KEPT_READ_FAILED);
+    } else {
+      rememberButtons(fresh);
     }
     const freshDisplay = new Map((fresh.dashboards ?? []).map((d) => [d.id, d.display] as const));
     config.update((c) => {
       if (!c) return c;
-      const { notices: _old, noticesUnreadable: _u, ...rest } = c;
+      const { notices: _old, noticesUnreadable: _u, signedOutButtons: _b, ...rest } = c;
       const kept = (fresh.notices ?? []).filter((n) => !dismissedNotices.has(n.id));
       const dashboards = c.dashboards.map((d) => {
         if (!freshDisplay.has(d.id)) return d;
@@ -621,6 +660,7 @@ async function refreshNotices(): Promise<void> {
       return {
         ...rest,
         dashboards,
+        ...(fresh.signedOutButtons !== undefined ? { signedOutButtons: fresh.signedOutButtons } : {}),
         ...(kept.length > 0 ? { notices: kept } : {}),
         ...(fresh.noticesUnreadable ? { noticesUnreadable: fresh.noticesUnreadable } : {})
       };
@@ -639,8 +679,8 @@ async function refreshNotices(): Promise<void> {
  * Save one global setting (the Settings page). Afterwards everything derived from the global
  * values is re-read, so nothing shows the old value as current: the status-check gates the
  * editing dialogs hold (the global one is among them), the notices, each dashboard's computed
- * `display` block (animated folder backgrounds inherit the global value) and the mounted tiles'
- * status.
+ * `display` block (animated folder backgrounds inherit the global value), the signed-out buttons
+ * and the mounted tiles' status.
  */
 export async function saveGlobalSetting(key: string, value: string | number): Promise<void> {
   await updateSetting(key, value);

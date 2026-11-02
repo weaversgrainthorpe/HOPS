@@ -153,6 +153,14 @@ dialog's **Forgot password?** shows the command for each kind of install. A
 **Log out** button sits at the right of the top bar (on a phone, it's in
 Settings instead).
 
+Want a tidier bar for people who only view? Under **Settings › Global
+settings › General**, turn off **Show the edit and Settings buttons when
+signed out**. The pencil and the gear then stay hidden until you sign in. To
+sign in when they're hidden, go to `/settings` on your HOPS address (for
+example `http://<your-server-address>:8080/settings`). Bookmark it. That
+address always works and always asks for the password, on or off. This only
+tidies the bar: who can sign in and what they can do stay the same.
+
 ## Step 3: Look around the Sample
 
 The Sample shows what HOPS can do. Its addresses are made-up
@@ -649,7 +657,8 @@ to the dashboard's address, such as `http://<server>:8080/media`.
   its own icon, like an app.
 - Phones are for viewing: at 480 pixels wide or narrower, the edit button
   is hidden. The gear (Settings) is still there for backups and your
-  password.
+  password (once you've signed in, if you've hidden the buttons for people
+  who are signed out: see Step 2).
 
 ## Step 9: Keep it tidy and safe
 

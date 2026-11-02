@@ -342,7 +342,7 @@
       logError('Background delete', error);
       const message = (error as Error).message;
       if (message.includes('401')) {
-        uploadError = 'You have been signed out. Sign in again (the pencil or the gear in the top bar) and try again.';
+        uploadError = 'You have been signed out. Sign in again (at /settings on your HOPS address) and try again.';
       } else {
         uploadError = `Failed to delete: ${message}`;
       }

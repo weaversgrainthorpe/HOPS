@@ -22,6 +22,7 @@ vi.mock('$lib/utils/api', async () => {
     getConfig: vi.fn(),
     getConfigFor: vi.fn(),
     getDashboard: vi.fn(),
+    updateSetting: vi.fn(),
     listSettings: vi.fn(),
     getDashboardSettings: vi.fn()
   };
@@ -38,6 +39,10 @@ import {
   configReadRunning,
   retryLoadForPage,
   applySavedLayout,
+  saveGlobalSetting,
+  signedOutButtonsHidden,
+  configLoading,
+  noticesStale,
   loadConfig,
   otherDashboards,
   retryOtherDashboards,
@@ -745,5 +750,109 @@ describe('showing a kept copy', () => {
     await loadConfig();
     applySavedLayout({ layout: { dashboards: [full('a', 2)] } } as never);
     expect(get(showingKept)).toBe(false);
+  });
+});
+
+// "Show the edit and Settings buttons when signed out": hidden only when a read from the server
+// said so. Anything else (no answer yet with nothing remembered, a failed read, a kept copy, a
+// server that doesn't send it) keeps them on show, so nobody is left with no visible way in.
+describe('the signed-out buttons', () => {
+  const off = (): Config => ({ ...doc(full('a', 1)), signedOutButtons: false });
+  const on = (): Config => ({ ...doc(full('a', 1)), signedOutButtons: true });
+  const HINT = 'hops_signed_out_buttons_hidden';
+
+  beforeEach(() => {
+    localStorage.removeItem(HINT);
+    showingKept.set(false);
+    noticesStale.set(null);
+    configLoading.set(true);
+  });
+
+  it('stay on show when the server says on, or says nothing (an older server)', async () => {
+    vi.mocked(api.getConfig).mockResolvedValue(on());
+    await loadConfig();
+    expect(get(signedOutButtonsHidden)).toBe(false);
+    vi.mocked(api.getConfig).mockResolvedValue(doc(full('a', 1)));
+    await loadConfig();
+    expect(get(signedOutButtonsHidden)).toBe(false);
+  });
+
+  it('hide when a read from the server says off', async () => {
+    vi.mocked(api.getConfig).mockResolvedValue(off());
+    await loadConfig();
+    expect(get(signedOutButtonsHidden)).toBe(true);
+  });
+
+  it('come back when the read fails, first load or a later one', async () => {
+    vi.mocked(api.getConfig).mockRejectedValue(new Error('down'));
+    await loadConfig();
+    expect(get(config)).toBeNull();
+    expect(get(signedOutButtonsHidden)).toBe(false);
+
+    vi.mocked(api.getConfig).mockResolvedValue(off());
+    await loadConfig();
+    expect(get(signedOutButtonsHidden)).toBe(true);
+    vi.mocked(api.getConfig).mockRejectedValue(new Error('down'));
+    await loadConfig({ background: true });
+    expect(get(config)).not.toBeNull(); // the held page stays, and the buttons with it
+    expect(get(signedOutButtonsHidden)).toBe(false);
+  });
+
+  it('come back on a kept copy: it is not an answer from the server', async () => {
+    vi.mocked(api.getConfig).mockResolvedValue(noteKept(off()));
+    await loadConfig();
+    expect(get(showingKept)).toBe(true);
+    expect(get(signedOutButtonsHidden)).toBe(false);
+    // ...and it is not remembered for the next page load either.
+    expect(localStorage.getItem(HINT)).toBeNull();
+  });
+
+  it('while the first read runs, follow what this browser last heard; a failure then shows them', async () => {
+    expect(get(signedOutButtonsHidden)).toBe(false); // nothing remembered: as today
+    vi.mocked(api.getConfig).mockResolvedValue(off());
+    await loadConfig();
+    expect(localStorage.getItem(HINT)).toBe('1');
+
+    config.set(null);
+    configLoading.set(true);
+    expect(get(signedOutButtonsHidden)).toBe(true); // no flash of buttons on the next page load
+
+    const read = deferred<Config>();
+    vi.mocked(api.getConfig).mockReturnValue(read.promise);
+    const load = loadConfig();
+    expect(get(signedOutButtonsHidden)).toBe(true);
+    read.reject(new Error('down'));
+    await load;
+    expect(get(signedOutButtonsHidden)).toBe(false);
+  });
+
+  it('turning it back on forgets the remembered off', async () => {
+    vi.mocked(api.getConfig).mockResolvedValue(off());
+    await loadConfig();
+    vi.mocked(api.getConfig).mockResolvedValue(on());
+    await loadConfig();
+    expect(localStorage.getItem(HINT)).toBeNull();
+  });
+
+  it('a Settings save takes effect in this tab: the held value follows the re-read', async () => {
+    vi.mocked(api.getConfig).mockResolvedValue(on());
+    await loadConfig();
+    vi.mocked(api.updateSetting).mockResolvedValue(undefined as never);
+    vi.mocked(api.getConfig).mockResolvedValue(off());
+    await saveGlobalSetting('display.signed_out_buttons', 'false');
+    expect(get(signedOutButtonsHidden)).toBe(true);
+    expect(localStorage.getItem(HINT)).toBe('1');
+
+    // A re-read that fails: the value on hand may be old, so the buttons show.
+    vi.mocked(api.getConfig).mockRejectedValue(new Error('down'));
+    await saveGlobalSetting('display.signed_out_buttons', 'false');
+    expect(get(signedOutButtonsHidden)).toBe(false);
+  });
+
+  it('a write keeps the value: its fresh layout carries it', async () => {
+    vi.mocked(api.getConfig).mockResolvedValue(off());
+    await loadConfig();
+    applySavedLayout({ layout: off() });
+    expect(get(signedOutButtonsHidden)).toBe(true);
   });
 });

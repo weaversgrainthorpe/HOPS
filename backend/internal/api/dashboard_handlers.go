@@ -245,6 +245,10 @@ type docAfterFn func(tx *sql.Tx) error
 // effective settings: what every viewer, signed in or not, needs to
 // render it (animatedFolderBackgrounds, and the global animations switch). It is never stored: a write
 // drops it (transientDashboardKeys).
+//
+// `signedOutButtons` is the global "Show the edit and Settings buttons when
+// signed out" setting: the one setting a viewer with no session needs, served
+// here so nothing else from the admin-only settings list reaches them.
 func (r *Router) publicDoc(stored configdoc.Obj) map[string]interface{} {
 	raw, _ := stored["dashboards"].([]any)
 	dashes := make([]any, 0, len(raw))
@@ -266,7 +270,11 @@ func (r *Router) publicDoc(stored configdoc.Obj) map[string]interface{} {
 		}
 		dashes = append(dashes, out)
 	}
-	out := map[string]interface{}{"schemaVersion": configdoc.SchemaVersion, "dashboards": dashes}
+	out := map[string]interface{}{
+		"schemaVersion":    configdoc.SchemaVersion,
+		"dashboards":       dashes,
+		"signedOutButtons": r.settings.GetBool(settings.KeyDisplaySignedOutButtons),
+	}
 	// The layout-form marker is served, so the frontend can refuse (visibly)
 	// to save into a document that is not in the form it writes. Start-up
 	// refuses a stored document at another version (MigrateWithBackup).

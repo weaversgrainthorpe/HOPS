@@ -26,6 +26,7 @@
     "discovery.per_host_timeout_seconds",
     "discovery.max_scan_minutes",
     "folders.animated_backgrounds",
-    "display.animations"
+    "display.animations",
+    "display.signed_out_buttons"
   ]
 }

@@ -91,6 +91,7 @@ const (
 	KeyDiscoveryMaxScanMinutes      = "discovery.max_scan_minutes"
 	KeyFoldersAnimatedBackgrounds   = "folders.animated_backgrounds"
 	KeyDisplayAnimations            = "display.animations"
+	KeyDisplaySignedOutButtons      = "display.signed_out_buttons"
 	KeyBackupKeepCount              = "backup.keep_count"
 	KeyBackupKeepDays               = "backup.keep_days"
 	KeyBackupMaxCount               = "backup.max_count"
@@ -258,6 +259,14 @@ var Definitions = []Definition{
 		Description: "Animations in the editor: a tile dropped into a folder flies into it and the folder gulps it in; two tiles " +
 			"merged into a new folder are drawn together before the folder pops out. On plays them unless your device asks " +
 			"for reduced motion; Always plays them even then; Off never does. They never delay your change.",
+	},
+	// Read live by the navbar, through the top-level signedOutButtons of every
+	// public config read. It only tidies the bar: the server's auth never reads it.
+	{
+		Key: KeyDisplaySignedOutButtons, Type: "bool", Default: "true",
+		Description: "The pencil and the gear in the top bar, for someone who isn't signed in. Off, they stay out of sight " +
+			"until you sign in: a tidier bar on a shared screen. It only tidies: who can sign in and what they can do stay " +
+			"the same. To sign in when they're hidden, go to /settings on your HOPS address. Bookmark it.",
 	},
 }
 

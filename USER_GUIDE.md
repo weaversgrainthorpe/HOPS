@@ -55,7 +55,10 @@ share a link with the household.
 dashboard*) or the **gear** (**Settings**). The first sign-in is `admin` /
 `admin`, and HOPS makes you set a new password straight away; see
 [Step 2: Sign in](QUICKSTART.md#step-2-sign-in). Once signed in, a **Log
-out** button sits at the right of the top bar.
+out** button sits at the right of the top bar. If the buttons are hidden
+(**Show the edit and Settings buttons when signed out**, under Settings ›
+Global settings › General), go to `/settings` on your HOPS address: it always
+asks for the password.
 
 Old addresses from HOPS 2 still work where it makes sense: anything under
 `/admin/discovery` goes to the matching page under
@@ -671,10 +674,10 @@ The right of the top bar is always there. From left to right it can hold:
 | **Decrease text size** / **Increase text size** (the two **A** buttons) | on dashboards | *Small*, *Medium*, *Large*, *Extra Large*. Kept in this browser. |
 | **Theme Settings** | always | **Brightness Mode** (*Dark*, *Light*, *Auto*), **Theme Preset** (Default, Metallic, Modern, Subtle, Cyberpunk, Sunset, Ocean, Forest), **Show recently used** and **Clear history**. Click **Apply Theme**. Kept in this browser. |
 | **Export Dashboard** | while editing | See [Export](#export). |
-| **pencil** / **Editing** | on dashboards, not on phones | Sign in, or enter and leave edit mode. |
+| **pencil** / **Editing** | on dashboards, not on phones (signed out, unless hidden by the setting below) | Sign in, or enter and leave edit mode. |
 | **Help** | signed in | Keyboard shortcuts and features. |
 | **About HOPS** | signed in | The version, the data folder and what HOPS can do. |
-| **Settings** (gear) | always | Settings (asks you to sign in). |
+| **Settings** (gear) | always, unless hidden while signed out by **Show the edit and Settings buttons when signed out** | Settings (asks you to sign in). |
 | **Log out** | signed in (on a phone, in Settings) | Signs this browser out. |
 
 **Show recently used** adds a row above the tabs with the tiles you open

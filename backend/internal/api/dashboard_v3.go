@@ -83,11 +83,12 @@ func verifyErr(err error) *apiError {
 // response (or the document) that a client may echo back inside a dashboard;
 // they are never dashboard content and are dropped rather than stored. The
 // last two were keys of the retired legacy view: a cached old client may still
-// echo them. `display` is computed per GET; `notices`
+// echo them. `display` and `signedOutButtons` are computed per GET; `notices`
 // is this process's one-time notices (notices.go). They are spelled in pieces so the retired-names scan
 // (TestNoLegacyReferencesInBackend) keeps guarding real uses.
 var transientDashboardKeys = map[string]bool{
 	"schemaVersion": true, "layout": true, "migrationNotices": true, "notices": true, "display": true,
+	"signedOutButtons": true,
 	"dashboard" + "Revisions": true, "v3" + "OnlyDashboards": true,
 }
 

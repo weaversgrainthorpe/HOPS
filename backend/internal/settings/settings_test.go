@@ -50,7 +50,7 @@ func TestEveryKeyHasADefinition(t *testing.T) {
 		KeyHTTPReadHeaderTimeoutSeconds, KeyHTTPReadTimeoutSeconds,
 		KeyHTTPWriteTimeoutSeconds, KeyHTTPIdleTimeoutSeconds,
 		KeyDiscoveryMaxParallelProbes, KeyDiscoveryPerHostTimeoutSecs, KeyDiscoveryMaxScanMinutes,
-		KeyFoldersAnimatedBackgrounds, KeyDisplayAnimations, KeyBackupKeepCount, KeyBackupKeepDays, KeyBackupMaxCount,
+		KeyFoldersAnimatedBackgrounds, KeyDisplayAnimations, KeyDisplaySignedOutButtons, KeyBackupKeepCount, KeyBackupKeepDays, KeyBackupMaxCount,
 	}
 	for _, k := range keys {
 		if _, ok := defByKey[k]; !ok {
@@ -652,6 +652,36 @@ func TestAnimationsSettingIsOnOffAlwaysDefaultOn(t *testing.T) {
 		if err := s.Set(KeyDisplayAnimations, bad); err == nil {
 			t.Errorf("Set %q: accepted, want refused", bad)
 		}
+	}
+}
+
+// "Show the edit and Settings buttons when signed out" is a GUI-set bool, On by
+// default so nothing changes for anyone who leaves it alone, and applies live.
+func TestSignedOutButtonsSettingDefaultsOn(t *testing.T) {
+	if KeyDisplaySignedOutButtons != "display.signed_out_buttons" {
+		t.Fatalf("key = %q", KeyDisplaySignedOutButtons)
+	}
+	def, ok := defByKey[KeyDisplaySignedOutButtons]
+	if !ok {
+		t.Fatal("no definition")
+	}
+	if def.Type != "bool" || def.Default != "true" || def.RestartRequired {
+		t.Fatalf("definition = %+v, want bool, default true, applies live", def)
+	}
+	// The way back in is said where the setting is.
+	want := "To sign in when they're hidden, go to /settings on your HOPS address. Bookmark it."
+	if !strings.Contains(def.Description, want) {
+		t.Fatalf("description %q lacks %q", def.Description, want)
+	}
+	s := newTestService(t)
+	if !s.GetBool(KeyDisplaySignedOutButtons) {
+		t.Fatal("fresh install: want on")
+	}
+	if err := s.Set(KeyDisplaySignedOutButtons, "false"); err != nil {
+		t.Fatal(err)
+	}
+	if s.GetBool(KeyDisplaySignedOutButtons) {
+		t.Fatal("after Set false: still on")
 	}
 }
 

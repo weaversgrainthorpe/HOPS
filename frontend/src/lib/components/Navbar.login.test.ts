@@ -30,8 +30,8 @@ vi.mock('$lib/utils/api', async () => ({
 
 import * as api from '$lib/utils/api';
 import { LoginError } from '$lib/utils/api';
-import { config } from '$lib/stores/config';
-import { isAuthenticated, mustChangePassword, clearMustChangePassword } from '$lib/stores/auth';
+import { config, configError, showingKept } from '$lib/stores/config';
+import { isAuthenticated, mustChangePassword, clearMustChangePassword, authUnknown } from '$lib/stores/auth';
 import { goto } from '$app/navigation';
 import { page } from '$app/stores';
 import type { Writable } from 'svelte/store';
@@ -247,3 +247,74 @@ describe('Navbar gear and Log out', () => {
 	});
 });
 
+
+// "Show the edit and Settings buttons when signed out" switched off.
+describe('Navbar with the signed-out buttons off', () => {
+	const pencil = () => screen.queryByRole('button', { name: 'Enter Edit Mode' });
+	const gear = () => screen.queryByRole('link', { name: 'Settings' });
+
+	beforeEach(() => {
+		navigateTo('/d');
+		resetEditSessionForTests();
+		isAuthenticated.set(false);
+		authUnknown.set(false);
+		mustChangePassword.set(false);
+		editMode.set(false);
+		configError.set(null);
+		showingKept.set(false);
+		config.set({ ...doc(), signedOutButtons: false });
+	});
+
+	it('signed out, neither the pencil nor the gear shows', () => {
+		render(Navbar, {});
+		expect(pencil()).toBeNull();
+		expect(gear()).toBeNull();
+		// The rest of the bar stays.
+		expect(screen.getByRole('button', { name: 'Search' })).toBeTruthy();
+		expect(screen.getByRole('button', { name: 'Theme Settings' })).toBeTruthy();
+	});
+
+	it('signed in, both show, and signing out hides them again', async () => {
+		isAuthenticated.set(true);
+		render(Navbar, {});
+		expect(pencil()).toBeTruthy();
+		expect(gear()).toBeTruthy();
+		isAuthenticated.set(false);
+		await tick();
+		expect(pencil()).toBeNull();
+		expect(gear()).toBeNull();
+	});
+
+	it('on, or when the setting could not be read, both show', async () => {
+		config.set({ ...doc(), signedOutButtons: true });
+		render(Navbar, {});
+		expect(pencil()).toBeTruthy();
+		expect(gear()).toBeTruthy();
+		config.set({ ...doc(), signedOutButtons: false });
+		await tick();
+		expect(gear()).toBeNull();
+		configError.set('The server did not answer');
+		await tick();
+		expect(pencil()).toBeTruthy();
+		expect(gear()).toBeTruthy();
+	});
+
+	it('both show on a kept copy, and while the session could not be checked', async () => {
+		showingKept.set(true);
+		render(Navbar, {});
+		expect(gear()).toBeTruthy();
+		showingKept.set(false);
+		await tick();
+		expect(gear()).toBeNull();
+		authUnknown.set(true);
+		await tick();
+		expect(pencil()).toBeTruthy();
+		expect(gear()).toBeTruthy();
+	});
+
+	it('a session that ended mid-edit keeps the way out of edit mode', async () => {
+		editMode.set(true);
+		render(Navbar, {});
+		expect(screen.getByRole('button', { name: 'Exit Edit Mode' })).toBeTruthy();
+	});
+});

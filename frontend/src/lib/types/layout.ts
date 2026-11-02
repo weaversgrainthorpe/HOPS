@@ -112,4 +112,9 @@ export interface LayoutDoc {
    */
   layoutVersion?: number;
   dashboards: LayoutDashboard[];
+  /**
+   * The global "Show the edit and Settings buttons when signed out" setting, computed per read and
+   * never stored. Absent (an older server): on. Read it through signedOutButtonsHidden.
+   */
+  signedOutButtons?: boolean;
 }

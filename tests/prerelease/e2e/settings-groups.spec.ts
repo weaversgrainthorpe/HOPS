@@ -8,6 +8,7 @@ import { setSetting } from '../helpers';
 // In a REAL browser: scrolling, IntersectionObserver and layout need Chromium.
 
 const GROUPS = [
+  { id: 'general', label: 'General' },
   { id: 'server', label: 'Server' },
   { id: 'sign-in-security', label: 'Sign-in & security' },
   { id: 'uploads', label: 'Uploads' },
@@ -55,7 +56,7 @@ test.describe('global settings groups', () => {
     await expect(chips(page)).toBeHidden();
     // The headings on the page are in the same order (no "Other": every server key is placed).
     await expect(page.getByRole('heading', { level: 3 })).toHaveText(GROUPS.map((g) => g.label));
-    await expectCurrent(subList(page), 'Server');
+    await expectCurrent(subList(page), 'General');
     await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('link', { name: 'Backups', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Backups', level: 2 })).toBeVisible();
     await expect(subList(page)).toHaveCount(0);
@@ -98,7 +99,7 @@ test.describe('global settings groups', () => {
   test('scrolling moves the highlight to the group in view', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await open(page);
-    await expectCurrent(subList(page), 'Server');
+    await expectCurrent(subList(page), 'General');
     await page.mouse.move(800, 400);
     for (const g of [GROUPS[2], GROUPS[4]]) {
       // Wheel until the group's heading is near the top of the window.
@@ -109,7 +110,7 @@ test.describe('global settings groups', () => {
     }
     // And back up to the top.
     await page.mouse.wheel(0, -100_000);
-    await expectCurrent(subList(page), 'Server');
+    await expectCurrent(subList(page), 'General');
   });
 
   test('scrolling by hand to the bottom highlights the last group, and back up moves it off', async ({ page }) => {

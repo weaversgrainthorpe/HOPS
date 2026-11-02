@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -121,5 +122,51 @@ func TestGetConfig_DisplayAnimationsFollowsTheGlobalSetting(t *testing.T) {
 		if got := displayOf(t, getView(t, c), "d1")["animations"]; got != v {
 			t.Fatalf("after setting %s: animations = %v", v, got)
 		}
+	}
+}
+
+// Every public config read carries the "buttons when signed out" setting at the
+// top level, to a viewer with no session, so the navbar can follow it; the
+// settings list itself stays admin-only. A write's `layout` carries it too.
+func TestPublicConfigCarriesSignedOutButtons(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, db)
+	anon := func(path string) map[string]interface{} {
+		t.Helper()
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		if w.Code != 200 {
+			t.Fatalf("anonymous GET %s: %d %s", path, w.Code, w.Body.String())
+		}
+		var v map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &v); err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	for _, path := range []string{"/api/config", "/api/config?dashboard="} {
+		if got := anon(path)["signedOutButtons"]; got != true {
+			t.Fatalf("default: GET %s signedOutButtons = %v, want true", path, got)
+		}
+	}
+	if w := putSetting(t, router, c.token, c.csrf, "display.signed_out_buttons", "false"); w.Code != 200 {
+		t.Fatalf("put setting: %d %s", w.Code, w.Body.String())
+	}
+	for _, path := range []string{"/api/config", "/api/config?dashboard="} {
+		if got := anon(path)["signedOutButtons"]; got != false {
+			t.Fatalf("off: GET %s signedOutButtons = %v, want false", path, got)
+		}
+	}
+	code, resp := c.do("PUT", "/api/dashboards/d1/settings", map[string]interface{}{
+		"overrides": map[string]interface{}{"statusCheckIntervalMinutes": 9}, "revision": 1})
+	if layout, ok := resp["layout"].(map[string]interface{}); !ok || layout["signedOutButtons"] != false {
+		t.Fatalf("write response %d: layout.signedOutButtons missing: %v", code, resp["layout"])
+	}
+	// A viewer gets the one value, never the admin list.
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest("GET", "/api/settings", nil))
+	if w.Code != 401 {
+		t.Fatalf("anonymous GET /api/settings: %d, want 401", w.Code)
 	}
 }

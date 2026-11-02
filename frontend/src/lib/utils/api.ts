@@ -335,6 +335,7 @@ function readConfigDocument(resp: any, what: string): Config {
   // The layout version is passed through as sent: the editor refuses to save into a
   // document at another version, so it must never be dropped (or invented) here.
   if (resp.layoutVersion !== undefined) out.layoutVersion = resp.layoutVersion;
+  if (typeof resp.signedOutButtons === 'boolean') out.signedOutButtons = resp.signedOutButtons;
   if (Array.isArray(resp.migrationNotices)) out.migrationNotices = resp.migrationNotices;
   if (resp.notices !== undefined) {
     // A notice this build cannot read is dropped from the list but counted, so the banner

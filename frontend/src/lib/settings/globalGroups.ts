@@ -16,6 +16,7 @@ export interface SettingGroupDef {
 }
 
 export const GLOBAL_SETTING_GROUPS: readonly SettingGroupDef[] = [
+	{ id: 'general', label: 'General', keys: ['display.signed_out_buttons'] },
 	{
 		id: 'server',
 		label: 'Server',
@@ -71,6 +72,7 @@ export const SETTING_LABELS: Readonly<Record<string, string>> = {
 	'upload.max_bytes_backup': 'Largest backup upload',
 	'editmode.idle_timeout_minutes': 'Edit mode times out after (minutes)',
 	'display.animations': 'Animations',
+	'display.signed_out_buttons': 'Show the edit and Settings buttons when signed out',
 	'folders.animated_backgrounds': 'Animated folder backgrounds',
 	'status.checks_enabled': 'Status monitoring',
 	'status.check_interval_minutes': 'Check every (minutes)',

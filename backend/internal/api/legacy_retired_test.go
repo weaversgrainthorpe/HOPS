@@ -17,8 +17,8 @@ import (
 // The legacy (v2-shaped) view and editor are retired. Everything
 // reads and writes the v3 document.
 
-// GET /api/config is the v3 document: exactly schemaVersion and dashboards
-// (plus migrationNotices / notices when there are any), with no groups/entries anywhere
+// GET /api/config is the v3 document: exactly schemaVersion and dashboards, plus
+// the viewer's signedOutButtons (and migrationNotices / notices when there are any), with no groups/entries anywhere
 // and none of the retired view-only keys.
 func TestGetConfig_IsTheV3Document(t *testing.T) {
 	router, db := setupTestRouter(t)
@@ -27,7 +27,7 @@ func TestGetConfig_IsTheV3Document(t *testing.T) {
 	addShowcase(t, db)
 	v := getView(t, c)
 	for k := range v {
-		if k != "schemaVersion" && k != "dashboards" && k != configdoc.LayoutVersionKey { // the layout-form marker is served
+		if k != "schemaVersion" && k != "dashboards" && k != "signedOutButtons" && k != configdoc.LayoutVersionKey { // the layout-form marker is served
 			t.Errorf("unexpected top-level key %q in GET /api/config", k)
 		}
 	}

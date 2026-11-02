@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { dashboards, currentRoute, dashboardHref } from '$lib/stores/config';
+  import { dashboards, currentRoute, dashboardHref, signedOutButtonsHidden } from '$lib/stores/config';
   import { page } from '$app/stores';
   import { tick, untrack } from 'svelte';
   import type { HeaderConfig } from '$lib/types';
-  import { isAuthenticated, logout, whenPasswordSettled } from '$lib/stores/auth';
+  import { isAuthenticated, logout, sessionUnsettled, whenPasswordSettled } from '$lib/stores/auth';
   import { goto } from '$app/navigation';
   import { theme, toggleTheme } from '$lib/stores/theme';
   import { editMode, editEntry, toggleEditMode, enableEditMode } from '$lib/stores/editMode';
@@ -74,6 +74,13 @@
   $effect(() => {
     if (loginPath !== null && loginPath !== currentPath) loginPath = null;
   });
+
+  // "Show the edit and Settings buttons when signed out" off: a tidier bar for viewers, nothing
+  // more (the /settings address still asks for the password). A session the last check couldn't
+  // settle counts as a way in still needed, and a session that ended mid-edit keeps its pencil,
+  // the way out of edit mode.
+  let buttonsHidden = $derived($signedOutButtonsHidden && !$isAuthenticated && !$sessionUnsettled);
+  let showPencil = $derived(isDashboardPage && (!buttonsHidden || $editMode));
 
   // The pencil is on every dashboard page. Logged out, it signs in first, in
   // place (no trip to the admin page), then starts editing this dashboard.
@@ -386,7 +393,7 @@
 
   // What the bar holds: edit mode, signed in or not, the page, the title, the text size.
   $effect(() => {
-    void [$editMode, $isAuthenticated, isDashboardPage, showLeft, showCenter, leftText, titleText, showSwitcher, $textSize, showAway, $awayMode];
+    void [$editMode, $isAuthenticated, buttonsHidden, isDashboardPage, showLeft, showCenter, leftText, titleText, showSwitcher, $textSize, showAway, $awayMode];
     untrack(() => void fitBar());
   });
 </script>
@@ -574,7 +581,7 @@
         </button>
       {/if}
 
-      {#if isDashboardPage}
+      {#if showPencil}
         <button
           onclick={handlePencil}
           class="edit-toggle"
@@ -612,12 +619,14 @@
       {/if}
 
       <!-- Settings is the admin home; logged out, it asks for the password in place. -->
-      <a href="/settings" class="admin-link" title="Settings" aria-label="Settings">
-        <Icon icon="mdi:cog" width="32" height="32" />
-        {#if $isAuthenticated}
-          <span class="admin-badge"></span>
-        {/if}
-      </a>
+      {#if !buttonsHidden}
+        <a href="/settings" class="admin-link" title="Settings" aria-label="Settings">
+          <Icon icon="mdi:cog" width="32" height="32" />
+          {#if $isAuthenticated}
+            <span class="admin-badge"></span>
+          {/if}
+        </a>
+      {/if}
 
       {#if $isAuthenticated}
         <button type="button" onclick={handleLogout} class="logout-btn" title="Log out" aria-label="Log out">
@@ -1184,7 +1193,7 @@
      are NEVER hidden, phones included (they are the only text-size control: a user who enlarged the
      text must always be able to make it smaller again); only under 360 px may they fold into one
      "Text size" button that opens them (.c8, see fitBar). The pencil, gear and Log out always stay
-     (phones keep their own rules above). */
+     (phones keep their own rules above; the signed-out buttons setting is not a level). */
   @media (min-width: 481px) {
     .nav-content.c1 {
       gap: 1rem;

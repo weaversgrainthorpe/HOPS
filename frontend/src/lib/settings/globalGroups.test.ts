@@ -8,6 +8,7 @@ import { GLOBAL_SETTING_GROUPS, OTHER_GROUP, SETTING_LABELS, groupSettings, jump
 describe('global settings grouping table', () => {
 	it('is the settings table, in order', () => {
 		expect(GLOBAL_SETTING_GROUPS.map((g) => [g.id, g.label])).toEqual([
+			['general', 'General'],
 			['server', 'Server'],
 			['sign-in-security', 'Sign-in & security'],
 			['uploads', 'Uploads'],
@@ -17,6 +18,7 @@ describe('global settings grouping table', () => {
 			['discovery', 'Discovery']
 		]);
 		const keysOf = (id: string) => GLOBAL_SETTING_GROUPS.find((g) => g.id === id)!.keys;
+		expect(keysOf('general')).toEqual(['display.signed_out_buttons']);
 		expect(keysOf('look-motion')).toEqual(['display.animations', 'folders.animated_backgrounds']);
 		expect(keysOf('editing')).toEqual(['editmode.idle_timeout_minutes']);
 		expect(keysOf('status-checks')).toEqual([

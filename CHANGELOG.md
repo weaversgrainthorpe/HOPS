@@ -20,6 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   browser's console. See HTTPS in DEPLOY.md: browsers only allow the copy on
   `https://` addresses and `localhost`.
 
+- **Show the edit and Settings buttons when signed out.** A new setting under
+  Settings › Global settings › General, on by default. Off, people who aren't
+  signed in don't see the pencil or the gear, and the bar stays that way until
+  you sign in. To sign in when they're hidden, go to `/settings` on your HOPS
+  address. Bookmark it. That address always asks for the password, on or off.
+  If HOPS can't read the setting, the buttons show. This only tidies the bar:
+  who can sign in and what they can do stay the same.
+
 ### Changed
 - **Opening a folder inside a folder makes room for all its items.** Before,
   a sub-folder that didn't fit its outer box said "Not enough room", and a
