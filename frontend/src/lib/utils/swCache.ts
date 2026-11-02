@@ -25,6 +25,18 @@ export function isCacheableApiPath(pathname: string): boolean {
   );
 }
 
+/** The kept reads that hold the dashboards, as opposed to the kept icons and backgrounds. */
+export function isKeptConfigRead(pathname: string): boolean {
+  return pathname === '/api/config' || pathname.startsWith('/api/config/dashboard/');
+}
+
+/**
+ * How long a config read waits for the server before a kept copy answers instead. Below the app's
+ * own 60 s limits (WHOLE_LOAD_TIMEOUT_MS, LIGHT_READ_TIMEOUT_MS), so on a slow link the kept copy
+ * gets to answer before the read is given up as failed.
+ */
+export const KEPT_WAIT_MS = 45_000;
+
 /**
  * Offline, with no copy of this exact read: another kept answer that serves it. The index-plus-one
  * read falls back to the whole config (every dashboard in full is a valid answer to it), so a page
@@ -69,6 +81,40 @@ export function markKept(res: Response): Response {
   const headers = new Headers(res.headers);
   headers.set(KEPT_HEADER, '1');
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+}
+
+/**
+ * The answer to a kept read. The server's if it lands first. A failed read gets the kept copy,
+ * marked, at once. A read still running after `waitMs` (null: no limit) gets the kept copy, marked,
+ * while `network` carries on: the caller's promise still finishes and refreshes the copy. With no
+ * copy to give it keeps waiting, so a slow read never fails earlier than it would have without the
+ * limit. Nothing kept and nothing from the server: the 503 the app shows as offline.
+ */
+export async function networkOrKept(
+  network: Promise<Response>,
+  keptCopy: () => Promise<Response | undefined>,
+  waitMs: number | null
+): Promise<Response> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const slow = new Promise<null>((resolve) => {
+    if (waitMs !== null) timer = setTimeout(() => resolve(null), waitMs);
+  });
+  try {
+    const first = await Promise.race([network, slow]);
+    if (first) return first;
+    // The server may still answer: a copy that can't be read is no reason to stop waiting for it.
+    const kept = await keptCopy().catch(() => undefined);
+    return kept ? markKept(kept) : await network;
+  } catch {
+    const kept = await keptCopy();
+    if (kept) return markKept(kept);
+    return new Response(JSON.stringify({ error: 'offline' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // The answers that came from a kept copy. Beside the data, not in it: a config can be saved back
