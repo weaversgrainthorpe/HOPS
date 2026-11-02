@@ -13,6 +13,7 @@
   import ImportModal from './ImportModal.svelte';
   import { suggestDashboardPath } from '$lib/utils/dashboardPath';
   import QRCodeModal from './QRCodeModal.svelte';
+  import ReorderButtons, { type ReorderMove } from '$lib/components/shared/ReorderButtons.svelte';
 
   // Every write goes through its own endpoint (create, rename at the stored
   // revision, delete with the revision, reorder); a refusal is shown by the
@@ -108,13 +109,14 @@
     editingId = null;
   }
 
-  /** Move a dashboard one place up (-1) or down (+1) in the display order. */
-  async function move(index: number, by: -1 | 1) {
+  /** Move a dashboard one place (up or down) or all the way (to the top or bottom) in the display order. */
+  async function move(index: number, how: ReorderMove) {
     const list = $dashboards;
-    const to = index + by;
-    if (busy || to < 0 || to >= list.length) return;
+    const to = how === 'up' ? index - 1 : how === 'down' ? index + 1 : how === 'top' ? 0 : list.length - 1;
+    if (busy || to < 0 || to >= list.length || to === index) return;
     const ids = list.map((d) => d.id);
-    [ids[index], ids[to]] = [ids[to], ids[index]];
+    const [moved] = ids.splice(index, 1);
+    ids.splice(to, 0, moved);
     busy = true;
     try {
       await reorderDashboards(ids);
@@ -257,24 +259,7 @@
             </button>
 
             <div class="dashboard-actions">
-              <button
-                onclick={() => move(index, -1)}
-                class="btn-secondary"
-                aria-label="Move {dashboard.name} up"
-                title="Move up"
-                disabled={index === 0 || busy}
-              >
-                <Icon icon="mdi:arrow-up" width="20" />
-              </button>
-              <button
-                onclick={() => move(index, 1)}
-                class="btn-secondary"
-                aria-label="Move {dashboard.name} down"
-                title="Move down"
-                disabled={index === $dashboards.length - 1 || busy}
-              >
-                <Icon icon="mdi:arrow-down" width="20" />
-              </button>
+              <ReorderButtons name={dashboard.name} first={index === 0} last={index === $dashboards.length - 1} {busy} onMove={(m) => move(index, m)} />
               <button onclick={() => startEdit(dashboard)} class="btn-secondary" aria-label="Rename {dashboard.name}" title="Rename">
                 <Icon icon="mdi:pencil" width="20" />
               </button>
@@ -345,6 +330,7 @@
 
   .header-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.75rem;
   }
 
@@ -358,12 +344,16 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
     padding: 1.5rem;
     gap: 1rem;
+    min-width: 0;
   }
 
   .dashboard-info {
-    flex: 1;
+    flex: 1 1 14rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
     text-align: left;
     background: transparent;
     border: none;
@@ -397,9 +387,20 @@
     font-size: 0.875rem;
   }
 
+  /* Wraps onto a second line when the row is narrow, so nothing runs past the edge. */
   .dashboard-actions {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 0.5rem;
+    max-width: 100%;
+  }
+
+  .dashboard-actions :global(.btn-secondary),
+  .dashboard-actions .btn-danger {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
   }
 
   .dashboard-edit-form {
@@ -411,11 +412,13 @@
 
   .edit-fields {
     display: flex;
+    flex-wrap: wrap;
     gap: 1rem;
   }
 
   .field {
     flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 0.25rem;

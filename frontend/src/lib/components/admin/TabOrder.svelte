@@ -14,6 +14,7 @@
   import { reorderTabs } from '$lib/editor/treeOps';
   import { moveBlock, sortByName, mergeAfterConflict } from '$lib/editor/tabOrder';
   import { toast } from '$lib/stores/toast';
+  import ReorderButtons, { type ReorderMove } from '$lib/components/shared/ReorderButtons.svelte';
 
   let { dashboardId }: { dashboardId: string } = $props();
 
@@ -66,6 +67,14 @@
     moveIds(new Set([id]), to);
     await tick();
     document.querySelector<HTMLElement>(`[data-tab-row="${CSS.escape(id)}"] [data-ctl="${control}"]:not(:disabled)`)?.focus();
+  }
+  /** A row's reorder buttons: where the tab goes, and which control keeps focus afterwards. */
+  function moveBy(r: { id: string; pos: number }, m: ReorderMove) {
+    if (m === 'up') return moveRow(r.id, r.pos - 2, 'up');
+    if (m === 'down') return moveRow(r.id, r.pos, 'down');
+    // From the top or bottom the row can only go the other way next, so focus that button.
+    if (m === 'top') return moveRow(r.id, 0, 'down');
+    return moveRow(r.id, order.length, 'up');
   }
   function toggle(id: string, on: boolean) {
     const next = new Set(ticked);
@@ -257,7 +266,7 @@
     <p><a href="/settings/dashboards">Back to Settings › Dashboards</a></p>
   {:else}
     <h2 class="section-title">Tab order: {dash.name} <span class="count">({order.length} tabs)</span></h2>
-    <p class="muted">Drag a row by its handle, use ↑ ↓, or type a position. Tick several rows to move them together. Nothing changes on the dashboard until you Save.</p>
+    <p class="muted">Drag a row by its handle, use the arrow buttons, or type a position. Tick several rows to move them together. Nothing changes on the dashboard until you Save.</p>
 
     <div class="bar">
       <input type="search" class="find" placeholder="Find a tab…" aria-label="Find a tab" bind:value={filter} />
@@ -287,16 +296,13 @@
           ondrop={(e) => drop(e, r.id)}
           ondragend={() => { dragId = overId = null; }}
         >
-          <!-- Pointer-only: the ↑ ↓ ⤒ ⤓ buttons are the keyboard path, so the handle is no tab stop. -->
+          <!-- Pointer-only: the move buttons are the keyboard path, so the handle is no tab stop. -->
           <span class="grip" aria-hidden="true" title="Drag"><Icon icon="mdi:drag" width="20" /></span>
           <input type="checkbox" aria-label={r.name} checked={ticked.has(r.id)} onchange={(e) => toggle(r.id, e.currentTarget.checked)} />
           <span class="num">{r.pos}</span>
           <span class="name">{r.name}</span>
           <span class="acts">
-            <button type="button" class="btn-secondary" data-ctl="up" aria-label="Move {r.name} up" title="Up" disabled={r.pos === 1} onclick={() => moveRow(r.id, r.pos - 2, 'up')}>↑</button>
-            <button type="button" class="btn-secondary" data-ctl="down" aria-label="Move {r.name} down" title="Down" disabled={r.pos === order.length} onclick={() => moveRow(r.id, r.pos, 'down')}>↓</button>
-            <button type="button" class="btn-secondary" data-ctl="top" aria-label="Move {r.name} to the top" title="To the top" disabled={r.pos === 1} onclick={() => moveRow(r.id, 0, 'down')}>⤒</button>
-            <button type="button" class="btn-secondary" data-ctl="bottom" aria-label="Move {r.name} to the bottom" title="To the bottom" disabled={r.pos === order.length} onclick={() => moveRow(r.id, order.length, 'up')}>⤓</button>
+            <ReorderButtons name={r.name} first={r.pos === 1} last={r.pos === order.length} onMove={(m) => moveBy(r, m)} />
           </span>
         </li>
       {/each}
@@ -330,8 +336,6 @@
   .grip { cursor: grab; background: none; border: none; color: var(--text-secondary); padding: 0.1rem; display: inline-flex; }
   .num { min-width: 2.2rem; text-align: right; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
   .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-  .acts { display: inline-flex; gap: 0.25rem; }
-  .acts button { padding: 0.15rem 0.5rem; }
   .foot { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; justify-content: flex-end; margin-top: 0.75rem; }
   .status { margin-right: auto; color: var(--text-secondary); font-size: 0.9rem; }
 </style>

@@ -184,3 +184,27 @@ describe('DashboardList reorder (PUT /api/dashboards/order)', () => {
     expect(names).toEqual(['Home', 'Fancy']);
   });
 });
+
+describe('DashboardList to top and to bottom', () => {
+  const three = () => doc({ ...home(), order: 0 }, { ...showcase(), order: 1 }, { ...home(), id: 'd3', name: 'Third', path: '/third', order: 2 });
+
+  it('Move to the top sends the whole order with that dashboard first', async () => {
+    vi.mocked(api.reorderDashboards).mockResolvedValue({ layout: three() });
+    config.set(three() as Config);
+    render(DashboardList);
+    await tick();
+    await fireEvent.click(row('Third').getByRole('button', { name: 'Move Third to the top' }));
+    await vi.waitFor(() => expect(api.reorderDashboards).toHaveBeenCalledWith(['d3', 'd1', 'v3d']));
+  });
+
+  it('Move to the bottom sends it last, and the ends disable what does not apply', async () => {
+    vi.mocked(api.reorderDashboards).mockResolvedValue({ layout: three() });
+    config.set(three() as Config);
+    render(DashboardList);
+    await tick();
+    expect(row('Home').getByRole('button', { name: 'Move Home to the top' })).toBeDisabled();
+    expect(row('Third').getByRole('button', { name: 'Move Third to the bottom' })).toBeDisabled();
+    await fireEvent.click(row('Home').getByRole('button', { name: 'Move Home to the bottom' }));
+    await vi.waitFor(() => expect(api.reorderDashboards).toHaveBeenCalledWith(['v3d', 'd3', 'd1']));
+  });
+});
