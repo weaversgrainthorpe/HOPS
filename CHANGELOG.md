@@ -107,6 +107,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A Windows path ending in a backslash gets a plain error.** In PowerShell
   and cmd, `--data "C:\HOPS Data\"` passes a stray quote mark, and Windows only
   said the "syntax is incorrect". HOPS now says to remove the trailing `\`.
+- **Discovery with an internal domain no longer lists services you don't
+  have.** When a domain answers every name (wildcard DNS) and a proxy replies
+  to unknown names with an empty page, every name HOPS tried looked found.
+  Now an empty page doesn't count, HOPS compares each name's page with a
+  made-up name's page and keeps only the ones that differ, and the scan says
+  that the domain answers every name.
 - **Notices sit above the edit toolbar,** so an error never covers Save.
 - **Add to HOPS shows one notice** when HOPS can't be reached, not several.
 - **Settings › Dashboards no longer runs off the right-hand edge** with a long
