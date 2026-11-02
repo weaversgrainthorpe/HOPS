@@ -65,6 +65,7 @@ func verifyDashboard(d Obj, keep *KeptURLs) error {
 	}
 	v.checkWhole(id, d)
 	v.checkOwned(id, d)
+	v.checkContentScale(id, d)
 	v.checkIDs(Obj{"dashboards": []any{d}})
 	v.checkStatusChecks(d)
 	v.checkTileURLs(d)
