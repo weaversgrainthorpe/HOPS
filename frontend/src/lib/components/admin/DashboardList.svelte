@@ -110,7 +110,7 @@
   }
 
   /** Move a dashboard one place (up or down) or all the way (to the top or bottom) in the display order. */
-  async function move(index: number, how: ReorderMove) {
+  async function move(index: number, how: ReorderMove, id: string) {
     const list = $dashboards;
     const to = how === 'up' ? index - 1 : how === 'down' ? index + 1 : how === 'top' ? 0 : list.length - 1;
     if (busy || to < 0 || to >= list.length || to === index) return;
@@ -125,6 +125,11 @@
     } finally {
       busy = false;
     }
+    // The buttons were off while saving, so put keyboard focus back on one of the same row: the
+    // one that was used, or (from the top or bottom, where it is now off) the way back.
+    await tick();
+    const ctl = how === 'top' ? 'down' : how === 'bottom' ? 'up' : how;
+    document.querySelector<HTMLElement>(`[data-dashboard-id="${CSS.escape(id)}"] [data-ctl="${ctl}"]:not(:disabled)`)?.focus();
   }
 
   async function openDashboard(dashboard: LayoutDashboard) {
@@ -218,7 +223,7 @@
   {#if $dashboards.length > 0}
     <div class="dashboards">
       {#each $dashboards as dashboard, index (dashboard.id)}
-        <div class="dashboard-item card">
+        <div class="dashboard-item card" data-dashboard-id={dashboard.id}>
           {#if editingId === dashboard.id}
             <div class="dashboard-edit-form">
               <div class="edit-fields">
@@ -259,7 +264,7 @@
             </button>
 
             <div class="dashboard-actions">
-              <ReorderButtons name={dashboard.name} first={index === 0} last={index === $dashboards.length - 1} {busy} onMove={(m) => move(index, m)} />
+              <ReorderButtons name={dashboard.name} first={index === 0} last={index === $dashboards.length - 1} {busy} onMove={(m) => move(index, m, dashboard.id)} />
               <button onclick={() => startEdit(dashboard)} class="btn-secondary" aria-label="Rename {dashboard.name}" title="Rename">
                 <Icon icon="mdi:pencil" width="20" />
               </button>

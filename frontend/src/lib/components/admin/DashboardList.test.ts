@@ -207,4 +207,13 @@ describe('DashboardList to top and to bottom', () => {
     await fireEvent.click(row('Home').getByRole('button', { name: 'Move Home to the bottom' }));
     await vi.waitFor(() => expect(api.reorderDashboards).toHaveBeenCalledWith(['v3d', 'd3', 'd1']));
   });
+
+  it('after a move, keyboard focus is back on the same dashboard buttons', async () => {
+    vi.mocked(api.reorderDashboards).mockResolvedValue({ layout: three() });
+    config.set(three() as Config);
+    render(DashboardList);
+    await tick();
+    await fireEvent.click(row('Third').getByRole('button', { name: 'Move Third up' }));
+    await vi.waitFor(() => expect(document.activeElement?.getAttribute('aria-label')).toBe('Move Third up'));
+  });
 });

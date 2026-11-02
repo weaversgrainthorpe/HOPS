@@ -41,8 +41,8 @@ async function open(page: Page, path: string, heading: string) {
 	await expect(page.getByText(/^Loading…$/)).toHaveCount(0);
 }
 
-/** The content area (the settings column inside its padding), the widest box in it, and every
- *  paragraph wider than ~75ch of its own font. */
+/** The content area (the settings column inside its padding) and the widest box in it. Paragraphs
+ *  are not boxes here: they use the full width like everything else. */
 async function measure(page: Page) {
 	return page.evaluate(() => {
 		const main = document.querySelector('.settings-main') as HTMLElement;
@@ -51,29 +51,13 @@ async function measure(page: Page) {
 		const body = document.querySelector('.page-body') as HTMLElement;
 		const left = body.getBoundingClientRect().left;
 		let widest = 0;
-		const tooWide: string[] = [];
 		const isPara = (el: Element) => el.matches('p, .lede, .lede-aside, .hint, .desc');
-		// A Global settings row's description uses the room left of its control: no measure cap.
-		const isRowDesc = (_el: Element) => false;
 		for (const el of Array.from(body.querySelectorAll('*')) as HTMLElement[]) {
 			const r = el.getBoundingClientRect();
-			if (!r.width || !r.height) continue;
-			if (isPara(el)) {
-				const probe = document.createElement('span');
-				probe.textContent = '0'.repeat(100);
-				probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap';
-				probe.style.font = getComputedStyle(el).font;
-				document.body.appendChild(probe);
-				const ch = probe.getBoundingClientRect().width / 100;
-				probe.remove();
-				const pcs = getComputedStyle(el);
-				const textW = r.width - parseFloat(pcs.paddingLeft) - parseFloat(pcs.paddingRight);
-				if (isRowDesc(el) && textW > 76 * ch) tooWide.push(`${el.tagName}.${el.className} ${Math.round(textW)}px > 76ch (${Math.round(76 * ch)}px)`);
-			} else if (r.left - left < 2) {
-				widest = Math.max(widest, r.width);
-			}
+			if (!r.width || !r.height || isPara(el)) continue;
+			if (r.left - left < 2) widest = Math.max(widest, r.width);
 		}
-		return { area, widest, ratio: widest / area, tooWide };
+		return { area, widest, ratio: widest / area };
 	});
 }
 
@@ -85,7 +69,6 @@ test.describe('settings widths', () => {
 				await open(page, pg.path, pg.heading);
 				const m = await measure(page);
 				expect(m.ratio, `widest box ${Math.round(m.widest)} of ${Math.round(m.area)}`).toBeGreaterThanOrEqual(0.85);
-				expect(m.tooWide).toEqual([]);
 				// No sideways scroll.
 				expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 			});
@@ -95,7 +78,8 @@ test.describe('settings widths', () => {
 	// Each Global settings row has the same shape: the label and description on the left, using the
 	// room; the control in a column of its own; then Reset/Revert/Save right beside it. The control
 	// column and the Revert/Save column sit at the same x on every row.
-	for (const width of [1280, 1920]) {
+	// 1265 is 1280 less a classic 15px scrollbar: still two columns, not stacked.
+	for (const width of [1265, 1280, 1920]) {
 		test(`Global settings at ${width}: label | control | buttons, in the same columns on every row`, async ({ page }) => {
 			await page.setViewportSize({ width, height: 900 });
 			await open(page, '/settings/global', 'Global settings');
@@ -115,7 +99,9 @@ test.describe('settings widths', () => {
 						controlTop: control.top,
 						labelTop: label.top,
 						actionsTop: actions.top,
-						numWidth: num ? num.getBoundingClientRect().width : 0
+						numWidth: num ? num.getBoundingClientRect().width : 0,
+						controlWidth: control.width,
+						selectWidth: (() => { const sel = row.querySelector('.row-control > select') as HTMLElement | null; return sel ? sel.getBoundingClientRect().width : 0; })()
 					};
 				})
 			);
@@ -130,39 +116,67 @@ test.describe('settings widths', () => {
 				expect(r.controlLeft, `${r.name}: the label does not run under the control`).toBeGreaterThanOrEqual(r.labelRight);
 				// A number box is sized to its largest value, never the whole column (14rem = 224px).
 				if (r.numWidth) expect(r.numWidth, `${r.name}: number box fits its value`).toBeLessThan(150);
+				// A select is as wide as its longest option, narrower than the control column (14rem).
+				if (r.selectWidth) expect(r.selectWidth, `${r.name}: select fits its options`).toBeLessThan(r.controlWidth);
 			}
 		});
 	}
 
-	test('Global settings on a phone: the text, then the control and its buttons under it', async ({ page }) => {
-		await page.setViewportSize({ width: 390, height: 800 });
-		await open(page, '/settings/global', 'Global settings');
-		const rows = await page.locator('.row').evaluateAll((els) =>
-			els.map((row) => {
-				const label = row.querySelector('.row-label')!.getBoundingClientRect();
-				const input = row.querySelector('.row-input')!.getBoundingClientRect();
-				return { below: input.top >= label.bottom - 1, right: input.right };
-			})
-		);
-		expect(rows.length).toBeGreaterThan(5);
-		expect(rows.every((r) => r.below)).toBe(true);
-		expect(rows.every((r) => r.right <= 390)).toBe(true);
-		expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-	});
-
-	// Settings > Dashboards: the header buttons and every row's buttons stay inside the page.
-	for (const width of [320, 390, 1340, 1920]) {
-		test(`Dashboards at ${width}: nothing runs past the right edge`, async ({ page }) => {
-			await page.setViewportSize({ width, height: 900 });
-			await open(page, '/settings/dashboards', 'Dashboards');
+	for (const width of [320, 390]) {
+		test(`Global settings at ${width}: the text, then the control and its buttons under it`, async ({ page }) => {
+			await page.setViewportSize({ width, height: 800 });
+			await open(page, '/settings/global', 'Global settings');
+			const rows = await page.locator('.row').evaluateAll((els) =>
+				els.map((row) => {
+					const label = row.querySelector('.row-label')!.getBoundingClientRect();
+					const rr = row.getBoundingClientRect();
+					const inside = Array.from(row.querySelectorAll('.row-control > *, .row-actions button')).every(
+						(c) => c.getBoundingClientRect().right <= rr.right + 0.5 && c.getBoundingClientRect().left >= rr.left - 0.5
+					);
+					return { below: row.querySelector('.row-input')!.getBoundingClientRect().top >= label.bottom - 1, inside };
+				})
+			);
+			expect(rows.length).toBeGreaterThan(5);
+			expect(rows.every((r) => r.below)).toBe(true);
+			expect(rows.every((r) => r.inside), 'controls and buttons stay inside their row').toBe(true);
 			expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-			const beyond = await page.evaluate(() => {
-				const edge = document.documentElement.clientWidth;
-				return Array.from(document.querySelectorAll('.dashboard-list button, .dashboard-list a'))
-					.filter((el) => el.getBoundingClientRect().right > edge + 0.5)
-					.map((el) => el.getAttribute('aria-label') || el.textContent?.trim());
+		});
+	}
+
+	// Settings > Dashboards: the header buttons and every row's buttons stay inside the page, even
+	// for a dashboard with a very long name and path (a short one never shows a clipping bug).
+	for (const width of [320, 390, 1340, 1920]) {
+		test(`Dashboards at ${width}: nothing runs past the right edge`, async ({ page, context }) => {
+			const id = `wide${Date.now().toString(36)}`;
+			const long = 'A very long dashboard name that keeps going '.repeat(3).trim();
+			const dash = {
+				id, name: long, order: 0, path: `/${id}-${'long-path-'.repeat(12)}`, revision: 1,
+				settings: { statusChecksEnabled: null, statusCheckIntervalMinutes: null, statusCheckTimeoutSeconds: null, editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null },
+				tabs: [{ id: `${id}-t`, name: 'Main', order: 0, root: { columns: 24, children: [] } }]
+			};
+			const doc = { format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard', config: { layoutVersion: 2, dashboards: [dash] } };
+			const imp = await page.request.post('/api/config/import', {
+				headers: { 'X-CSRF-Token': await getCsrfToken(context) },
+				multipart: { file: { name: 's.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(doc)) } }
 			});
-			expect(beyond).toEqual([]);
+			expect(imp.status(), await imp.text()).toBe(200);
+			try {
+				await page.setViewportSize({ width, height: 900 });
+				await open(page, '/settings/dashboards', 'Dashboards');
+				await expect(page.getByRole('button', { name: `Move ${long} up` })).toBeVisible();
+				expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+				const beyond = await page.evaluate(() => {
+					const edge = document.documentElement.clientWidth;
+					return Array.from(document.querySelectorAll('.dashboard-list button, .dashboard-list a'))
+						.filter((el) => el.getBoundingClientRect().right > edge + 0.5)
+						.map((el) => el.getAttribute('aria-label') || el.textContent?.trim());
+				});
+				expect(beyond).toEqual([]);
+			} finally {
+				const cfg = await (await page.request.get('/api/config')).json();
+				const rev = cfg.dashboards.find((d: { id: string }) => d.id === id)?.revision;
+				await page.request.delete(`/api/dashboards/${encodeURIComponent(id)}?revision=${rev}`, { headers: { 'X-CSRF-Token': await getCsrfToken(context) } });
+			}
 		});
 	}
 

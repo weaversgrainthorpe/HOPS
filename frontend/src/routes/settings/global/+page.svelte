@@ -264,7 +264,9 @@
 
   /** A number box as wide as the longest value it may hold, plus room for padding and the spinner. */
   function numberWidth(s: SettingDef): string {
-    const digits = Math.max(String(s.max ?? '').length, String(s.min ?? '').length, String(s.default ?? '').length, 3);
+    // With no largest value to go by, leave room for six digits.
+    const floor = s.max ? 3 : 6;
+    const digits = Math.max(String(s.max ?? '').length, String(s.min ?? '').length, String(s.default ?? '').length, floor);
     return `calc(${digits}ch + 3.5rem)`;
   }
 
@@ -651,7 +653,7 @@
 
   .row-input {
     display: grid;
-    grid-template-columns: 14rem 17rem;
+    grid-template-columns: 14rem 19rem;
     column-gap: 1rem;
     align-items: start;
   }
@@ -766,6 +768,7 @@
 
   /* Reset to default, Revert, Save: right-aligned in their column, so Revert and Save never move. */
   .row-actions {
+    white-space: nowrap;
     display: flex;
     justify-content: flex-end;
     gap: 0.5rem;
@@ -871,7 +874,7 @@
 
   /* Narrow (a phone, or a tablet beside the settings sidebar): the text on top; the control and
      its buttons on one line under it, wrapping if they do not fit. */
-  @container (max-width: 60rem) {
+  @container (max-width: 54rem) {
     .row {
       grid-template-columns: minmax(0, 1fr);
     }
