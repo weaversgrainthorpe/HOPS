@@ -10,7 +10,8 @@ describe('ContentScaleSetting: the dashboard\'s Tile content size slider', () =>
     expect(s.type).toBe('range');
     expect([s.min, s.max, s.step, s.value]).toEqual(['75', '125', '5', '110']);
     expect(s.getAttribute('aria-valuetext')).toBe('110%');
-    expect(screen.getByText('110%')).toBeInTheDocument();
+    expect(screen.getByText('110%').getAttribute('aria-hidden')).toBe('true'); // said once, by the slider
+    expect(document.getElementById(s.getAttribute('aria-describedby')!)!.textContent).toMatch(/Small tiles change least/);
   });
 
   it('a missing value is 100%; value() is undefined while nothing changed (the dashboard is untouched)', async () => {

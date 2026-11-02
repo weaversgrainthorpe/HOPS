@@ -206,8 +206,15 @@ describe('Entry content layout', () => {
       expect(rule('.tc-box')).toMatch(/--s:\s*var\(--content-scale,\s*1\)/);
     });
 
-    it('the icon is 60% of the inner height times the scale, clamped to the box', () => {
-      expect(rule('.tc')).toMatch(/--icon:\s*max\(12px,\s*min\(calc\(var\(--inner-h\)\s*\*\s*0\.6\s*\*\s*var\(--s\)\),\s*var\(--inner-w\)\)\)/);
+    it('one description line is reserved for every tile of a size; the icon takes the rest, capped by the width', () => {
+      expect(rule('.tc')).toMatch(/--desc-reserve:\s*calc\(var\(--desc-font\) \* 1\.2 \+ var\(--gap\)\)/);
+      expect(rule('.tc')).toMatch(/--icon:\s*max\(12px,\s*min\(var\(--inner-w\),\s*calc\(var\(--inner-h\) - var\(--name-line\) - var\(--gap\) - var\(--desc-reserve\)\)\)\)/);
+      // None reserved on a tile too short for a line at its floor (a Small grid tile).
+      expect(css).toMatch(/@container tc \(max-height:\s*89\.99px\)\s*\{[^}]*\.tc\s*\{[^}]*--desc-reserve:\s*0px/);
+    });
+
+    it('the scale takes its room from the padding: 8cqmin at 100%, 3 at 125%, 18 at 75%', () => {
+      expect(rule('.tc')).toMatch(/--pad:\s*max\(3px,\s*calc\(8cqmin \+ max\(0, 1 - var\(--s\)\) \* 40cqmin - max\(0, var\(--s\) - 1\) \* 20cqmin\)\)/);
     });
 
     it('the description takes only the room left under the icon (basis 0), and hides when no line fits', () => {
@@ -216,10 +223,29 @@ describe('Entry content layout', () => {
       expect(css).toMatch(/@container tcdesc \(max-height:\s*1\.19em\)\s*\{[^}]*\.tc-desc\s*\{[^}]*display:\s*none/);
     });
 
-    it('readable floors (times a phone text size): a name 12px (10px for a long word fitted to the width), a description 11px', () => {
-      expect(rule('.tc')).toMatch(/--name-nominal:\s*calc\(max\(12px,\s*calc\(10cqmin \* var\(--s\)\)\)\s*\*\s*var\(--tk\)\)/);
+    it('readable floors (times a phone text size): a name 12px rising with the scale (10px for a long word fitted to the width), a description 11px', () => {
+      expect(rule('.tc')).toMatch(/--name-nominal:\s*calc\(max\(calc\(12px \* max\(1, var\(--s\)\)\),\s*calc\(10cqmin \* var\(--s\)\)\)\s*\*\s*var\(--tk\)\)/);
       expect(rule('.tc-name')).toMatch(/font-size:\s*max\(calc\(10px \* var\(--tk\)\),\s*min\(var\(--name-nominal\),\s*var\(--name-fit\)\)\)/);
-      expect(rule('.tc-desc-slot')).toMatch(/font-size:\s*calc\(max\(11px,/);
+      expect(rule('.tc')).toMatch(/--desc-font:\s*calc\(max\(11px,/);
+    });
+
+    it('a camel-case name may break between its parts (<wbr>), never mid-word', async () => {
+      const { container } = render(Entry, { entry: { ...entry, name: 'HomeAssistant', size: 'small' }, fit: 'compact' });
+      await tick();
+      const name = container.querySelector('.tc-name')!;
+      expect(name.textContent!.trim()).toBe('HomeAssistant');
+      expect(name.querySelectorAll('wbr')).toHaveLength(1);
+      expect(Number((container.querySelector('.tc-box') as HTMLElement).style.getPropertyValue('--name-seg-em')))
+        .toBeLessThan(Number((container.querySelector('.tc-box') as HTMLElement).style.getPropertyValue('--name-word-em')));
+    });
+
+    it('the description is the tile\'s accessible description, shown or not', async () => {
+      const { container } = render(Entry, { entry: { ...entry, description: 'Vision and stats', size: 'small' }, fit: 'compact' });
+      await tick();
+      const btn = container.querySelector('button.entry')!;
+      const id = btn.getAttribute('aria-describedby')!;
+      expect(id).toBeTruthy();
+      expect(document.getElementById(id)!.textContent).toBe('Vision and stats');
     });
 
     it('a Small name takes two lines, and one below the two-line size', () => {

@@ -733,6 +733,9 @@
           {:else if previews.length === 0}
             <span class="empty-note">{small ? 'Empty' : 'Empty folder'}</span>
           {:else}
+            <!-- A size container: the preview is a 2 x 2 square, or one row of two when the box is too
+                 short for 2 x 2 to be readable (a Small tile under its two-line name). -->
+            <div class="preview-wrap">
             <div class="preview-grid">
               {#each previews as p (p.id)}
                 <span class="preview-cell">
@@ -745,6 +748,7 @@
                   {/if}
                 </span>
               {/each}
+            </div>
             </div>
           {/if}
         {/snippet}
@@ -1245,19 +1249,44 @@
     padding: 0.5rem;
     cursor: pointer;
   }
-  /* The preview fills the icon's square (TileContent): 2 x 2 icons, or the folder's own icon. */
-  .preview-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    grid-template-rows: repeat(2, 1fr);
-    gap: 8%;
+  /* The preview fills the icon's box (TileContent): 2 x 2 icons in a square, or the folder's own icon. */
+  .preview-wrap {
     width: 100%;
     height: 100%;
     min-height: 0;
+    container: pv / size;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .preview-grid {
+    --side: min(100cqw, 100cqh);
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: calc(var(--side) * 0.08);
+    width: var(--side);
+    height: var(--side);
+  }
+  /* PREVIEW_ROW_BELOW_PX = 28: a box too short for a readable 2 x 2 shows one row of two, each as big as
+     the box allows (the first two icons; the name and tooltip still say how many there are). */
+  @container pv (max-height: 27.99px) {
+    .preview-grid {
+      --cell: min(100cqh, calc((100cqw - 2px) / 2));
+      grid-template-columns: repeat(2, var(--cell));
+      grid-template-rows: var(--cell);
+      gap: 2px;
+      width: auto;
+      height: auto;
+    }
+    .preview-cell:nth-child(n + 3) {
+      display: none;
+    }
   }
   .own-icon {
-    width: 100%;
     height: 100%;
+    aspect-ratio: 1;
+    max-width: 100%;
     min-height: 0;
     box-sizing: border-box;
   }

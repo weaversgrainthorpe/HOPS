@@ -121,6 +121,10 @@
   const textOpacity = $derived(String(clamp01(entry.textOpacity, 1)));
   const iconOpacity = $derived(String(clamp01(entry.iconOpacity, 1)));
 
+  // The description is the tile's accessible description, shown or not: a Small tile with no room
+  // for it still has it for screen readers (and in its hover title).
+  const descId = $props.id();
+
   // The size class follows the tile (a changed Size shows at once, no reload).
   const sizeClass = $derived(entry.size === 'small' || entry.size === 'large' ? entry.size : 'medium');
 </script>
@@ -164,6 +168,7 @@
     title={urlProblem ? `${tileTitle}\n${urlProblemText}` : tileTitle}
     aria-label={inEditor || isNote ? entry.name : `Open ${entry.name}${usingAway ? ' (away address)' : ''}`}
     aria-pressed={inEditor ? editorSelected : undefined}
+    aria-describedby={!isNote && entry.description ? descId : undefined}
   >
     <span class="entry-bg" aria-hidden="true" style:background-color={entry.color} style:opacity={bgOpacity}></span>
     {#if isNote}
@@ -176,7 +181,7 @@
     {:else}
       <!-- ONE rule for what's inside (TileContent): the name at the top, the icon a fixed share of the
            tile, the description under it without moving the icon. -->
-      <TileContent name={entry.name} size={sizeClass} description={entry.description || undefined} {textOpacity}>
+      <TileContent name={entry.name} size={sizeClass} description={entry.description || undefined} descriptionId={descId} {textOpacity}>
         {#snippet icon()}
           <!-- icon-backing exists on every tile so layout doesn't shift when the optional background is
                added/removed. It's only visually present (padding + rounding + bg) when entry.iconBgColor is set. -->
@@ -380,9 +385,11 @@
 
   /* What's inside a link tile is TileContent's (one rule at every size; the dashboard's Tile content
      size scales it). These style only the icon in its square: it fills the square, a badge included. */
+  /* A square as tall as the icon's box (at Small the box is the full width; the icon stays square). */
   .icon {
-    width: 100%;
     height: 100%;
+    aspect-ratio: 1;
+    max-width: 100%;
     display: flex;
     align-items: center;
     justify-content: center;

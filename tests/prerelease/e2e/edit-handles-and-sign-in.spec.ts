@@ -2323,8 +2323,8 @@ test.describe('tile content layout', () => {
       const l = await look(page, f.id(k));
       expect(l.fit, `phone ${k}: stacked tiles have no fit`).toBe('none');
       arranged(l, `phone ${k}`);
-      // A phone's Small tile (100px) has no room left under its icon; Medium and Large do.
-      if (k !== 'sm') expect(l.sub, `phone ${k}: shows its description`).not.toBeNull();
+      // Every phone tile reserves one description line under its icon, Small (100px) too.
+      expect(l.sub, `phone ${k}: shows its description`).not.toBeNull();
     }
   });
 });

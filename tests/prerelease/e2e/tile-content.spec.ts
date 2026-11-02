@@ -173,10 +173,42 @@ test.describe('tile content uses the tile', () => {
       const [tfs, ffs] = await Promise.all([tn.evaluate((e) => getComputedStyle(e).fontSize), fn.evaluate((e) => getComputedStyle(e).fontSize)]);
       expect(ffs, `${fo}: the name is a tile's size`).toBe(tfs);
     }
-    // The icon is about two-thirds of a Large tile's inner height (it was 45% of the tile).
-    const tile = (await node(page, f.id('l1')).boundingBox())!;
-    const icon = (await iconOf(page, f.id('l1')).boundingBox())!;
-    expect(icon.height / tile.height).toBeGreaterThan(0.5);
+    // The icon takes the tile's height less the name and ONE reserved description line: no tall empty band
+    // under it on a tile without a description (it was 27% of a Large tile).
+    for (const k of ['l1', 'm1']) {
+      const band = await node(page, f.id(k)).evaluate((cell) => {
+        const tc = cell.querySelector('.tc') as HTMLElement;
+        const box = tc.getBoundingClientRect();
+        const icon = cell.querySelector('.tc-icon')!.getBoundingClientRect();
+        const content = box.bottom - parseFloat(getComputedStyle(tc).paddingBottom);
+        return { inBox: (content - icon.bottom) / box.height, toEdge: (box.bottom - icon.bottom) / box.height, icon: icon.height / box.height };
+      });
+      console.log(`${k} at 100%: icon ${(band.icon * 100).toFixed(1)}% of the tile; empty band under it ${(band.inBox * 100).toFixed(1)}% (to the edge ${(band.toEdge * 100).toFixed(1)}%)`);
+      expect(band.inBox, `${k}: the band under the icon is one description line`).toBeLessThanOrEqual(0.13);
+      expect(band.icon, `${k}: the icon fills the tile`).toBeGreaterThan(0.55);
+    }
+    // A Small minimised folder's preview stays readable (Rounded and a tab shape): at least 12 px a cell.
+    for (const k of ['sf', 'st']) {
+      const cells = await node(page, f.id(k)).locator('.preview-cell').evaluateAll((els) =>
+        els.filter((e) => getComputedStyle(e).display !== 'none').map((e) => Math.min(e.getBoundingClientRect().width, e.getBoundingClientRect().height)));
+      console.log(`${k}: preview cells ${cells.map((c) => c.toFixed(1)).join(', ')} px`);
+      expect(cells.length, `${k}: shows icons`).toBeGreaterThanOrEqual(2);
+      for (const c of cells) expect(c, `${k}: a preview cell is readable`).toBeGreaterThanOrEqual(12);
+    }
+    // "HomeAssistant" at Small breaks between its words ("Home / Assistant"), never mid-word.
+    const lines = await node(page, f.id('s3')).locator('.tc-name').evaluate((el) => {
+      const r = document.createRange();
+      const t = el.childNodes;
+      const tops = new Map<number, string>();
+      for (const n of Array.from(t)) {
+        if (n.nodeType !== Node.TEXT_NODE || !n.textContent?.trim()) continue;
+        r.selectNodeContents(n);
+        const top = Math.round(r.getClientRects()[0]?.top ?? 0);
+        tops.set(top, (tops.get(top) ?? '') + n.textContent);
+      }
+      return [...tops.values()];
+    });
+    expect(lines.join('|').replace(/\s/g, '')).toMatch(/^(Home\|Assistant|HomeAssistant)$/);
     await contentStaysInside(page);
   });
 
@@ -186,6 +218,8 @@ test.describe('tile content uses the tile', () => {
       await open(page, base.path);
       const boxBefore = (await node(page, base.id('l2')).boundingBox())!;
       const iconBefore = (await iconOf(page, base.id('l2')).boundingBox())!;
+      const fs = (id: string) => node(page, id).locator('.tc-name').evaluate((e) => parseFloat(getComputedStyle(e).fontSize));
+      const nameBase = await fs(base.id('l2'));
       const f = await importOk(page, context, showcase, { contentScale: scale });
       await open(page, f.path);
       await expect(page.locator('.tab-canvas')).toHaveAttribute('data-content-scale', String(scale));
@@ -193,10 +227,26 @@ test.describe('tile content uses the tile', () => {
       const icon = (await iconOf(page, f.id('l2')).boundingBox())!;
       expect(box.width).toBeCloseTo(boxBefore.width, 0);
       expect(box.height).toBeCloseTo(boxBefore.height, 0);
-      if (scale > 100) expect(icon.height).toBeGreaterThan(iconBefore.height + 5);
+      if (scale > 100) expect(icon.height).toBeGreaterThanOrEqual(iconBefore.height - 1);
       else expect(icon.height).toBeLessThan(iconBefore.height - 5);
+      // The text grows or shrinks with it.
+      const nameAt = await fs(f.id('l2'));
+      if (scale > 100) expect(nameAt).toBeGreaterThan(nameBase);
+      else expect(nameAt).toBeLessThan(nameBase);
+      // Large and Medium descriptions stay visible: at least one line.
+      for (const k of ['l2', 'm2']) {
+        const d = node(page, f.id(k)).locator('.tc-desc');
+        await expect(d, `${k} at ${scale}%: its description shows`).toBeVisible();
+        const lh = await d.evaluate((e) => ({ h: e.getBoundingClientRect().height, l: parseFloat(getComputedStyle(e).lineHeight) }));
+        console.log(`${k} at ${scale}%: description ${lh.h.toFixed(1)}px (${(lh.h / lh.l).toFixed(2)} lines)`);
+        expect(lh.h, `${k} at ${scale}%: at least one whole line`).toBeGreaterThanOrEqual(lh.l - 0.5);
+      }
       await contentStaysInside(page);
       await shot(page, `scale-${scale}-1640`);
+      await page.setViewportSize({ width: 1920, height: 1200 });
+      await flourishesDone(page);
+      await contentStaysInside(page);
+      await shot(page, `scale-${scale}-1920`);
     });
   }
 
@@ -254,12 +304,22 @@ test.describe('tile content uses the tile', () => {
     await open(page, g.path);
     await contentStaysInside(page);
     await shot(page, 'phone-390-scale-125');
+    const h = await importOk(page, context, showcase, { contentScale: 75 });
+    await open(page, h.path);
+    await contentStaysInside(page);
+    await shot(page, 'phone-390-scale-75');
   });
 
   test('screenshots of every size (before/after)', async ({ page, context }) => {
     const f = await importOk(page, context, showcase);
     await open(page, f.path);
     await shot(page, 'sizes-1640');
+    if (SHOTS) {
+      // A Large row with and without descriptions, side by side, at 100%.
+      const a = (await node(page, f.id('l1')).boundingBox())!;
+      const b = (await node(page, f.id('l3')).boundingBox())!;
+      await page.screenshot({ path: path.join(SHOTS, `${SHOT_TAG}-no-desc-large-100.png`), clip: { x: a.x - 4, y: a.y - 4, width: b.x + b.width - a.x + 8, height: a.height + 8 } });
+    }
     await page.setViewportSize({ width: 1920, height: 1200 });
     await flourishesDone(page);
     await shot(page, 'sizes-1920');

@@ -14,6 +14,7 @@
   }
 
   let { stored }: Props = $props();
+  const uid = $props.id();
 
   // svelte-ignore state_referenced_locally
   const problem = contentScaleProblem(stored);
@@ -33,23 +34,26 @@
 
 <div class="row scale-row">
   <div class="row-head">
-    <label class="row-label" for="content-scale">Tile content size</label>
-    <output for="content-scale" class="readout">{scale}%</output>
+    <label class="row-label" for="{uid}-range">Tile content size</label>
+    <!-- Shown, not announced: the slider's own value text says it. -->
+    <output for="{uid}-range" class="readout" aria-hidden="true">{scale}%</output>
   </div>
-  <p class="hint">
+  <p class="hint" id="{uid}-hint">
     Makes the icon, name and description inside every tile and minimised folder on this dashboard bigger or
-    smaller. Tiles and folders stay the same size.
+    smaller. Tiles and folders stay the same size. Small tiles change least: their text is already at its
+    smallest readable size.
   </p>
   <div class="row-body">
     <span class="end" aria-hidden="true">{CONTENT_SCALE.min}%</span>
     <input
-      id="content-scale"
+      id="{uid}-range"
       type="range"
       min={CONTENT_SCALE.min}
       max={CONTENT_SCALE.max}
       step={CONTENT_SCALE.step}
       value={scale}
       aria-valuetext={`${scale}%`}
+      aria-describedby="{uid}-hint"
       oninput={(e) => (scale = contentScaleOf(Number(e.currentTarget.value)))}
     />
     <span class="end" aria-hidden="true">{CONTENT_SCALE.max}%</span>

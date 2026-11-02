@@ -169,6 +169,7 @@ test.describe('at the Small size', () => {
         const box = c.getBoundingClientRect();
         return [...c.querySelectorAll('.title, .icon svg, .collapsed-name, .preview-cell, [data-own-icon], .empty-note')].every((e) => {
           const r = e.getBoundingClientRect();
+          if (getComputedStyle(e).display === 'none') return true; // not drawn (a Small row shows two icons)
           return r.top >= box.top - 0.5 && r.bottom <= box.bottom + 0.5 && r.left >= box.left - 0.5 && r.right <= box.right + 0.5;
         });
       });

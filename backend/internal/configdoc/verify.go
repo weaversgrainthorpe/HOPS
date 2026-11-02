@@ -65,7 +65,6 @@ func verifyDashboard(d Obj, keep *KeptURLs) error {
 	}
 	v.checkWhole(id, d)
 	v.checkOwned(id, d)
-	v.checkContentScale(id, d)
 	v.checkIDs(Obj{"dashboards": []any{d}})
 	v.checkStatusChecks(d)
 	v.checkTileURLs(d)
@@ -93,6 +92,9 @@ func wholeProblems(id string, d Obj) []string {
 		out = append(out, fmt.Sprintf("dashboard %q: tabs is %s, want an array: this is not a whole dashboard", id, trunc(show(d["tabs"]))))
 	}
 	if p := partialProblem(id, d); p != "" {
+		out = append(out, p)
+	}
+	if p := contentScaleProblem(id, d); p != "" {
 		out = append(out, p)
 	}
 	return out

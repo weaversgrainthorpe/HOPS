@@ -53,3 +53,21 @@ func TestVerifyDashboard_ContentScale(t *testing.T) {
 		})
 	}
 }
+
+// A backup about to be restored is refused too (VerifyWholeDocument), never drawn at 100% unmarked.
+func TestVerifyWholeDocument_ContentScale(t *testing.T) {
+	d := validDashboardForStatusTest()
+	d["tabs"] = []any{}
+	d["contentScale"] = float64(130)
+	doc := Obj{"schemaVersion": float64(3), "dashboards": []any{d}}
+	if !IsV3(doc) {
+		t.Skip("fixture is not v3")
+	}
+	if err := VerifyWholeDocument(doc); err == nil || !strings.Contains(err.Error(), "tile content size") {
+		t.Fatalf("restore accepted contentScale 130: %v", err)
+	}
+	d["contentScale"] = float64(110)
+	if err := VerifyWholeDocument(doc); err != nil {
+		t.Fatalf("refused 110: %v", err)
+	}
+}

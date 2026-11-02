@@ -52,11 +52,8 @@ function measurer(): CanvasRenderingContext2D | null {
   return ctx;
 }
 
-/** The width of `name`'s longest word, in em at the name's weight (1 for an empty name). */
-export function longestWordEm(name: string): number {
-  const words = String(name ?? '').trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return 1;
-  const word = words.reduce((a, b) => (b.length > a.length ? b : a));
+/** One word's width in em at the name's weight (measured once, cached). */
+function wordEm(word: string): number {
   const hit = cache.get(word);
   if (hit !== undefined) return hit;
   const m = measurer();
@@ -68,4 +65,26 @@ export function longestWordEm(name: string): number {
   em = Math.max(1, Math.round(em * 1000) / 1000);
   cache.set(word, em);
   return em;
+}
+
+const words = (name: string) => String(name ?? '').trim().split(/\s+/).filter(Boolean);
+
+/**
+ * A word's camel-case parts: it may break where a capital follows a lower-case letter
+ * ("HomeAssistant" → "Home", "Assistant"), so a long name breaks between its words, never mid-word.
+ */
+export function camelParts(word: string): string[] {
+  return String(word ?? '').split(/(?<=[a-z])(?=[A-Z])/);
+}
+
+/** The width of `name`'s widest word, in em at the name's weight (1 for an empty name). */
+export function longestWordEm(name: string): number {
+  const ws = words(name);
+  return ws.length === 0 ? 1 : Math.max(...ws.map(wordEm));
+}
+
+/** The width of `name`'s widest camel-case part (see camelParts), in em (1 for an empty name). */
+export function widestSegmentEm(name: string): number {
+  const ws = words(name).flatMap(camelParts).filter(Boolean);
+  return ws.length === 0 ? 1 : Math.max(...ws.map(wordEm));
 }

@@ -179,8 +179,16 @@ for (const width of [1280, 1920]) test.describe(`one content rule at every size 
       await expect(node(page, f.id('sm')).locator('.icon svg')).toBeVisible();
       for (const k of ['sm', 'md', 'lg']) {
         const l = await look(page, f.id(k));
-        // 12px, or down to 10px only for a word too wide for the tile at 12px (it shrinks before it breaks).
-        expect(l.name, `${k} at ${vw}px: ${show(l)}`).toBeGreaterThanOrEqual(l.side < 60 ? 10 : 12);
+        // 12px, or down to 10px only when the name's widest word is wider than the tile at 12px (it
+        // shrinks to fit before it breaks: rule 3).
+        const tooWide = await node(page, f.id(k)).evaluate((cell) => {
+          const title = cell.querySelector('.title') as HTMLElement;
+          const ctx = document.createElement('canvas').getContext('2d')!;
+          ctx.font = `600 12px ${getComputedStyle(title).fontFamily}`;
+          const widest = Math.max(...(title.textContent ?? '').trim().split(/\s+/).map((w) => ctx.measureText(w).width));
+          return widest > cell.querySelector('.tc')!.getBoundingClientRect().width - 6;
+        });
+        expect(l.name, `${k} at ${vw}px (widest word too wide at 12px: ${tooWide}): ${show(l)}`).toBeGreaterThanOrEqual(tooWide ? 10 : 12);
         if (l.desc !== null) expect(l.desc, `${k} at ${vw}px: ${show(l)}`).toBeGreaterThanOrEqual(11);
         expect(l.top, `${k} at ${vw}px: inside`).toBeGreaterThanOrEqual(0);
         expect(l.bottom, `${k} at ${vw}px: inside`).toBeGreaterThanOrEqual(0);
