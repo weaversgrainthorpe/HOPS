@@ -18,6 +18,7 @@
   } from '$lib/utils/api';
   import DetectorEditModal from '$lib/components/admin/DetectorEditModal.svelte';
   import PromoteDialog from '$lib/components/admin/PromoteDialog.svelte';
+  import { promotableRows, hiddenTickedCount, hiddenTickedMessage } from '$lib/settings/discoverySelection';
 
   const scanId = $derived(page.params.id ?? '');
 
@@ -425,13 +426,14 @@
     // Already-promoted rows are locked — bulk actions skip them so the
     // user can't accidentally untick the visual "this is on the dashboard"
     // marker or attempt to re-promote a row that already shipped.
-    for (const r of results) {
+    // They also act on the rows shown only; ticks on filtered-out rows stay as they are.
+    for (const r of visibleResults) {
       if (r.curateState === 'promoted') continue;
       selected[r.id] = state;
     }
   }
   function selectAllHigh() {
-    for (const r of results) {
+    for (const r of visibleResults) {
       if (r.curateState === 'promoted') continue;
       selected[r.id] = r.confidence === 'high';
     }
@@ -475,20 +477,17 @@
 
   // selectedCount excludes already-promoted rows so the "Promote N"
   // button reflects only what would actually be added on the next click.
-  let selectedCount = $derived(
-    results.reduce(
-      (n, r) => n + (selected[r.id] && r.curateState !== 'promoted' ? 1 : 0),
-      0
-    )
-  );
+  // Only rows shown by the current filter count; ticks on hidden rows are kept
+  // but never promoted while hidden.
+  let selectedCount = $derived(promotableRows(visibleResults, selected).length);
+  let hiddenTicked = $derived(hiddenTickedCount(results, visibleResults, selected));
 
   // Categories that will become folders when the user presses Promote.
   // Preview shown in the modal so the admin sees the distribution
   // before committing.
   let categoriesInSelection = $derived.by(() => {
     const counts = new Map<DiscoveryCategory, number>();
-    for (const r of results) {
-      if (!selected[r.id] || r.curateState === 'promoted') continue;
+    for (const r of promotableRows(visibleResults, selected)) {
       const cat = (categoryDrafts[r.id] ?? r.category ?? 'other') as DiscoveryCategory;
       counts.set(cat, (counts.get(cat) ?? 0) + 1);
     }
@@ -508,14 +507,11 @@
   async function doPromote(target: PromoteTarget) {
     if (!scan || promoting) return;
     promoting = true;
-    const ids = results
-      .filter((r) => selected[r.id] && r.curateState !== 'promoted')
-      .map((r) => r.id);
+    const rows = promotableRows(visibleResults, selected);
+    const ids = rows.map((r) => r.id);
     // Push the latest overrides for selected rows so the server has them
     // before promoting.
-    for (const r of results) {
-      if (selected[r.id]) await persistCurateState(r);
-    }
+    for (const r of rows) await persistCurateState(r);
     try {
       const resp = await promoteScan(scan.id, target, ids);
       toast.success(`${resp.promoted} tile${resp.promoted === 1 ? '' : 's'} added to the dashboard`);
@@ -648,6 +644,9 @@
               <button class:active={diffFilter === 'all'} onclick={() => (diffFilter = 'all')}>All ({results.length})</button>
               <button class:active={diffFilter === 'gone'} onclick={() => (diffFilter = 'gone')}>Gone ({diff.counts.gone})</button>
             </div>
+            {#if hiddenTicked > 0}
+              <p class="muted" data-testid="hidden-ticked">{hiddenTickedMessage(hiddenTicked)} <button class="link-btn" onclick={() => (diffFilter = 'all')}>Show all</button></p>
+            {/if}
           {:else}
             <div class="diff-summary" data-testid="diff-summary">First scan of this range — nothing to compare.</div>
           {/if}
@@ -1051,6 +1050,7 @@
      the checkbox cell takes the row's accent so it doesn't look ticked. */
   .diff-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 0 0 12px; }
   .diff-summary { color: var(--text-primary); }
+  .link-btn { background: none; border: 0; padding: 0; color: var(--accent-solid); text-decoration: underline; cursor: pointer; font: inherit; }
   .diff-filter { display: inline-flex; gap: 4px; }
   .diff-filter button {
     padding: 4px 10px; border-radius: 6px; cursor: pointer; font: inherit;
