@@ -64,6 +64,20 @@ describe('editorActions', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it('setLook also sets the Tile content size in the same undo step; undefined leaves it as it is', () => {
+    const before = draft();
+    expect(setLook(before.header as never, before.background as never, undefined)).toBe(true);
+    expect(draft()).toBe(before);
+    expect(setLook(before.header as never, before.background as never, 115)).toBe(true);
+    expect(draft().contentScale).toBe(115);
+    expect(get(session)!.undo).toHaveLength(1);
+    expect(setLook(before.header as never, before.background as never, 115)).toBe(true);
+    expect(get(session)!.undo).toHaveLength(1); // unchanged: no new step
+    undo();
+    expect(draft().contentScale).toBeUndefined();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it('a new (Medium) tile on a tab takes its 2 x 2 span at the first free cell; in a folder it goes last, unplaced', () => {
     const id = addNode({ ...blankTile(), name: 'F', url: 'https://f.test' }, { tabId: 't2' })!;
     const t = nodeIn(draft(), id) as TileNode;

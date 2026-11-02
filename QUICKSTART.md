@@ -502,6 +502,11 @@ The two **A** buttons make the text smaller or larger: *Small*, *Medium*,
 Both are kept in this browser, so each person and each device can choose
 their own. Nothing is saved to the dashboard.
 
+**Tile content size** is saved with the dashboard, for everyone. In edit
+mode, click **Dashboard** in the toolbar, then **Settings**. The slider makes
+the icon, name and description inside every tile and minimised folder bigger
+or smaller, from 75% to 125%. The tiles themselves stay the same size.
+
 Also in Theme Settings: **Show recently used** adds a row of the tiles you
 open most, above the tabs. It is kept in this browser only, and **Clear
 history** empties it.

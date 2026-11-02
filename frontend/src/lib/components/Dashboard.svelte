@@ -605,6 +605,7 @@
     raised={dashboardEditFrom.raised}
     header={look.header}
     background={look.background}
+    contentScale={(draft ?? dashboard).contentScale}
     onClose={() => (showDashboardEdit = false)}
   />
 {/if}
