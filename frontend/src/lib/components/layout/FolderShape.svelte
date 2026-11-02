@@ -34,8 +34,10 @@
     heightPx?: number;
     /** Told the measured size (a minimised tile lays its name out on the front panel). */
     onSize?: (widthPx: number, heightPx: number) => void;
+    /** Minimised, its name in the tab (folderShapePaths.miniTabLabel): the tab's height and the width the name asks. */
+    miniTab?: { heightPx: number; wantPx: number } | null;
   }
-  let { look, variant, dashboardId, tabRect = null, mode = variant === 'minimised' ? 'still' : 'animated', widthPx, heightPx, onSize }: Props = $props();
+  let { look, variant, dashboardId, tabRect = null, mode = variant === 'minimised' ? 'still' : 'animated', widthPx, heightPx, onSize, miniTab = null }: Props = $props();
 
   const uid = $props.id();
   let w = $state(0);
@@ -61,6 +63,7 @@
     heightPx: heightPx ?? (h > 0 ? h : 120)
   });
   const parts = $derived.by(() => {
+    if (variant === 'minimised' && miniTab) return shapeParts(look.shape, look.tabPosition, variant, box, miniTab.wantPx, miniTab.heightPx);
     const p = shapeParts(look.shape, look.tabPosition, variant, box, undefined);
     // The real label decides an open / nested tab's width: draw the tab where it is.
     return p.tab && tabRect && variant !== 'minimised' ? shapeParts(look.shape, look.tabPosition, variant, box, tabRect.widthPx) : p;

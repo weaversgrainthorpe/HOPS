@@ -28,6 +28,8 @@
     descriptionId?: string;
     /** Extra room at the top (a tab shape's tab): the content sits inside the body. */
     topPx?: number;
+    /** False: the name is drawn elsewhere (a minimised tab shape's tab); the icon box takes the whole body. */
+    showName?: boolean;
     /** The name's own class (a hook for its component: Entry's title, a folder's collapsed-name). */
     nameClass?: string;
     textOpacity?: string;
@@ -35,7 +37,7 @@
     icon: Snippet;
   }
 
-  let { name, size, description, descriptionId, topPx = 0, nameClass = 'title', textOpacity, icon }: Props = $props();
+  let { name, size, description, descriptionId, topPx = 0, showName = true, nameClass = 'title', textOpacity, icon }: Props = $props();
   const wordEm = $derived(longestWordEm(name));
   const segEm = $derived(widestSegmentEm(name));
   /** The name as words and their camel-case parts: a line may break between the parts (<wbr>). */
@@ -43,11 +45,13 @@
 </script>
 
 <div class="tc-box" style:--tc-top={`${Math.max(0, topPx)}px`} style:--name-word-em={wordEm} style:--name-seg-em={segEm}>
-  <div class="tc {size}">
+  <div class="tc {size}" class:preview-only={!showName}>
+    {#if showName}
     <div class="tc-name {nameClass}" style:opacity={textOpacity}>
       <!-- Only a Small name wraps; Chrome breaks at <wbr> even under nowrap, so one-line names get none. -->
       {#if size === 'small'}{#each parts as word, i (i)}{#each word as part, j (j)}{#if j > 0}<wbr />{/if}{part}{/each}{/each}{:else}{name}{/if}
     </div>
+    {/if}
     <div class="tc-icon">
       {@render icon()}
     </div>
@@ -96,6 +100,10 @@
     justify-content: flex-start;
     gap: var(--gap);
     overflow: hidden;
+  }
+  /* The name is in the tab (a minimised tab shape): the preview takes the body's whole inner box. */
+  .tc.preview-only {
+    --icon: max(12px, min(var(--inner-w), var(--inner-h)));
   }
   /* Too short for a description line at its floor beside the name and an icon (a Small tile on the grid;
      a 100 px phone tile has room): nothing reserved, the icon takes it. */

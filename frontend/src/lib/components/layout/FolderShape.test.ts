@@ -189,6 +189,27 @@ describe('minimised', () => {
       r.unmount();
     }
   });
+  it('a tab shape tall enough carries its name IN its tab (aria-hidden: the tile already says it); a short one keeps it in the body', async () => {
+    shapeH = 120;
+    const r = await renderTab([folder('m', kids(3), { shape: 'folder-paper', display: 'collapsed', iconUrl: '/icons/f.png' })]);
+    const tab = el(r.container, 'm').querySelector('[data-folder-mini-tab]') as HTMLElement;
+    expect(tab).toBeTruthy();
+    expect(tab.getAttribute('aria-hidden')).toBe('true');
+    expect(tab.textContent!.trim()).toBe('m');
+    expect(tab.querySelector('.tab-icon')).toBeTruthy(); // the small icon, as the open tab shows it
+    expect(el(r.container, 'm').querySelector('.tc-name')).toBeNull(); // the body holds only the preview
+    expect(el(r.container, 'm').querySelector('.tc.preview-only')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^m, folder with 3 items/ })).toBeTruthy();
+    r.unmount();
+    shapeH = 60;
+    const s = await renderTab([folder('m', kids(3), { shape: 'folder-paper', display: 'collapsed', size: 'small' })]);
+    expect(el(s.container, 'm').querySelector('[data-folder-mini-tab]')).toBeNull();
+    expect(el(s.container, 'm').querySelector('.tc-name')!.textContent!.trim()).toBe('m');
+    s.unmount();
+    shapeH = 120;
+    const u = await renderTab([folder('m', kids(3), { shape: 'folder-paper', display: 'collapsed', showTitle: false })]);
+    expect(el(u.container, 'm').querySelector('[data-folder-mini-tab]')).toBeNull();
+  });
   it('a Rounded tile at every size: its name above the 2 x 2 preview (one rule with the tiles; no Small-only layout)', async () => {
     for (const [h, size] of [[48, 'small'], [120, 'medium'], [250, 'large']] as const) {
       shapeH = h;

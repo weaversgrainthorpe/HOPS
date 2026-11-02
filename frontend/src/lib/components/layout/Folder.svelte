@@ -28,7 +28,7 @@
     folderMinCells, openFolderContentBox, phoneFlowMetrics, phonePaging, previewChildren, shapeOf, sizeOf, sizeSpan
   } from '$lib/layout/geometry';
   import { deriveFolderColours } from '$lib/layout/folderColours';
-  import { shapeParts, tabWantPx } from '$lib/layout/folderShapePaths';
+  import { miniTabLabel, shapeParts, tabWantPx } from '$lib/layout/folderShapePaths';
   import TileContent from './TileContent.svelte';
   import FolderShape from './FolderShape.svelte';
   import { minimisedShowsOwnIcon, NO_OWN_ICON_NOTE } from '$lib/layout/folderIcon';
@@ -243,10 +243,21 @@
   // ---- minimised tile: a compact version of its shape (measured: its size depends on where it is)
   let tileW = $state(0);
   let tileH = $state(0);
-  /** A tab shape's tile lays its name and icons out on the front panel, below the tab. */
-  const miniFrontPx = $derived(
-    tabbed ? shapeParts(folder.shape, folder.tabPosition, 'minimised', { widthPx: tileW || 120, heightPx: tileH || 120 }).frontRect.topPx : 0
+  /**
+   * A tab shape's name goes IN its tab, as when the folder is open (same font, icon and ellipsis), when the
+   * tile is tall enough for a readable tab (folderShapePaths.miniTabLabel); the body then holds only the
+   * preview. An untitled folder, or a tile too short, keeps its name in the body (as a Rounded tile does).
+   */
+  const miniLabel = $derived(tabbed && tileH > 0 && folder.showTitle !== false ? miniTabLabel(tileH) : null);
+  /** The tab the name asks for: its open-tab width (tabWantPx at 14 px) scaled to the tab's font. */
+  const miniTab = $derived(miniLabel ? { heightPx: miniLabel.tabPx, wantPx: (wantOf(folder) * miniLabel.fontPx) / 14 } : null);
+  const miniParts = $derived(
+    tabbed
+      ? shapeParts(folder.shape, folder.tabPosition, 'minimised', { widthPx: tileW || 120, heightPx: tileH || 120 }, miniTab?.wantPx, miniTab?.heightPx)
+      : null
   );
+  /** A tab shape's tile lays its content out on the front panel, below the tab. */
+  const miniFrontPx = $derived(miniParts ? miniParts.frontRect.topPx : 0);
   const previews = $derived(previewChildren(folder));
   const itemCount = $derived(Array.isArray(folder.content?.children) ? folder.content.children.length : 0);
   // Children exist but none can be drawn: say so, never "Empty folder" (no silent failures).
@@ -716,15 +727,34 @@
         look={folder}
         variant="minimised"
         dashboardId={dashboard.id}
+        {miniTab}
         onSize={(mw, mh) => {
           tileW = mw;
           tileH = mh;
         }}
       />
+      {#if miniLabel && miniParts?.tab}
+        <!-- Its name in its tab, as the open folder shows it. Hidden from screen readers: the tile's own
+             accessible name already says it. -->
+        <div
+          class="shape-tab mini-tab"
+          aria-hidden="true"
+          data-folder-mini-tab={folder.id}
+          style:left="{miniParts.tab.leftPx}px"
+          style:width="{miniParts.tab.widthPx}px"
+          style:height="{miniLabel.tabPx}px"
+          style:line-height="{miniLabel.tabPx}px"
+          style:font-size="{miniLabel.fontPx}px"
+          style:--tab-icon-px="{Math.round((miniLabel.fontPx * 16) / 14)}px"
+        >
+          {@render headerIcon(folder, true)}
+          <span class="tab-name collapsed-name">{folder.name}</span>
+        </div>
+      {/if}
       <!-- ONE rule with the tiles beside it (TileContent): its name where a tile's is, at the same size and
            weight; the preview (2 x 2 icons inside, or its own icon) takes the icon's share. A tab shape's
            content sits inside its body, below the tab. -->
-      <TileContent name={folder.name} size={shownSize} topPx={tabbed ? miniFrontPx : 0} nameClass="collapsed-name">
+      <TileContent name={folder.name} size={shownSize} topPx={tabbed ? miniFrontPx : 0} showName={!miniLabel} nameClass="collapsed-name">
         {#snippet icon()}
           {#if unreadable}
             <span class="empty-note unreadable">{small ? "Can't display" : "Can't display this folder's contents"}</span>
@@ -1035,6 +1065,15 @@
     font-size: 0.875rem;
     font-weight: 600;
     line-height: 24px;
+  }
+  /* A minimised folder's tab: the open tab's look, sized to the compact tab (inline height and font). */
+  .shape-tab.mini-tab {
+    gap: 0.25em;
+    padding: 0 0.6em;
+  }
+  .shape-tab.mini-tab :global(.tab-icon) {
+    width: var(--tab-icon-px);
+    height: var(--tab-icon-px);
   }
   .shape-tab.nested-tab {
     font-size: 0.8125rem;

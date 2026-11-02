@@ -53,6 +53,23 @@ export interface ShapeParts {
 const r1 = (n: number) => Math.round(n * 10) / 10;
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
+/**
+ * The shortest minimised tile whose tab carries its name (a 16 px tab, a 10 px name, under a fifth of the
+ * tile). Below it the name stays in the body, as on a Rounded tile.
+ */
+export const MINI_TAB_NAME_MIN_PX = 80;
+/**
+ * A minimised tab shape's tab when it carries the folder's name, as the open folder's does: the tab
+ * (16 px .. the tab allowance, 24) and the name's font (the open tab's 14 px in 24 px: the tab less 6 px,
+ * 10 .. 14 px). Null when the tile is too short for a readable one (MINI_TAB_NAME_MIN_PX).
+ */
+export function miniTabLabel(tileHeightPx: number): { tabPx: number; fontPx: number } | null {
+  const h = Number.isFinite(tileHeightPx) ? tileHeightPx : 0;
+  if (h < MINI_TAB_NAME_MIN_PX) return null;
+  const tabPx = Math.round(clamp(h * 0.14, 16, FOLDER_CHROME.tabPx));
+  return { tabPx, fontPx: Math.min(14, tabPx - 6) };
+}
+
 /** A minimised tile's tab height: a compact version of the open tab (6 px .. the tab allowance). */
 export function miniTabPx(tileHeightPx: number): number {
   return Math.round(clamp((Number.isFinite(tileHeightPx) ? tileHeightPx : 0) * 0.14, 6, FOLDER_CHROME.tabPx));
@@ -119,10 +136,12 @@ function flapPath(W: number, H: number, top: number, tilt: number, r: number, i:
 /**
  * Everything FolderShape draws for `shape` in a box of `box` px, at `state`. Open and nested tabs are
  * exactly folderTabRect (so the real label on the tab lines up with the drawn tab); a minimised tab is
- * a compact one (miniTabPx high, ~40% wide). An unknown shape is Rounded.
+ * a compact one (miniTabPx high, ~40% wide; one carrying its name: miniTabHeightPx high and at least
+ * wantPx wide). An unknown shape is Rounded.
  */
 export function shapeParts(
-  rawShape: unknown, tabPosition: unknown, state: ShapeState, box: { widthPx: number; heightPx: number }, wantPx?: number
+  rawShape: unknown, tabPosition: unknown, state: ShapeState, box: { widthPx: number; heightPx: number }, wantPx?: number,
+  miniTabHeightPx?: number
 ): ShapeParts {
   const shape = shapeOf(rawShape);
   const W = Math.max(0, box.widthPx || 0), H = Math.max(0, box.heightPx || 0);
@@ -132,8 +151,9 @@ export function shapeParts(
   };
   if (shape === 'rounded') return empty;
   const mini = state === 'minimised';
-  const T = mini ? miniTabPx(H) : FOLDER_CHROME.tabPx;
-  const rect0 = folderTabRect(shape, tabPosition, box, mini ? W * 0.42 : wantPx)!;
+  // A minimised tab carrying its name (miniTabLabel) is taller, and at least as wide as the name asks.
+  const T = mini ? (miniTabHeightPx && miniTabHeightPx > 0 ? miniTabHeightPx : miniTabPx(H)) : FOLDER_CHROME.tabPx;
+  const rect0 = folderTabRect(shape, tabPosition, box, mini ? Math.max(W * 0.42, wantPx ?? 0) : wantPx)!;
   const tab: InsetRect = mini ? { ...rect0, heightPx: T } : rect0;
   const pos = tabPosition === 'centre' || tabPosition === 'right' ? tabPosition : 'left';
   const r = mini ? clamp(Math.min(W, H) * 0.08, 3, 10) : 10;

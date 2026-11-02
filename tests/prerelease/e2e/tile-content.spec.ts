@@ -221,6 +221,60 @@ test.describe('tile content uses the tile', () => {
     }
   });
 
+  test('a minimised tab-shaped folder carries its name IN its tab (Large, Medium); its preview takes the whole body', async ({ page, context }) => {
+    const SHAPES = ['folder-paper', 'folder-outline'];
+    const f = await importOk(page, context, (id) => [
+      ...SHAPES.flatMap((shape, i) => [
+        mini(id(`l${i}`), 'Ulanzi Matrix', 'large', i * 4, 0, { shape }),
+        mini(id(`m${i}`), 'Ulanzi Matrix', 'medium', 8 + i * 2, 0, { shape })
+      ]),
+      mini(id('lr'), 'Ulanzi Matrix', 'large', 12, 0),
+      mini(id('mr'), 'Ulanzi Matrix', 'medium', 16, 0)
+    ]);
+    await open(page, f.path);
+    for (const [k, rounded] of SHAPES.flatMap((_, i) => [[`l${i}`, 'lr'], [`m${i}`, 'mr']])) {
+      const tab = page.locator(`[data-folder-mini-tab="${f.id(k)}"]`);
+      await expect(tab, `${k}: its name is in the tab`).toBeVisible();
+      await expect(tab).toHaveAttribute('aria-hidden', 'true');
+      const tb = (await tab.boundingBox())!;
+      const name = (await tab.locator('.tab-name').boundingBox())!;
+      const tile = (await node(page, f.id(k)).boundingBox())!;
+      expect(inside(name, tb), `${k}: the name sits inside the tab's box`).toBe(true);
+      expect(Math.abs(tb.y - tile.y), `${k}: the tab is at the tile's top`).toBeLessThan(2);
+      const fs = await tab.evaluate((e) => parseFloat(getComputedStyle(e).fontSize));
+      expect(fs, `${k}: a readable name`).toBeGreaterThanOrEqual(10);
+      // No second copy of the name in the body; the preview fills it, bigger than a Rounded tile's beside it.
+      await expect(node(page, f.id(k)).locator('.tc-name')).toHaveCount(0);
+      const pv = (await iconOf(page, f.id(k)).boundingBox())!;
+      const pr = (await iconOf(page, f.id(rounded)).boundingBox())!;
+      console.log(`${k}: tab ${tb.height.toFixed(0)}px, name ${fs}px; preview ${pv.height.toFixed(1)}px vs Rounded ${pr.height.toFixed(1)}px`);
+      expect(pv.height, `${k}: the preview grows into the body`).toBeGreaterThan(pr.height);
+      // The tile keeps its one accessible name.
+      await expect(node(page, f.id(k)).getByRole('button', { name: /^Ulanzi Matrix, folder with 4 items/ })).toHaveCount(1);
+    }
+    await contentStaysInside(page);
+  });
+
+  test('screenshot: every tab shape minimised at Large, Medium and Small beside a tile, and open', async ({ page, context }) => {
+    test.skip(!SHOTS, 'screenshots only (HOPS_SHOTS_DIR)');
+    const SHAPES = ['simple-tab', 'folder-flat', 'folder-paper', 'folder-outline', 'folder-cartoon', 'folder-open'];
+    const f = await importOk(page, context, (id) => SHAPES.flatMap((shape, i) => {
+      const y = i * 5;
+      return [
+        tile(id(`t${i}`), 'WARP', 'large', { x: 0, y }),
+        mini(id(`l${i}`), shape, 'large', 4, y, { shape }),
+        tile(id(`tm${i}`), 'WARP', 'medium', { x: 8, y }),
+        mini(id(`m${i}`), shape, 'medium', 10, y, { shape }),
+        tile(id(`ts${i}`), 'WARP', 'small', { x: 12, y }),
+        mini(id(`s${i}`), shape, 'small', 13, y, { shape }),
+        { ...mini(id(`o${i}`), shape, 'small', 15, y, { shape, display: 'expanded' }), placement: { x: 15, y, w: 9, h: 4 } }
+      ];
+    }));
+    await page.setViewportSize({ width: 1640, height: 2400 });
+    await open(page, f.path);
+    await shot(page, 'tab-folders-1640');
+  });
+
   test('phone: the same rule inside the phone tiles; nothing spills', async ({ page, context }) => {
     await page.setViewportSize({ width: 390, height: 1400 });
     const f = await importOk(page, context, showcase);

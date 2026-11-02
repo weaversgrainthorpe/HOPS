@@ -2,7 +2,7 @@
 // FolderShape.svelte draws exactly these parts; the content inset (shapeInset) must sit on the body.
 import { describe, it, expect } from 'vitest';
 import { FOLDER_CHROME, FOLDER_SHAPES, TAB_POSITIONS, folderTabRect, shapeInset } from './geometry';
-import { shapeParts, miniTabPx, tabWantPx, MINI_NAME_FLOOR_PX, type ShapeState } from './folderShapePaths';
+import { shapeParts, miniTabPx, miniTabLabel, tabWantPx, MINI_NAME_FLOOR_PX, MINI_TAB_NAME_MIN_PX, type ShapeState } from './folderShapePaths';
 import type { FolderShape } from '$lib/types/layout';
 
 const TAB_SHAPES = FOLDER_SHAPES.filter((s) => s !== 'rounded') as FolderShape[];
@@ -107,3 +107,28 @@ describe('tab label width', () => {
   });
 });
 
+
+describe('miniTabLabel: a minimised tab shape carries its name in its tab when it is readable', () => {
+  it('Large and Medium tiles: a 16-24 px tab, the name 10-14 px (the open tab: 14 px in 24 px)', () => {
+    expect(miniTabLabel(262)).toEqual({ tabPx: 24, fontPx: 14 });
+    expect(miniTabLabel(131)).toEqual({ tabPx: 18, fontPx: 12 });
+    expect(miniTabLabel(101)).toEqual({ tabPx: 16, fontPx: 10 });
+  });
+  it('a tile too short for a readable tab (under MINI_TAB_NAME_MIN_PX): null, the name stays in the body', () => {
+    expect(MINI_TAB_NAME_MIN_PX).toBe(80);
+    expect(miniTabLabel(79)).toBeNull();
+    expect(miniTabLabel(65)).toBeNull();
+    expect(miniTabLabel(0)).toBeNull();
+    expect(miniTabLabel(NaN)).toBeNull();
+    expect(miniTabLabel(80)).toEqual({ tabPx: 16, fontPx: 10 });
+  });
+  it('shapeParts draws a minimised tab at the asked height and at least the asked width', () => {
+    const plain = shapeParts('folder-paper', 'left', 'minimised', { widthPx: 262, heightPx: 262 });
+    const named = shapeParts('folder-paper', 'left', 'minimised', { widthPx: 262, heightPx: 262 }, 150, 24);
+    expect(named.tab!.heightPx).toBe(24);
+    expect(named.tab!.widthPx).toBeCloseTo(150, 5);
+    expect(named.frontRect.topPx).toBeGreaterThanOrEqual(24);
+    // A short want keeps the default ~42% width.
+    expect(shapeParts('folder-paper', 'left', 'minimised', { widthPx: 262, heightPx: 262 }, 20, 24).tab!.widthPx).toBeCloseTo(plain.tab!.widthPx, 5);
+  });
+});
