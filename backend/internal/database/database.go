@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"io/fs"
+	"log/slog"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -45,8 +47,19 @@ func Initialize(dbPath string) (*sql.DB, error) {
 	}
 
 	// Enable WAL mode for better concurrency (allows concurrent reads during writes)
-	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
+	// The pragma answers with the mode SQLite really uses: it can stay on
+	// another one (a network share without shared memory), which is slower and
+	// can lock readers out. Never fatal, but never silent: logged, and shown to
+	// the admin as a notice.
+	var mode string
+	if err := db.QueryRow("PRAGMA journal_mode=WAL").Scan(&mode); err != nil {
 		return nil, fmt.Errorf("failed to set WAL mode: %w", err)
+	}
+	if dbPath != ":memory:" && !strings.HasPrefix(dbPath, "file:") {
+		if w := journalModeWarning(mode, dbPath); w != "" {
+			slog.Warn(w, "component", "database", "journal_mode", mode)
+			SharedBackupManager(dbPath).RecordJournalMode(w)
+		}
 	}
 
 	// Set busy timeout to wait up to 5 seconds if database is locked
@@ -407,4 +420,17 @@ func addColumnIfMissing(db *sql.DB, table, column, definition string) error {
 
 	_, err = db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, definition))
 	return err
+}
+
+// journalModeWarning says what is wrong when SQLite did not switch to WAL,
+// or "" when it did. mode is what PRAGMA journal_mode=WAL answered.
+func journalModeWarning(mode, dbPath string) string {
+	if strings.EqualFold(mode, "wal") {
+		return ""
+	}
+	if mode == "" {
+		mode = "unknown"
+	}
+	return fmt.Sprintf("the database is using journal mode %q instead of WAL (data folder %s). This can happen when the data folder is on a network share. "+
+		"HOPS still works, but it is slower and readers can be blocked while it saves; keep the data folder on a local disk", mode, filepath.Dir(dbPath))
 }

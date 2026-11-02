@@ -85,7 +85,7 @@ func backupProblemNotice(p database.BackupProblem) notice {
 		text = fmt.Sprintf("HOPS couldn't clean up deleted images (%s): %s. Check that HOPS can write to its data folder; it tries again after the next backup and once a day.", at, p.Reason)
 	case database.ProblemAtticLarge:
 		text = fmt.Sprintf("%s (%s).", capitalize(p.Reason), at)
-	case database.ProblemJournalLeft:
+	case database.ProblemJournalLeft, database.ProblemJournalMode:
 		text = fmt.Sprintf("%s (%s).", capitalize(p.Reason), at)
 	case database.ProblemNoticesUnsaved:
 		text = fmt.Sprintf("%s (%s). Check that HOPS can write to its backups folder.", capitalize(p.Reason), at)

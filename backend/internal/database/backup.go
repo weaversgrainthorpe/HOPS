@@ -97,6 +97,9 @@ const (
 	// ProblemJournalLeft: the restore journal couldn't be removed. Not
 	// dismissible; retried before the next restore and at the next start.
 	ProblemJournalLeft = "restore-journal-left"
+	// ProblemJournalMode: SQLite would not use WAL for the data folder.
+	// Not dismissible; it is checked at every start.
+	ProblemJournalMode = "journal-mode"
 )
 
 // BackupProblem is a backup failure the admin must see: what failed, when,
@@ -153,6 +156,7 @@ type BackupManager struct {
 	noticesLoadErr *BackupProblem
 	noticesSaveErr *BackupProblem
 	journalErr     *BackupProblem // the restore journal couldn't be removed (retried before the next restore)
+	journalMode    *BackupProblem // SQLite is not in WAL mode (set at startup)
 
 	// Uploaded images: the attic sweep's notices, and the restore's
 	// image report (dismissible, kept across restarts).
@@ -297,7 +301,7 @@ func (bm *BackupManager) Problems() []BackupProblem {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
 	var out []BackupProblem
-	for _, p := range []*BackupProblem{bm.restore, bm.backupErr, bm.rotateErr, bm.ceiling, bm.recovered, bm.noticesLoadErr, bm.noticesSaveErr, bm.journalErr,
+	for _, p := range []*BackupProblem{bm.restore, bm.backupErr, bm.rotateErr, bm.ceiling, bm.recovered, bm.noticesLoadErr, bm.noticesSaveErr, bm.journalErr, bm.journalMode,
 		bm.atticBlocked, bm.atticFailed, bm.atticLargeP, bm.restoreImages, bm.indexRebuilt} {
 		if p != nil {
 			out = append(out, *p)
@@ -335,6 +339,13 @@ func (bm *BackupManager) DismissProblem(kind string) bool {
 		bm.saveNoticesLocked()
 	}
 	return had
+}
+
+// RecordJournalMode records that SQLite is not in WAL mode.
+func (bm *BackupManager) RecordJournalMode(reason string) {
+	bm.mu.Lock()
+	defer bm.mu.Unlock()
+	bm.journalMode = &BackupProblem{Kind: ProblemJournalMode, At: time.Now(), Reason: reason}
 }
 
 // RecordJournalLeft records that the restore journal couldn't be removed.
