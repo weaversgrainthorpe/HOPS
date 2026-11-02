@@ -703,14 +703,12 @@ function canonical(v: unknown): string {
  * The dashboard dialog's Header and Background, applied as ONE undo step.
  * Nothing changed (whatever the key order): no undo step.
  */
-export function setLook(header: HeaderConfig | undefined, background: Background | undefined, contentScale?: number): boolean {
+export function setLook(header: HeaderConfig | undefined, background: Background | undefined): boolean {
   return apply('Edit dashboard', (dd) => {
     const h = plain(header);
     const b = plain(background);
-    // The Tile content size: undefined leaves it as it is (the dialog changed nothing).
-    const scale = contentScale === undefined ? dd.contentScale : contentScale;
-    if (canonical(dd.header) === canonical(h) && canonical(dd.background) === canonical(b) && scale === dd.contentScale) return dd;
-    return { ...dd, header: h, background: b, ...(scale === undefined ? {} : { contentScale: scale }) };
+    if (canonical(dd.header) === canonical(h) && canonical(dd.background) === canonical(b)) return dd;
+    return { ...dd, header: h, background: b };
   });
 }
 

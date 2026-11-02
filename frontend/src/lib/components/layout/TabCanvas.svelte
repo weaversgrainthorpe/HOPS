@@ -11,7 +11,6 @@
   } from '$lib/stores/folderView';
   import ContainerView from './ContainerView.svelte';
   import { SHAPE_MEASURE_CONTEXT, type ShapeMeasure } from '$lib/layout/shapeMeasure';
-  import { contentScaleOf } from '$lib/layout/contentScale';
 
   interface Props {
     dashboard: LayoutDashboard;
@@ -116,8 +115,6 @@
   const metrics = $derived(containerMetrics(viewTab.root, rootBoxWidthPx(plan, viewTab)));
   // Editing on a phone (stacked plan, once measured): the toolbar says resizing needs more room.
   const stacked = $derived(width > 0 && plan.kind === 'stacked');
-  /** The dashboard's Tile content size as drawn (a value the server would refuse draws at 100%). */
-  const contentScale = $derived(contentScaleOf(dashboard.contentScale));
   $effect(() => {
     if (!editing) return;
     canvasStacked.set(stacked);
@@ -127,15 +124,12 @@
 
 <svelte:window bind:innerWidth={viewportW} bind:innerHeight={viewportH} />
 
-<!-- The dashboard's Tile content size scales what's drawn inside every tile and minimised folder
-     (TileContent reads --content-scale); boxes and the grid never change. -->
+<!-- On a phone (stacked) tile text follows the text-size buttons (TileContent reads --tile-text-scale). -->
 <div
   class="tab-canvas"
   class:editing
   bind:this={el}
   data-tab-id={tab.id}
-  data-content-scale={contentScale}
-  style:--content-scale={contentScale / 100}
   style:--tile-text-scale={stacked ? 'var(--text-size-scale, 1)' : undefined}
 >
   {#if $layoutStale}

@@ -3,9 +3,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { getCsrfToken, flourishesDone } from '../helpers';
 
-// Tiles and minimised folders use their space by ONE rule (name at the top, the icon a fixed share of
-// the height, the description under it), and the dashboard's "Tile content size" scales what's drawn
-// inside them, never the boxes. Synthetic data; needs real layout.
+// Tiles and minimised folders use their space by ONE rule (name at the top, one description line
+// reserved under the icon, the icon taking the rest). Synthetic data; needs real layout.
 // HOPS_SHOTS_DIR (test-harness switch, not an app setting): also save before/after screenshots there.
 
 const SHOTS = process.env.HOPS_SHOTS_DIR || '';
@@ -32,7 +31,7 @@ const mini = (id: string, name: string, size: string, x: number, y: number, extr
   };
 };
 
-async function importDash(page: Page, context: BrowserContext, children: (id: (s: string) => string) => Child[], settings: Child = {}) {
+async function importDash(page: Page, context: BrowserContext, children: (id: (s: string) => string) => Child[]) {
   const p = `tc${Date.now().toString(36)}${(seq++).toString(36)}`;
   const id = (s: string) => `${p}-${s}`;
   const dash = {
@@ -41,7 +40,6 @@ async function importDash(page: Page, context: BrowserContext, children: (id: (s
       statusChecksEnabled: null, statusCheckIntervalMinutes: null, statusCheckTimeoutSeconds: null,
       editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null
     },
-    ...settings,
     tabs: [{ id: id('tab'), name: 'Main', order: 0, root: { columns: 24, children: children(id) } }]
   };
   const doc = {
@@ -55,8 +53,8 @@ async function importDash(page: Page, context: BrowserContext, children: (id: (s
   return { r, path: `/${p}`, id, dashId: id('dash') };
 }
 
-async function importOk(page: Page, context: BrowserContext, children: (id: (s: string) => string) => Child[], settings: Child = {}) {
-  const res = await importDash(page, context, children, settings);
+async function importOk(page: Page, context: BrowserContext, children: (id: (s: string) => string) => Child[]) {
+  const res = await importDash(page, context, children);
   expect(res.r.status(), await res.r.text()).toBe(200);
   made.push(res.dashId);
   return res;
@@ -212,102 +210,23 @@ test.describe('tile content uses the tile', () => {
     await contentStaysInside(page);
   });
 
-  for (const scale of [75, 125]) {
-    test(`content scale ${scale}%: content scales, boxes don't, nothing spills`, async ({ page, context }) => {
-      const base = await importOk(page, context, showcase);
-      await open(page, base.path);
-      const boxBefore = (await node(page, base.id('l2')).boundingBox())!;
-      const iconBefore = (await iconOf(page, base.id('l2')).boundingBox())!;
-      const fs = (id: string) => node(page, id).locator('.tc-name').evaluate((e) => parseFloat(getComputedStyle(e).fontSize));
-      const nameBase = await fs(base.id('l2'));
-      const f = await importOk(page, context, showcase, { contentScale: scale });
-      await open(page, f.path);
-      await expect(page.locator('.tab-canvas')).toHaveAttribute('data-content-scale', String(scale));
-      const box = (await node(page, f.id('l2')).boundingBox())!;
-      const icon = (await iconOf(page, f.id('l2')).boundingBox())!;
-      expect(box.width).toBeCloseTo(boxBefore.width, 0);
-      expect(box.height).toBeCloseTo(boxBefore.height, 0);
-      if (scale > 100) expect(icon.height).toBeGreaterThanOrEqual(iconBefore.height - 1);
-      else expect(icon.height).toBeLessThan(iconBefore.height - 5);
-      // The text grows or shrinks with it.
-      const nameAt = await fs(f.id('l2'));
-      if (scale > 100) expect(nameAt).toBeGreaterThan(nameBase);
-      else expect(nameAt).toBeLessThan(nameBase);
-      // Large and Medium descriptions stay visible: at least one line.
-      for (const k of ['l2', 'm2']) {
-        const d = node(page, f.id(k)).locator('.tc-desc');
-        await expect(d, `${k} at ${scale}%: its description shows`).toBeVisible();
-        const lh = await d.evaluate((e) => ({ h: e.getBoundingClientRect().height, l: parseFloat(getComputedStyle(e).lineHeight) }));
-        console.log(`${k} at ${scale}%: description ${lh.h.toFixed(1)}px (${(lh.h / lh.l).toFixed(2)} lines)`);
-        expect(lh.h, `${k} at ${scale}%: at least one whole line`).toBeGreaterThanOrEqual(lh.l - 0.5);
-      }
-      await contentStaysInside(page);
-      await shot(page, `scale-${scale}-1640`);
-      await page.setViewportSize({ width: 1920, height: 1200 });
-      await flourishesDone(page);
-      await contentStaysInside(page);
-      await shot(page, `scale-${scale}-1920`);
-    });
-  }
-
-  test('the slider: set in the dashboard dialog, drawn at once in the editor, saved with the dashboard (its revision moves on)', async ({ page, context }) => {
+  test('Large and Medium descriptions show (at least one whole line) in the line reserved for them', async ({ page, context }) => {
     const f = await importOk(page, context, showcase);
     await open(page, f.path);
-    const iconBefore = (await iconOf(page, f.id('l1')).boundingBox())!;
-    const revBefore = (await (await page.request.get('/api/config')).json()).dashboards.find((d: { id: string }) => d.id === f.dashId).revision;
-    await page.locator('[aria-label="Enter Edit Mode"]').click();
-    await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
-    await page.getByRole('button', { name: 'Edit Dashboard' }).click();
-    const dlg = page.getByRole('dialog', { name: 'Edit Dashboard' });
-    await dlg.getByRole('tab', { name: 'Settings' }).click();
-    const slider = dlg.getByRole('slider', { name: 'Tile content size' });
-    await expect(slider).toHaveValue('100');
-    await expect(dlg.getByRole('button', { name: 'Reset to 100%' })).toBeDisabled();
-    // Keyboard: four steps right is 120%.
-    await slider.focus();
-    for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowRight');
-    await expect(slider).toHaveValue('120');
-    await expect(slider).toHaveAttribute('aria-valuetext', '120%');
-    await expect(dlg.locator('output')).toHaveText('120%');
-    await dlg.getByRole('button', { name: 'Save' }).click();
-    await expect(dlg).toHaveCount(0);
-    // The editor draws the draft at once.
-    await expect(page.locator('.tab-canvas')).toHaveAttribute('data-content-scale', '120');
-    await page.getByRole('toolbar', { name: 'Editing' }).getByRole('button', { name: /Save/ }).click();
-    await expect.poll(async () => {
-      const d = (await (await page.request.get('/api/config')).json()).dashboards.find((x: { id: string }) => x.id === f.dashId);
-      return [d.contentScale, d.revision > revBefore];
-    }).toEqual([120, true]);
-    // Out of edit mode, a fresh load draws it.
-    await open(page, f.path);
-    await expect(page.locator('.tab-canvas')).toHaveAttribute('data-content-scale', '120');
-    const iconAfter = (await iconOf(page, f.id('l1')).boundingBox())!;
-    expect(iconAfter.height).toBeGreaterThan(iconBefore.height);
-    await contentStaysInside(page);
-  });
-
-  test('a bad content scale is refused on import', async ({ page, context }) => {
-    for (const bad of [130, 102, '110']) {
-      const res = await importDash(page, context, showcase, { contentScale: bad });
-      expect(res.r.status()).toBe(400);
-      expect(await res.r.text()).toContain('tile content size');
+    for (const k of ['l2', 'm2']) {
+      const d = node(page, f.id(k)).locator('.tc-desc');
+      await expect(d, `${k}: its description shows`).toBeVisible();
+      const lh = await d.evaluate((e) => ({ h: e.getBoundingClientRect().height, l: parseFloat(getComputedStyle(e).lineHeight) }));
+      expect(lh.h, `${k}: at least one whole line`).toBeGreaterThanOrEqual(lh.l - 0.5);
     }
   });
 
-  test('phone: the same rule inside the phone tiles; nothing spills at 125%', async ({ page, context }) => {
+  test('phone: the same rule inside the phone tiles; nothing spills', async ({ page, context }) => {
     await page.setViewportSize({ width: 390, height: 1400 });
     const f = await importOk(page, context, showcase);
     await open(page, f.path);
     await contentStaysInside(page);
     await shot(page, 'phone-390');
-    const g = await importOk(page, context, showcase, { contentScale: 125 });
-    await open(page, g.path);
-    await contentStaysInside(page);
-    await shot(page, 'phone-390-scale-125');
-    const h = await importOk(page, context, showcase, { contentScale: 75 });
-    await open(page, h.path);
-    await contentStaysInside(page);
-    await shot(page, 'phone-390-scale-75');
   });
 
   test('screenshots of every size (before/after)', async ({ page, context }) => {

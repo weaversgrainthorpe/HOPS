@@ -180,13 +180,6 @@ In [edit mode](#the-editor), the **Dashboard** button in the toolbar opens
   | **Edit mode idle timeout (minutes)** | Global settings › Editing › **Edit mode times out after (minutes)** |
   | **Animated folder backgrounds** | Global settings › Look & motion › **Animated folder backgrounds** |
 
-  **Tile content size**, at the top of **Settings**, is the dashboard's own.
-  The slider makes the icon, name and description inside every tile and
-  minimised folder on this dashboard bigger or smaller, from 75% to 125% in
-  steps of 5%. Tiles and folders stay the same size and in the same places.
-  **Reset to 100%** puts it back to normal. Like the header and background,
-  it shows at once in the editor and is kept when you save your edits.
-
 ---
 
 ## Tabs

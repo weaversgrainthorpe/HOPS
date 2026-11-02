@@ -94,9 +94,6 @@ func wholeProblems(id string, d Obj) []string {
 	if p := partialProblem(id, d); p != "" {
 		out = append(out, p)
 	}
-	if p := contentScaleProblem(id, d); p != "" {
-		out = append(out, p)
-	}
 	return out
 }
 

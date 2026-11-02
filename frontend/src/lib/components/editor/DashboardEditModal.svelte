@@ -2,8 +2,8 @@
   /**
    * The one dashboard dialog: Header, Background and Settings, with one Save and
    * one Cancel. Save runs the settings save first (server; only when a setting changed): if it
-   * fails, the dialog stays open with the error and the draft is not touched. Then the header,
-   * background and Tile content size go to the draft as ONE undo step. Cancel (or Escape) discards everything.
+   * fails, the dialog stays open with the error and the draft is not touched. Then the header and
+   * background go to the draft as ONE undo step. Cancel (or Escape) discards everything.
    */
   import Icon from '@iconify/svelte';
   import { tick } from 'svelte';
@@ -12,7 +12,6 @@
   import HeaderSection from '../admin/HeaderSection.svelte';
   import BackgroundSection from '../admin/BackgroundSection.svelte';
   import DashboardSettingsSection from '../admin/DashboardSettingsSection.svelte';
-  import ContentScaleSetting from '../admin/ContentScaleSetting.svelte';
   import { setLook } from '$lib/editor/editorActions';
   import { reducedMotion } from '$lib/stores/backgroundAnimation';
 
@@ -21,8 +20,6 @@
     /** The draft's header and background, as the dialog opens. */
     header?: HeaderConfig;
     background?: Background;
-    /** The draft's Tile content size (contentScale), as the dialog opens; missing = 100%. */
-    contentScale?: unknown;
     onClose: () => void;
     /** The section shown on open (default Header). */
     initialSection?: SectionId;
@@ -32,7 +29,7 @@
     raised?: boolean;
   }
 
-  let { dashboardId, header, background, contentScale, onClose, initialSection = 'header', focusSetting, raised = false }: Props = $props();
+  let { dashboardId, header, background, onClose, initialSection = 'header', focusSetting, raised = false }: Props = $props();
 
   type SectionId = 'header' | 'background' | 'settings';
   const SECTIONS: { id: SectionId; label: string }[] = [
@@ -71,7 +68,6 @@
   let headerSection = $state<HeaderSection>();
   let backgroundSection = $state<BackgroundSection>();
   let settingsSection = $state<DashboardSettingsSection>();
-  let scaleSetting = $state<ContentScaleSetting>();
   let settingsInvalid = $state(false);
   let settingsLoadFailed = $state(false);
   let saving = $state(false);
@@ -106,9 +102,9 @@
       await show('settings');
       return;
     }
-    if (!setLook(nextHeader, bg.value, scaleSetting?.value())) {
+    if (!setLook(nextHeader, bg.value)) {
       // apply() has already said why (a toast); say it here too, where the user is looking.
-      problem = "The header, background and tile content size couldn't be applied to the draft (see the message). Settings changes, if any, are saved.";
+      problem = "The header and background couldn't be applied to the draft (see the message). Settings changes, if any, are saved.";
       return;
     }
     onClose();
@@ -187,7 +183,6 @@
     {/if}
   </div>
   <div role="tabpanel" id="dash-edit-panel-settings" aria-labelledby="dash-edit-tab-settings" hidden={active !== 'settings'} bind:this={settingsPanel}>
-    <ContentScaleSetting bind:this={scaleSetting} stored={contentScale} />
     <DashboardSettingsSection
       bind:this={settingsSection}
       bind:invalid={settingsInvalid}

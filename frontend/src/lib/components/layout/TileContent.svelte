@@ -10,16 +10,14 @@
    *    the width. It gives way only to a two-line Small name. At Small the icon's box is the full inner
    *    width (a minimised folder's preview can then be one row of two);
    *  - the description fills the reserve (two lines when there is room, with an ellipsis).
-   * Shares are of the box (a size container, so 1cqmin is 1% of its shorter side). The dashboard's
-   * "Tile content size" (--content-scale on the tab canvas) scales the text and the gaps; the icon takes
-   * what is left, and the padding gives way (8cqmin at 100%, 3cqmin at 125%, 18cqmin at 75%), so the box
-   * never changes and nothing spills out.
+   * Shares are of the box (a size container, so 1cqmin is 1% of its shorter side): padding 8cqmin, gaps
+   * 2.5cqmin, the name 10cqmin and the description 8cqmin, with readable floors. Nothing spills out.
    * Long words: a word wider than the tile shrinks its font to fit (down to NAME_FIT_MIN_PX). At Small a
    * camel-case word too wide even then breaks at its case boundary ("Home / Assistant"), and only a word
    * with no such boundary breaks mid-word.
    */
   import type { Snippet } from 'svelte';
-  import { camelParts, longestWordEm, widestSegmentEm } from '$lib/layout/contentScale';
+  import { camelParts, longestWordEm, widestSegmentEm } from '$lib/layout/nameFit';
 
   interface Props {
     name: string;
@@ -68,25 +66,22 @@
     inset: 0;
     container: tc / size;
     pointer-events: none;
-    /* The dashboard's Tile content size (1 = 100%), set on the tab canvas; anything else reads as 1. */
-    --s: var(--content-scale, 1);
     /* On a phone (stacked) the text follows the text-size buttons, as it always has there; the tab canvas
        sets --tile-text-scale only then. */
     --tk: var(--tile-text-scale, 1);
   }
   .tc {
-    /* The padding gives the scale its room: 8cqmin at 100%, down to 3cqmin at 125%, up to 18cqmin at 75%. */
-    --pad: max(3px, calc(8cqmin + max(0, 1 - var(--s)) * 40cqmin - max(0, var(--s) - 1) * 20cqmin));
-    --gap: max(2px, calc(2.5cqmin * var(--s)));
+    --pad: max(3px, 8cqmin);
+    --gap: max(2px, 2.5cqmin);
     /* The box inside the padding (the tab, on a tab shape, comes off the top). */
     --inner-h: calc(100cqh - 2 * var(--pad) - var(--tc-top, 0px));
     --inner-w: calc(100cqw - 2 * var(--pad));
-    /* The name: 10% of the box; its 12 px floor rises with the scale (never falls below 12 px). */
-    --name-nominal: calc(max(calc(12px * max(1, var(--s))), calc(10cqmin * var(--s))) * var(--tk));
+    /* The name: 10% of the box, a 12 px floor. */
+    --name-nominal: calc(max(12px, 10cqmin) * var(--tk));
     --name-line: calc(var(--name-nominal) * 1.2);
     --name-fit: calc((100cqw - 6px) / var(--name-word-em, 1));
-    /* The description: 8% of the box, an 11 px floor, at most 20 px (times the scale). */
-    --desc-font: calc(max(11px, min(calc(8cqmin * var(--s)), calc(20px * var(--s)))) * var(--tk));
+    /* The description: 8% of the box, an 11 px floor, at most 20 px. */
+    --desc-font: calc(max(11px, min(8cqmin, 20px)) * var(--tk));
     /* ONE description line reserved for every tile of this size (and its gap); none on a Small grid tile. */
     --desc-reserve: calc(var(--desc-font) * 1.2 + var(--gap));
     /* The icon: the rest, capped by the width. */

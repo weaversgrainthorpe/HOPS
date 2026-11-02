@@ -1,30 +1,8 @@
 /**
- * The dashboard's "Tile content size" (stored as `contentScale`, in %): what is drawn inside every
- * tile and minimised folder on the dashboard (icon, name, description) scales by it. Boxes, grid
- * positions and folder boxes never change. Twin of configdoc/contentscale.go.
+ * Fitting a tile's name to its width (TileContent): the widest word, in em at the name's weight, so a
+ * long word can shrink to fit before it breaks; and a word's camel-case parts, where a Small name may
+ * break ("Home / Assistant") instead of mid-word.
  */
-export const CONTENT_SCALE = { min: 75, max: 125, step: 5, normal: 100 } as const;
-
-const valid = (v: unknown): v is number =>
-  typeof v === 'number' &&
-  Number.isInteger(v) &&
-  v >= CONTENT_SCALE.min &&
-  v <= CONTENT_SCALE.max &&
-  v % CONTENT_SCALE.step === 0;
-
-/**
- * The scale as drawn, in %: a missing field is 100. A value the server would refuse is drawn at 100
- * too: a draw-time fallback (like sizeOf), never a conversion of stored data. The server refuses it.
- */
-export function contentScaleOf(v: unknown): number {
-  return valid(v) ? v : CONTENT_SCALE.normal;
-}
-
-/** Why the server would refuse this value, or null (a missing field is fine: it means 100). */
-export function contentScaleProblem(v: unknown): string | null {
-  if (v === undefined || valid(v)) return null;
-  return 'The tile content size must be a whole number from 75 to 125, in steps of 5. It is drawn at 100% until it is fixed.';
-}
 
 // ---- a name's longest word, in em: a single long word shrinks its font to fit the tile's width
 

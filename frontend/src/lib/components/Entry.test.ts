@@ -201,9 +201,9 @@ describe('Entry content layout', () => {
       expect(entryCss).not.toMatch(/\.compact/);
     });
 
-    it('the box is a size container and the scale comes from --content-scale (1 when unset)', () => {
+    it('the box is a size container, and nothing in it scales by a dashboard setting', () => {
       expect(rule('.tc-box')).toMatch(/container:\s*tc\s*\/\s*size/);
-      expect(rule('.tc-box')).toMatch(/--s:\s*var\(--content-scale,\s*1\)/);
+      expect(css).not.toMatch(/content-scale|var\(--s\)/);
     });
 
     it('one description line is reserved for every tile of a size; the icon takes the rest, capped by the width', () => {
@@ -213,8 +213,9 @@ describe('Entry content layout', () => {
       expect(css).toMatch(/@container tc \(max-height:\s*89\.99px\)\s*\{[^}]*\.tc\s*\{[^}]*--desc-reserve:\s*0px/);
     });
 
-    it('the scale takes its room from the padding: 8cqmin at 100%, 3 at 125%, 18 at 75%', () => {
-      expect(rule('.tc')).toMatch(/--pad:\s*max\(3px,\s*calc\(8cqmin \+ max\(0, 1 - var\(--s\)\) \* 40cqmin - max\(0, var\(--s\) - 1\) \* 20cqmin\)\)/);
+    it('padding 8cqmin and gaps 2.5cqmin, with px floors', () => {
+      expect(rule('.tc')).toMatch(/--pad:\s*max\(3px,\s*8cqmin\)/);
+      expect(rule('.tc')).toMatch(/--gap:\s*max\(2px,\s*2\.5cqmin\)/);
     });
 
     it('the description takes only the room left under the icon (basis 0), and hides when no line fits', () => {
@@ -223,8 +224,8 @@ describe('Entry content layout', () => {
       expect(css).toMatch(/@container tcdesc \(max-height:\s*1\.19em\)\s*\{[^}]*\.tc-desc\s*\{[^}]*display:\s*none/);
     });
 
-    it('readable floors (times a phone text size): a name 12px rising with the scale (10px for a long word fitted to the width), a description 11px', () => {
-      expect(rule('.tc')).toMatch(/--name-nominal:\s*calc\(max\(calc\(12px \* max\(1, var\(--s\)\)\),\s*calc\(10cqmin \* var\(--s\)\)\)\s*\*\s*var\(--tk\)\)/);
+    it('readable floors (times a phone text size): a name 12px (10px for a long word fitted to the width), a description 11px', () => {
+      expect(rule('.tc')).toMatch(/--name-nominal:\s*calc\(max\(12px,\s*10cqmin\)\s*\*\s*var\(--tk\)\)/);
       expect(rule('.tc-name')).toMatch(/font-size:\s*max\(calc\(10px \* var\(--tk\)\),\s*min\(var\(--name-nominal\),\s*var\(--name-fit\)\)\)/);
       expect(rule('.tc')).toMatch(/--desc-font:\s*calc\(max\(11px,/);
     });
