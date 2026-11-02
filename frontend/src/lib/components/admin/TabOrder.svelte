@@ -86,6 +86,7 @@
   }
   function sortAz() {
     commit(sortByName(order.map((id) => ({ id, name: nameOf.get(id) ?? id }))));
+    say('Tabs sorted A to Z.');
   }
   function undo() {
     if (!history.length) return;
@@ -97,6 +98,7 @@
     order = saved;
     history = [];
     problem = '';
+    say('Changes discarded. The saved order is back.');
   }
 
   // An unsaved arrangement joins the editor's leave guard (the layout's beforeNavigate and

@@ -507,6 +507,25 @@ describe('Tab order page', () => {
     });
   });
 
+  describe('announcing sort and discard', () => {
+    const said = () => document.querySelector('[aria-live="polite"][data-testid="tab-order-announce"]')!.textContent;
+
+    it('says when Sort A→Z has run', async () => {
+      setLayout([dash(['b', 'c', 'a'])]);
+      render(TabOrder, { dashboardId: 'd1' });
+      expect(said()).toBe('');
+      await fireEvent.click(btn('Sort A→Z'));
+      expect(said()).toBe('Tabs sorted A to Z.');
+    });
+
+    it('says when changes are discarded', async () => {
+      render(TabOrder, { dashboardId: 'd1' });
+      await fireEvent.click(btn('Move t1 down'));
+      await fireEvent.click(btn('Discard changes'));
+      expect(said()).toBe('Changes discarded. The saved order is back.');
+    });
+  });
+
   describe('saving checks', () => {
     it('an old layout form is shown and nothing is sent', async () => {
       render(TabOrder, { dashboardId: 'd1' });
