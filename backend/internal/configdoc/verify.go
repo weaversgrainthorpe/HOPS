@@ -81,12 +81,60 @@ func verifyDashboard(d Obj, keep *KeptURLs) error {
 // tabs: []), or an index entry of GET /api/config?dashboard= (marked partial).
 // Stored, either would replace the dashboard's content with nothing.
 func (v *verifier) checkWhole(id string, d Obj) {
+	for _, p := range wholeProblems(id, d) {
+		v.add("%s, so it was not saved", p)
+	}
+}
+
+func wholeProblems(id string, d Obj) []string {
+	var out []string
 	if _, ok := d["tabs"].([]any); !ok {
-		v.add("dashboard %q: tabs is %s, want an array: this is not a whole dashboard, so it was not saved", id, trunc(show(d["tabs"])))
+		out = append(out, fmt.Sprintf("dashboard %q: tabs is %s, want an array: this is not a whole dashboard", id, trunc(show(d["tabs"]))))
 	}
+	if p := partialProblem(id, d); p != "" {
+		out = append(out, p)
+	}
+	return out
+}
+
+func partialProblem(id string, d Obj) string {
 	if _, has := d["partial"]; has {
-		v.add("dashboard %q: it is marked partial (an index entry, not a whole dashboard), so it was not saved", id)
+		return fmt.Sprintf("dashboard %q: it is marked partial (an index entry, not a whole dashboard)", id)
 	}
+	return ""
+}
+
+// VerifyWholeDocument is checkWhole for a stored document of any age, for a
+// backup about to be restored: every read of the whole document fails on an
+// index entry, so one must never get in that way either. A v2 dashboard may
+// have no tabs (the converter gives it an empty list), so only the partial mark
+// counts there: the converter would carry it over.
+func VerifyWholeDocument(doc Obj) error {
+	v := &verifier{}
+	list, _ := doc["dashboards"].([]any)
+	for i, d := range list {
+		dm, ok := d.(Obj)
+		if !ok {
+			if IsV3(doc) {
+				v.add("dashboards[%d] is %s: not a dashboard", i, trunc(show(d)))
+			}
+			continue
+		}
+		id, _ := dm["id"].(string)
+		problems := []string{partialProblem(id, dm)}
+		if IsV3(doc) {
+			problems = wholeProblems(id, dm)
+		}
+		for _, p := range problems {
+			if p != "" {
+				v.add("%s", p)
+			}
+		}
+	}
+	if len(v.problems) > 0 {
+		return &VerifyError{Problems: v.problems}
+	}
+	return nil
 }
 
 // checkFolderMinimums refuses a tab-level folder whose open box is below its

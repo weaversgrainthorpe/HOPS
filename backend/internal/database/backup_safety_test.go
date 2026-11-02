@@ -1,6 +1,7 @@
 package database
 
 import (
+	"bytes"
 	"database/sql"
 	"errors"
 	"os"
@@ -348,5 +349,146 @@ func TestManualReasonSanitised(t *testing.T) {
 		if err != nil || got != want {
 			t.Errorf("%q: got %q %v, want %q", in, got, err, want)
 		}
+	}
+}
+
+// storeDoc replaces the config row of the database at path.
+func storeDoc(t *testing.T, path, doc string) {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`INSERT OR REPLACE INTO config (id, data) VALUES (1, ?)`, doc); err != nil {
+		t.Fatal(err)
+	}
+}
+
+const wholeV3 = `{"schemaVersion":3,"dashboards":[{"id":"a","path":"/a","tabs":[]}]}`
+
+// A backup goes through the same whole-dashboard check as a write: restored, an
+// index entry would block every read of the whole document. Old backups stay
+// restorable: a v2 dashboard may have no tabs (the converter gives it an empty list).
+func TestValidateHOPSDatabase_WholeDashboards(t *testing.T) {
+	cases := []struct{ name, doc, want string }{
+		{"v3 whole", wholeV3, ""},
+		{"v2 with tabs", `{"dashboards":[{"id":"a","path":"/a","tabs":[]}]}`, ""},
+		{"v2 no tabs", `{"dashboards":[{"id":"a","path":"/a"}]}`, ""},
+		{"v2 null tabs", `{"dashboards":[{"id":"a","path":"/a","tabs":null}]}`, ""},
+		{"v2 no dashboards", `{}`, ""},
+		{"v3 partial", `{"schemaVersion":3,"dashboards":[{"id":"a","path":"/a","tabs":[]},{"id":"b","path":"/b","partial":true}]}`, `dashboard "b"`},
+		{"v3 partial with tabs", `{"schemaVersion":3,"dashboards":[{"id":"c","path":"/c","tabs":[],"partial":false}]}`, `dashboard "c"`},
+		{"v3 no tabs", `{"schemaVersion":3,"dashboards":[{"id":"d","path":"/d"}]}`, `dashboard "d"`},
+		{"v3 not an object", `{"schemaVersion":3,"dashboards":["x"]}`, "not a dashboard"},
+		{"v2 partial", `{"dashboards":[{"id":"e","path":"/e","partial":true}]}`, `dashboard "e"`},
+		{"not json", `{nope`, "cannot be read"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, dbPath := setupBackupTest(t)
+			storeDoc(t, dbPath, c.doc)
+			err := ValidateHOPSDatabase(dbPath)
+			if c.want == "" {
+				if err != nil {
+					t.Fatalf("refused: %v", err)
+				}
+				return
+			}
+			var ibe *InvalidBackupError
+			if !errors.As(err, &ibe) || !strings.Contains(ibe.Reason, c.want) {
+				t.Fatalf("got %v, want an InvalidBackupError naming %q", err, c.want)
+			}
+		})
+	}
+}
+
+// No config row at all is left to start-up, as before: there is no document to check.
+func TestValidateHOPSDatabase_NoConfigRow(t *testing.T) {
+	_, dbPath := setupBackupTest(t)
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`DELETE FROM config`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	if err := ValidateHOPSDatabase(dbPath); err != nil {
+		t.Fatalf("refused: %v", err)
+	}
+}
+
+// A backup holding a partial dashboard is refused at restore with nothing changed:
+// no stage, no safety backup, and the live document as it was.
+func TestRestoreRefusesPartialDashboard_LiveUntouched(t *testing.T) {
+	bm, dbPath := setupBackupTest(t)
+	storeDoc(t, dbPath, wholeV3)
+	name, err := func() (string, error) {
+		p, err := bm.CreateBackup("manual")
+		return filepath.Base(p), err
+	}()
+	if err != nil {
+		t.Fatal(err)
+	}
+	storeDoc(t, filepath.Join(bm.backupDir, name), `{"schemaVersion":3,"dashboards":[{"id":"a","path":"/a","partial":true}]}`)
+	before, err := os.ReadFile(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backups, _ := bm.ListBackups()
+
+	err = bm.RestoreBackup(nil, name)
+	var ibe *InvalidBackupError
+	if !errors.As(err, &ibe) {
+		t.Fatalf("got %v, want an InvalidBackupError", err)
+	}
+	for _, leftover := range []string{PendingRestorePath(dbPath), PendingRestorePath(dbPath) + ".tmp"} {
+		if _, err := os.Stat(leftover); !os.IsNotExist(err) {
+			t.Fatalf("%s left behind: %v", leftover, err)
+		}
+	}
+	if bm.PendingRestore() {
+		t.Fatal("a refused restore is staged")
+	}
+	after, err := os.ReadFile(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("the live database changed")
+	}
+	if now, _ := bm.ListBackups(); len(now) != len(backups) {
+		t.Fatalf("backups went from %d to %d: a safety backup ran for a refused restore", len(backups), len(now))
+	}
+}
+
+// One staged by an older build is caught at start-up: set aside, the live database stays.
+func TestStagedPartialDashboardIsSetAside(t *testing.T) {
+	_, dbPath := setupBackupTest(t)
+	storeDoc(t, dbPath, wholeV3)
+	before, err := os.ReadFile(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(PendingRestorePath(dbPath), before, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	storeDoc(t, PendingRestorePath(dbPath), `{"schemaVersion":3,"dashboards":[{"id":"a","path":"/a","partial":true}]}`)
+
+	_, err = RecoverAndApplyRestore(dbPath)
+	if err == nil || !strings.Contains(err.Error(), "marked partial") {
+		t.Fatalf("got %v", err)
+	}
+	after, err := os.ReadFile(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("the live database changed")
+	}
+	if _, err := os.Stat(dbPath + FailedRestoreSuffix); err != nil {
+		t.Fatalf("not set aside: %v", err)
 	}
 }

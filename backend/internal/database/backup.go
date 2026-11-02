@@ -18,6 +18,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
 )
 
 const (
@@ -1184,6 +1186,28 @@ func ValidateHOPSDatabase(path string) error {
 	}
 	if len(missing) > 0 {
 		return &InvalidBackupError{Reason: "this is not a HOPS database (it has no " + strings.Join(missing, ", ") + " table)"}
+	}
+	return checkWholeDashboards(db)
+}
+
+// checkWholeDashboards refuses a database whose dashboards a write would have
+// refused (configdoc's checkWhole): restored, a partial one blocks every full
+// read. One with no config row has no document to check: start-up handles that.
+func checkWholeDashboards(db *sql.DB) error {
+	var raw string
+	if err := db.QueryRow("SELECT data FROM config WHERE id = 1").Scan(&raw); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		return &InvalidBackupError{Reason: "its dashboards cannot be read: " + err.Error()}
+	}
+	var doc configdoc.Obj
+	if err := json.Unmarshal([]byte(raw), &doc); err != nil {
+		return &InvalidBackupError{Reason: "its dashboards cannot be read: " + err.Error()}
+	}
+	var ve *configdoc.VerifyError
+	if err := configdoc.VerifyWholeDocument(doc); errors.As(err, &ve) {
+		return &InvalidBackupError{Reason: "it holds incomplete dashboards: " + strings.Join(ve.Problems, "; ")}
 	}
 	return nil
 }

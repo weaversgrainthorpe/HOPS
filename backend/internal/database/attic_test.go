@@ -53,7 +53,7 @@ func setConfig(t testing.TB, db *sql.DB, urls ...string) {
 	for _, u := range urls {
 		tiles = append(tiles, `{"name":"t","iconUrl":"`+u+`"}`)
 	}
-	data := `{"schemaVersion":3,"dashboards":[{"id":"d","tiles":[` + strings.Join(tiles, ",") + `]}]}`
+	data := `{"schemaVersion":3,"dashboards":[{"id":"d","tabs":[],"tiles":[` + strings.Join(tiles, ",") + `]}]}`
 	if _, err := db.Exec(`INSERT OR REPLACE INTO config (id, data) VALUES (1, ?)`, data); err != nil {
 		t.Fatal(err)
 	}

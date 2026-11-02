@@ -1,11 +1,13 @@
 package api
 
 import (
+	"database/sql"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -289,5 +291,44 @@ func TestManualBackupReasonSanitisedAndReservedRefused(t *testing.T) {
 	}
 	if p, _ := resp["path"].(string); !strings.HasSuffix(p, "_------x-y.db") {
 		t.Fatalf("reason not sanitised: %q", p)
+	}
+}
+
+// A backup holding an index entry for a dashboard is refused where the user can
+// read why, and the live dashboards stay exactly as they are.
+func TestRestoreRefusesPartialDashboard(t *testing.T) {
+	router, db := setupTestRouter(t)
+	seed(t, db)
+	c := newClient(t, router)
+	dir, _, name := backupsOf(t, c)
+	raw, err := os.ReadFile(filepath.Join(dir, name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	crafted := "hops-backup-2026-01-01_00-00-00_manual.db"
+	if err := os.WriteFile(filepath.Join(dir, crafted), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cdb, err := sql.Open("sqlite", filepath.Join(dir, crafted))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cdb.Close()
+	if _, err := cdb.Exec(`UPDATE config SET data = '{"schemaVersion":3,"dashboards":[{"id":"x","path":"/x","partial":true}]}' WHERE id = 1`); err != nil {
+		t.Fatal(err)
+	}
+	cdb.Close()
+	_, before := anonJSON(t, router, "/api/config")
+
+	code, resp := c.do("POST", "/api/backups/"+crafted, nil)
+	msg, _ := resp["error"].(string)
+	if code != http.StatusUnprocessableEntity || !strings.Contains(msg, `dashboard "x"`) || !strings.Contains(msg, "nothing was restored") {
+		t.Fatalf("got %d %q", code, msg)
+	}
+	if _, err := os.Stat(database.PendingRestorePath(filepath.Join(filepath.Dir(dir), "hops.db"))); !os.IsNotExist(err) {
+		t.Fatalf("a refused restore was staged: %v", err)
+	}
+	if _, after := anonJSON(t, router, "/api/config"); !reflect.DeepEqual(before, after) {
+		t.Fatal("the live config changed")
 	}
 }
