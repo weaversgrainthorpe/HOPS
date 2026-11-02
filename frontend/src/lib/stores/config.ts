@@ -110,6 +110,10 @@ export const layoutStale = writable(false);
 // True while the held document came from the service worker's kept copy, of any age, not from the
 // server. Stays on until a read from the server lands; the page says so meanwhile (OfflineBanner).
 export const showingKept = writable(false);
+/** Why the saved copy on show could not be updated. Null: no read has failed over it yet. */
+export const keptFailure = writable<string | null>(null);
+
+const KEPT_READ_FAILED = 'the server did not answer with your dashboards';
 
 // Loading state
 export const configLoading = writable(true);
@@ -254,6 +258,7 @@ export function resetPartialLoadingForTests(): void {
   mismatchReloaded.clear();
   otherDashboards.set('loading');
   dashboardFetches.set({});
+  keptFailure.set(null);
 }
 
 const message = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
@@ -342,7 +347,11 @@ async function runLoad(seq: number, light: boolean, opts: LoadOptions) {
     // A quiet retry that fails over held data leaves it on show: it never swaps a page for a card.
     if (!quiet || get(config) === null) configError.set(error instanceof Error ? error.message : 'Failed to load configuration');
     // A held index whose reload failed: the other dashboards are not coming either.
-    if (hasPartialDashboards(get(config)) && !quiet) otherDashboards.set({ error: message(error, 'the request failed') });
+    // A quiet retry replaces a background load that was on its way, so waiting on it ends here too.
+    if (hasPartialDashboards(get(config)) && (!quiet || get(otherDashboards) === 'loading')) {
+      otherDashboards.set({ error: message(error, 'the request failed') });
+    }
+    if (quiet && get(showingKept)) keptFailure.set(message(error, 'the request failed'));
   } finally {
     if (seq === loadSeq) configLoading.set(false);
   }
@@ -366,6 +375,7 @@ export function configReadRunning(): boolean {
 function adoptLoaded(data: Config): void {
   config.set(withoutDismissed(data));
   showingKept.set(isKept(data));
+  keptFailure.set(isKept(data) ? KEPT_READ_FAILED : null);
   configError.set(null);
   noticesStale.set(null);
   layoutStale.set(false);
@@ -407,7 +417,10 @@ async function loadRest(seq: number, afterMismatch: boolean): Promise<void> {
   }
   if (seq !== loadSeq) return; // superseded: the newer load fetches its own
   const held = get(config);
-  if (!held) return;
+  if (!held) {
+    otherDashboards.set('ready'); // nothing left to complete: never a "Loading" line with no end
+    return;
+  }
   if (!afterMismatch && shownDashboardChanged(held, full)) {
     // The dashboard on screen changed since the index was read: never show it next to the newer
     // others. Reload index + open + rest at the new state, through the stale-layout path.
@@ -504,7 +517,10 @@ export async function fetchDashboard(id: string): Promise<void> {
     }
     settle();
     config.set({ ...held, dashboards: held.dashboards.map((d) => (d.id === id ? answer.dashboard : d)) });
-    if (isKept(answer)) showingKept.set(true);
+    if (isKept(answer)) {
+      showingKept.set(true);
+      keptFailure.set(KEPT_READ_FAILED);
+    }
   } catch (error) {
     if (seq !== loadSeq) {
       settle();
@@ -583,7 +599,10 @@ async function refreshNotices(): Promise<void> {
   try {
     const fresh = await getConfig();
     if (mine !== refreshSeq) return; // superseded: a newer read owns the result
-    if (isKept(fresh)) showingKept.set(true);
+    if (isKept(fresh)) {
+      showingKept.set(true);
+      keptFailure.set(KEPT_READ_FAILED);
+    }
     const freshDisplay = new Map((fresh.dashboards ?? []).map((d) => [d.id, d.display] as const));
     config.update((c) => {
       if (!c) return c;

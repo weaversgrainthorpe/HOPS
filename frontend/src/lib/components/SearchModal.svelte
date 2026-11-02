@@ -142,8 +142,8 @@
         bind:this={inputEl}
         bind:value={query}
         type="text"
-        placeholder={scoped ? 'Search this dashboard' : 'Search all dashboards'}
-        aria-label={scoped ? 'Search tiles on this dashboard by name, URL, or description' : 'Search tiles on all dashboards by name, URL, or description'}
+        placeholder={scoped ? 'Search this dashboard' : partial ? 'Search the loaded dashboards' : 'Search all dashboards'}
+        aria-label={scoped ? 'Search tiles on this dashboard by name, URL, or description' : partial ? `Search tiles on ${loadedNames || 'the loaded dashboards'} by name, URL, or description` : 'Search tiles on all dashboards by name, URL, or description'}
         onkeydown={handleKeydown}
       />
       <button type="button" class="esc-hint" aria-label="Close search" onclick={onClose}><kbd>Esc</kbd></button>

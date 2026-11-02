@@ -34,6 +34,7 @@ import {
   configError,
   layoutStale,
   showingKept,
+  keptFailure,
   configReadRunning,
   retryLoadForPage,
   applySavedLayout,
@@ -576,6 +577,49 @@ describe('showing a kept copy', () => {
         expect(get(dashboardFetches).b).toBeUndefined();
       });
     }
+  });
+
+  it('a quiet retry that fails ends the wait for the background load it replaced', async () => {
+    getConfig.mockImplementation(() => new Promise(() => {}));
+    getConfigFor.mockResolvedValueOnce(idx('r1', full('a', 1), index('b', 1)));
+    await loadConfig({ dashboard: 'a' });
+    expect(get(otherDashboards)).toBe('loading');
+    getConfigFor.mockRejectedValueOnce(new Error('the server went away'));
+    await retryLoadForPage();
+    expect(get(otherDashboards)).toEqual({ error: 'the server went away' });
+  });
+
+  it('a background load with nothing left to complete is not left loading', async () => {
+    const rest = deferred<Config>();
+    getConfig.mockReturnValueOnce(rest.promise);
+    getConfigFor.mockResolvedValueOnce(idx('r1', full('a', 1), index('b', 1)));
+    await loadConfig({ dashboard: 'a' });
+    config.set(null);
+    rest.resolve(doc(full('a', 1), full('b', 1)));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(get(otherDashboards)).toBe('ready');
+  });
+
+  it('a retry that fails over a kept copy keeps the page and says why, until a fresh read lands', async () => {
+    getConfig.mockResolvedValue(keptWhole());
+    await loadConfig();
+    getConfig.mockRejectedValue(new Error('the database is locked'));
+    await retryLoadForPage();
+    expect(get(config)).not.toBeNull();
+    expect(get(showingKept)).toBe(true);
+    expect(get(keptFailure)).toBe('the database is locked');
+    getConfig.mockResolvedValue(doc(full('a', 2)));
+    await retryLoadForPage();
+    expect(get(showingKept)).toBe(false);
+    expect(get(keptFailure)).toBeNull();
+  });
+
+  it('a retry answered from the kept copy again is a failure to say too', async () => {
+    getConfig.mockResolvedValue(keptWhole());
+    await loadConfig();
+    await retryLoadForPage();
+    expect(get(showingKept)).toBe(true);
+    expect(get(keptFailure)).toBe('the server did not answer with your dashboards');
   });
 
   it('a whole load always has a time limit: retries wait for a running load', async () => {

@@ -308,6 +308,18 @@ describe('SearchModal while the other dashboards are still arriving', () => {
     config.set({ schemaVersion: 3, dashboards: [layoutD1, labIndex] } as Config);
   });
 
+  it('the search box only promises what is loaded, until everything is', async () => {
+    otherDashboards.set('loading');
+    render(SearchModal, { onClose: () => {} });
+    await tick();
+    const box = screen.getByRole('textbox', { name: /search/i });
+    expect(box).toHaveAttribute('placeholder', 'Search the loaded dashboards');
+    expect(box).toHaveAccessibleName(expect.stringContaining('Home'));
+    config.set({ schemaVersion: 3, dashboards: [layoutD1, labFull] } as Config);
+    await tick();
+    expect(box).toHaveAttribute('placeholder', 'Search all dashboards');
+  });
+
   it('while loading: says so, searches the open dashboard meanwhile and labels the results as from it only', async () => {
     otherDashboards.set('loading');
     render(SearchModal, { onClose: () => {} });

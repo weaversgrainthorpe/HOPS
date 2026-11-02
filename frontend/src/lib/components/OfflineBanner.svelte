@@ -1,7 +1,17 @@
 <script lang="ts">
   import { isOffline, offlineSinceLabel } from '$lib/stores/network';
-  import { showingKept } from '$lib/stores/config';
+  import { configReadRunning, keptFailure, retryLoadForPage, showingKept } from '$lib/stores/config';
+  import { pageUnsaved, session } from '$lib/stores/editSession';
   import Icon from '@iconify/svelte';
+
+  let retrying = $state(false);
+
+  async function retry() {
+    if (configReadRunning()) return;
+    retrying = true;
+    await retryLoadForPage();
+    retrying = false;
+  }
 </script>
 
 {#if $isOffline}
@@ -19,7 +29,14 @@
   <!-- The server answers (or hasn't failed a probe yet), but this page is still a saved copy. -->
   <div class="offline-banner" role="status" aria-live="polite">
     <Icon icon="mdi:cloud-off-outline" width="20" />
-    <span class="text">This is a saved copy, and may be out of date. HOPS will update it when it can.</span>
+    <span class="text">
+      This is a saved copy, and may be out of date.
+      {#if $keptFailure}Couldn't update it: {$keptFailure}.{:else}HOPS will update it when it can.{/if}
+    </span>
+    <!-- Open edits are never re-read under the person making them (see outageRecovery). -->
+    {#if $keptFailure && $session === null && !$pageUnsaved}
+      <button type="button" class="retry" disabled={retrying} onclick={retry}>Retry</button>
+    {/if}
   </div>
 {/if}
 
@@ -38,6 +55,19 @@
 
   .text {
     line-height: 1.4;
+  }
+
+  .retry {
+    flex: none;
+    margin-left: auto;
+    padding: 0.2rem 0.75rem;
+    border: 1px solid currentColor;
+    background: none;
+    color: inherit;
+  }
+
+  .retry:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.2);
   }
 
   .since {

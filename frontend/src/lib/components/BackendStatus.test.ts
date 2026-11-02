@@ -9,6 +9,7 @@ vi.mock('$lib/utils/api', async () => ({
 
 import BackendStatus from './BackendStatus.svelte';
 import { backendStatus } from '$lib/stores/backendStatus';
+import { isOffline } from '$lib/stores/network';
 
 async function settle() {
 	await new Promise((r) => setTimeout(r, 0));
@@ -18,6 +19,21 @@ describe('BackendStatus header dot', () => {
 	beforeEach(() => {
 		backendStatus.reset();
 		getBackendVersion.mockReset();
+	});
+
+	it('looks again as soon as the offline banner changes, so the tick never stays green under it', async () => {
+		isOffline.set(false);
+		getBackendVersion.mockResolvedValue({ version: '3.0.0' });
+		render(BackendStatus);
+		await settle();
+		expect(screen.getByRole('button', { name: 'Backend online' })).toBeInTheDocument();
+		getBackendVersion.mockRejectedValue(new TypeError('Failed to fetch'));
+		isOffline.set(true);
+		await settle();
+		expect(screen.getByRole('button', { name: 'Backend offline' })).toBeInTheDocument();
+		isOffline.set(false);
+		getBackendVersion.mockResolvedValue({ version: '3.0.0' });
+		await settle();
 	});
 
 	it('is a green dot with version and round-trip time in an accessible tooltip when online', async () => {

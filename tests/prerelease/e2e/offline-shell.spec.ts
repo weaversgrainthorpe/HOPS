@@ -110,6 +110,7 @@ test('a page opened with the server down shows the app and the banner, then upda
     const res = await page.goto('/sample?first-offline-page');
     expect(res?.status()).toBe(200);
     await expect(offline).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Backend offline' })).toBeVisible();
     await expect(page.getByRole('button', { name: tileName! }).first()).toBeVisible();
     await expect(page.getByText('Renamed while away')).toHaveCount(0);
 
@@ -119,6 +120,7 @@ test('a page opened with the server down shows the app and the banner, then upda
     await expect(page.getByText('Renamed while away').first()).toBeVisible(RECOVERY);
     await expect(offline).toHaveCount(0);
     await expect(savedCopy).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Backend online' })).toBeVisible(RECOVERY);
   } finally {
     await ctx.close();
     await admin.close();
@@ -179,8 +181,8 @@ test("the sign-in check fails with the server reached: its words, and a way to s
     await notice.getByRole('button', { name: 'Sign in' }).click();
     const dialog = page.getByRole('dialog', { name: 'Sign in' });
     await dialog.getByLabel('Username').fill(ADMIN_USERNAME);
-    await dialog.getByLabel('Password').fill(ADMIN_INITIAL_PASSWORD);
-    await dialog.getByLabel('Password').press('Enter');
+    await dialog.getByLabel('Password', { exact: true }).fill(ADMIN_INITIAL_PASSWORD);
+    await dialog.getByLabel('Password', { exact: true }).press('Enter');
     await expect(page.getByRole('heading', { name: 'Set a New Password' })).toBeVisible();
   } finally {
     await ctx.close();

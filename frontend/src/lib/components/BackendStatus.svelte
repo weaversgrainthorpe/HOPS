@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { get } from 'svelte/store';
   import { backendStatus } from '$lib/stores/backendStatus';
+  import { isOffline } from '$lib/stores/network';
 
   // A small status dot for the page header: green online, red offline (can't reach it),
   // amber degraded (reached, but it answered with an error), grey while checking. The version and
@@ -13,6 +15,15 @@
 
   onDestroy(() => {
     backendStatus.stopPolling();
+  });
+
+  // The dot and the banner poll apart: when the banner changes, look now, so they never disagree
+  // for up to a poll's length.
+  let lastOffline = get(isOffline);
+  $effect(() => {
+    if ($isOffline === lastOffline) return;
+    lastOffline = $isOffline;
+    void backendStatus.check();
   });
 
   const tipId = `backend-status-tip-${Math.random().toString(36).slice(2, 8)}`;
