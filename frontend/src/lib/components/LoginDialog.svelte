@@ -2,6 +2,7 @@
   import { onMount, tick } from 'svelte';
   import Icon from '@iconify/svelte';
   import Modal from '$lib/components/shared/Modal.svelte';
+  import PasswordField from '$lib/components/shared/PasswordField.svelte';
   import { login, loginError, isLoggingIn } from '$lib/stores/auth';
 
   // Sign in without leaving the page: the dashboard pencil, and Settings (the gear). Credentials
@@ -81,14 +82,13 @@
 
     <div class="form-group">
       <label for={passwordId}>Password</label>
-      <input
+      <PasswordField
         id={passwordId}
-        type="password"
         bind:value={password}
         required
         autocomplete="current-password"
         disabled={$isLoggingIn}
-        bind:this={passwordEl}
+        bind:inputEl={passwordEl}
       />
     </div>
 

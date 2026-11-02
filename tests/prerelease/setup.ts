@@ -15,8 +15,8 @@ setup('authenticate and save state', async ({ page }) => {
   const dlg = page.getByRole('dialog', { name: 'Sign in' });
   await expect(dlg).toBeVisible({ timeout: 10_000 });
   await dlg.getByLabel('Username').fill(ADMIN_USERNAME);
-  await dlg.getByLabel('Password').fill(ADMIN_INITIAL_PASSWORD);
-  await dlg.getByLabel('Password').press('Enter');
+  await dlg.getByLabel('Password', { exact: true }).fill(ADMIN_INITIAL_PASSWORD);
+  await dlg.getByLabel('Password', { exact: true }).press('Enter');
   await expect(dlg).toHaveCount(0);
 
   // Forced password change modal

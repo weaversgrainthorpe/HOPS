@@ -161,8 +161,8 @@ c.commit()
 		await page.goto('/settings/global');
 		const dlg = page.getByRole('dialog', { name: 'Sign in' });
 		await dlg.getByLabel('Username').fill(ADMIN_USERNAME);
-		await dlg.getByLabel('Password').fill(ADMIN_INITIAL_PASSWORD);
-		await dlg.getByLabel('Password').press('Enter');
+		await dlg.getByLabel('Password', { exact: true }).fill(ADMIN_INITIAL_PASSWORD);
+		await dlg.getByLabel('Password', { exact: true }).press('Enter');
 		await expect(page.getByRole('heading', { name: 'Set a New Password' })).toBeVisible({ timeout: 10_000 });
 		await page.fill('input#current-password', ADMIN_INITIAL_PASSWORD);
 		await page.fill('input#new-password', ADMIN_TEST_PASSWORD);

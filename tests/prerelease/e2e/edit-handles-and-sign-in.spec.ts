@@ -319,8 +319,8 @@ test.describe('editing changes in a real browser', () => {
     await expect(dlg).toBeVisible();
     await expect(dlg.getByLabel('Username')).toBeFocused();
     await dlg.getByLabel('Username').fill(ADMIN_USERNAME);
-    await dlg.getByLabel('Password').fill(ADMIN_TEST_PASSWORD);
-    await dlg.getByLabel('Password').press('Enter');
+    await dlg.getByLabel('Password', { exact: true }).fill(ADMIN_TEST_PASSWORD);
+    await dlg.getByLabel('Password', { exact: true }).press('Enter');
     await expect(dlg).toHaveCount(0);
   }
 
@@ -336,7 +336,7 @@ test.describe('editing changes in a real browser', () => {
       await anon.getByRole('button', { name: 'Enter Edit Mode' }).click();
       const dlg = anon.getByRole('dialog', { name: 'Sign in' });
       await dlg.getByLabel('Username').fill(ADMIN_USERNAME);
-      await dlg.getByLabel('Password').fill('definitely-wrong');
+      await dlg.getByLabel('Password', { exact: true }).fill('definitely-wrong');
       await dlg.getByRole('button', { name: 'Sign in' }).click();
       await expect(dlg.getByRole('alert')).toContainText('check your username and password');
       await expect(dlg).toBeVisible();
@@ -862,16 +862,16 @@ test.describe('Settings is the admin home; / shows a dashboard', () => {
       // A wrong password: the reason shows once, in the dialog (no second copy in a toast), and
       // the cursor is back in the password field.
       await dlg.getByLabel('Username').fill(ADMIN_USERNAME);
-      await dlg.getByLabel('Password').fill('definitely-wrong');
-      await dlg.getByLabel('Password').press('Enter');
+      await dlg.getByLabel('Password', { exact: true }).fill('definitely-wrong');
+      await dlg.getByLabel('Password', { exact: true }).press('Enter');
       await expect(dlg.getByRole('alert')).toContainText('check your username and password');
       await expect(anon.locator('.toast-error')).toHaveCount(0);
-      await expect(dlg.getByLabel('Password')).toBeFocused();
+      await expect(dlg.getByLabel('Password', { exact: true })).toBeFocused();
       await expect(dlg).toBeVisible();
 
       // The right one: Settings, in place.
-      await dlg.getByLabel('Password').fill(ADMIN_TEST_PASSWORD);
-      await dlg.getByLabel('Password').press('Enter');
+      await dlg.getByLabel('Password', { exact: true }).fill(ADMIN_TEST_PASSWORD);
+      await dlg.getByLabel('Password', { exact: true }).press('Enter');
       await expect(dlg).toHaveCount(0);
       await expect(anon).toHaveURL(/\/settings\/dashboards$/);
       // Every section is in the sidebar; this page is Dashboards.
@@ -1175,7 +1175,7 @@ test.describe('one sign-in dialog at a time: navigating closes the pencil\'s', (
 
       // The footer's Sign in button (not Enter) submits this dialog's own form.
       await dlg.getByLabel('Username').fill(ADMIN_USERNAME);
-      await dlg.getByLabel('Password').fill(ADMIN_TEST_PASSWORD);
+      await dlg.getByLabel('Password', { exact: true }).fill(ADMIN_TEST_PASSWORD);
       await dlg.getByRole('button', { name: 'Sign in' }).click();
       await expect(dlg).toHaveCount(0);
       await expect(anon.getByRole('heading', { name: 'Dashboards', level: 2 })).toBeVisible();
@@ -1218,7 +1218,7 @@ test.describe('one sign-in dialog at a time: navigating closes the pencil\'s', (
       const dlg = anon.getByRole('dialog', { name: 'Sign in' });
       await expect(dlg).toHaveCount(1);
       await dlg.getByLabel('Username').fill(ADMIN_USERNAME);
-      await dlg.getByLabel('Password').fill(ADMIN_TEST_PASSWORD);
+      await dlg.getByLabel('Password', { exact: true }).fill(ADMIN_TEST_PASSWORD);
       await dlg.getByRole('button', { name: 'Sign in' }).click();
       await expect(dlg).toHaveCount(0);
       await expect(anon.getByRole('toolbar', { name: 'Editing' })).toBeVisible();

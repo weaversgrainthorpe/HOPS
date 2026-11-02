@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from '@iconify/svelte';
+  import PasswordField from '$lib/components/shared/PasswordField.svelte';
   import { changePassword } from '$lib/utils/api';
   import { validatePassword, validateMatch } from '$lib/utils/validation';
   import { isBackendOffline } from '$lib/stores/backendStatus';
@@ -91,20 +92,19 @@
   <form id="change-password-form" onsubmit={handleSubmit}>
     <div class="form-group">
       <label for="current-password">Current Password</label>
-      <input id="current-password" type="password" bind:value={currentPassword} required autocomplete="current-password" disabled={isSubmitting} />
+      <PasswordField id="current-password" bind:value={currentPassword} required autocomplete="current-password" disabled={isSubmitting} />
     </div>
 
     <div class="form-group">
       <label for="new-password">New Password</label>
-      <input
+      <PasswordField
         id="new-password"
-        type="password"
         bind:value={newPassword}
         required
         autocomplete="new-password"
-        aria-describedby="password-rules"
+        describedby="password-rules"
         disabled={isSubmitting}
-        class:invalid={newPassword && !newPasswordValidation.valid}
+        invalid={!!newPassword && !newPasswordValidation.valid}
       />
       <span class="hint" id="password-rules">8 to 72 characters, and different from the current password.</span>
       {#if newPassword && !newPasswordValidation.valid}
@@ -114,14 +114,13 @@
 
     <div class="form-group">
       <label for="confirm-password">Confirm New Password</label>
-      <input
+      <PasswordField
         id="confirm-password"
-        type="password"
         bind:value={confirmPassword}
         required
         autocomplete="new-password"
         disabled={isSubmitting}
-        class:invalid={confirmPassword && !confirmValidation.valid}
+        invalid={!!confirmPassword && !confirmValidation.valid}
       />
       {#if confirmPassword && !confirmValidation.valid}
         <span class="field-error">{confirmValidation.message}</span>
@@ -166,31 +165,6 @@
     font-weight: 500;
     font-size: 0.875rem;
     color: var(--text-primary);
-  }
-
-  input {
-    width: 100%;
-    padding: 0.625rem 0.75rem;
-    background: var(--bg-primary);
-    border: 1px solid var(--border);
-    border-radius: 0.375rem;
-    color: var(--text-primary);
-    font-size: 0.875rem;
-  }
-
-  input:focus {
-    outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-  }
-
-  input:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  input.invalid {
-    border-color: var(--color-error, #ef4444);
   }
 
   .field-error {

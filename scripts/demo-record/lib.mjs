@@ -31,8 +31,8 @@ export async function signIn(base, args = []) {
 }
 
 async function signInWith(page, dlg, password, must = false) {
-  await dlg.getByLabel('Password').fill(password);
-  await dlg.getByLabel('Password').press('Enter');
+  await dlg.getByLabel('Password', { exact: true }).fill(password);
+  await dlg.getByLabel('Password', { exact: true }).press('Enter');
   try {
     await dlg.waitFor({ state: 'detached', timeout: 4_000 });
     return true;

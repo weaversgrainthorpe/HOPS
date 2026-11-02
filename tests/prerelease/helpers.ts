@@ -57,8 +57,8 @@ export async function signInDialog(page: Page, username = ADMIN_USERNAME, passwo
   const dlg = page.getByRole('dialog', { name: 'Sign in' });
   await expect(dlg).toBeVisible();
   await dlg.getByLabel('Username').fill(username);
-  await dlg.getByLabel('Password').fill(password);
-  await dlg.getByLabel('Password').press('Enter');
+  await dlg.getByLabel('Password', { exact: true }).fill(password);
+  await dlg.getByLabel('Password', { exact: true }).press('Enter');
   await expect(dlg).toHaveCount(0);
 }
 
