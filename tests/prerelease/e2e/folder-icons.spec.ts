@@ -143,3 +143,34 @@ test.describe('a minimised folder shows its own icon', () => {
     await expect(tileOf('bad').locator('.collapsed-name')).toHaveText('Broken');
   });
 });
+
+test.describe('at the Small size', () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test('names take two lines and a Rounded folder keeps everything inside its tile', async ({ page, context }) => {
+    const small = (x: number, y: number) => ({ x, y, w: 1, h: 1 });
+    const mini = (id: string, name: string, x: number, extra: Child = {}) =>
+      folder(id, name, small(x, 2), [kid(`${id}a`, 'A'), kid(`${id}b`, 'B'), kid(`${id}c`, 'C')], { size: 'small', display: 'collapsed', ...extra });
+    const d = await importDash(page, context, (id) => [
+      kid(id('t'), 'Home Assistant', { url: 'https://ha.example.lan/', size: 'small', placement: small(0, 0) }),
+      mini(id('none'), 'Own none', 0, { minimisedIcon: 'own' }),
+      mini(id('has'), 'Own has', 6, { minimisedIcon: 'own', icon: 'mdi:home' }),
+      folder(id('empty'), 'Empty one', small(12, 2), [], { size: 'small', display: 'collapsed' })
+    ]);
+    await page.goto(d.path);
+    const cell = (s: string) => page.locator(`.tab-canvas [data-node-id="${d.id(s)}"]`);
+    const title = await cell('t').locator('.title').evaluate((t) => t.getBoundingClientRect().height / parseFloat(getComputedStyle(t).lineHeight));
+    expect(Math.round(title), 'the name wraps to two lines').toBe(2);
+    await expect(cell('none').locator('.preview-cell')).toHaveCount(2);
+    for (const s of ['t', 'none', 'has', 'empty']) {
+      const inside = await cell(s).evaluate((c) => {
+        const box = c.getBoundingClientRect();
+        return [...c.querySelectorAll('.title, .icon svg, .collapsed-name, .preview-cell, [data-own-icon], .empty-note')].every((e) => {
+          const r = e.getBoundingClientRect();
+          return r.top >= box.top - 0.5 && r.bottom <= box.bottom + 0.5 && r.left >= box.left - 0.5 && r.right <= box.right + 0.5;
+        });
+      });
+      expect(inside, `${s}: everything inside the tile`).toBe(true);
+    }
+  });
+});

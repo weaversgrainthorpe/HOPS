@@ -22,6 +22,23 @@ export const MINI_NAME_FLOOR_PX = 12;
  * and padding. Below it the tile is the Small silhouette with its icons.
  */
 export const MINI_NAME_MIN_TILE_PX = 84;
+/** The smallest tile whose name can take two lines of 12 px and leave room for an icon (Entry.svelte's container query too). */
+export const SMALL_TWO_LINES_MIN_PX = 50;
+/** One line of a Small tile's name: 12 px at line-height 1.1. */
+const SMALL_LINE_PX = 13.2;
+/** The compact padding and gap of a Rounded Small tile (Folder.svelte's .small-round). */
+const SMALL_PAD_PX = 3;
+const SMALL_GAP_PX = 2;
+
+/**
+ * A Rounded tile too small for its name and the 2 x 2 icons: the side of the icons left beside its name
+ * (one line or two), two to a row, or one own icon. Never below 8 px.
+ */
+export function smallIconPx(tile: { widthPx: number; heightPx: number }, nameLines: 1 | 2): number {
+  const tall = tile.heightPx - 2 * SMALL_PAD_PX - SMALL_GAP_PX - nameLines * SMALL_LINE_PX;
+  const wide = (tile.widthPx - 2 * SMALL_PAD_PX - SMALL_GAP_PX) / 2;
+  return Math.max(8, Math.floor(Math.min(tall, wide)));
+}
 
 export interface ShapeParts {
   /** The shape drawn: the folder's own, or Rounded for a missing / unknown one. */

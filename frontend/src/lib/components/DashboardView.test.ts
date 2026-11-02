@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, within, cleanup, waitFor } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
+import { SCREEN_ROOM_CLASS } from '$lib/layout/screenRoom';
 
 const pageStore = vi.hoisted(() => ({ set: null as null | ((p: any) => void) }));
 vi.mock('$app/stores', async () => {
@@ -242,6 +243,10 @@ describe('route resolution and reveal lifetime', () => {
   });
 
   it('search reveal: opens the folder chain in place, drills down, flips to the tile\'s page and focuses it', async () => {
+    const realRect = Element.prototype.getBoundingClientRect;
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      return this.classList.contains(SCREEN_ROOM_CLASS) ? ({ height: 697 } as DOMRect) : realRect.call(this);
+    });
     const kids = Array.from({ length: 100 }, (_, i) => entry(`k${i + 1}`, `Kid${i + 1}`));
     const sub = { kind: 'folder', id: 'sb', name: 'Sub', display: 'expanded', size: 'medium', contentSize: 'medium', content: { children: kids } };
     const deep: LayoutDashboard = {
@@ -254,7 +259,7 @@ describe('route resolution and reveal lifetime', () => {
     const { container } = render(Dashboard, { dashboard: deep });
     await tick();
     requestReveal({ dashboardId: 'd1', tabId: 't2', folderIds: ['box2', 'sb'], tileId: 'k100' });
-    // An 8 wide box at 60 px cells grows to one screen (768 - 71 = 11 rows): 660 high, so Sub's inset
+    // An 8 wide box at 60 px cells grows to one screen (697 px of room = 11 rows): 660 high, so Sub's inset
     // box inside it has 462 - 18 = 444 x 532 → 3 a row; overfull, so the page bar leaves 4 rows (12)
     // a page: k100 is on page 9.
     await waitFor(() => expect(container.querySelector('.tab-canvas [data-node-id="k100"]')).not.toBeNull());

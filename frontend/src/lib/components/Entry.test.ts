@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { SMALL_TWO_LINES_MIN_PX } from '$lib/layout/folderShapePaths';
 import Entry from './Entry.svelte';
 import { editMode } from '$lib/stores/editMode';
 import type { Entry as EntryType } from '$lib/types';
@@ -231,10 +232,16 @@ describe('Entry content layout', () => {
       expect(css).toMatch(/@container tile \(max-height:\s*110\.29px\)\s*\{[^}]*\.entry\.fill\.large \.subtitle[^}]*\{[^}]*display:\s*none/);
     });
 
-    it('the description hide thresholds are the heights its floors need (85px, Small 76px), not a fixed 72px', () => {
+    it('the description hide thresholds are the heights its floors need (85px, Small 98px with its two-line name), not a fixed 72px', () => {
       expect(css).not.toMatch(/71\.99px/);
       expect(css).toMatch(/@container tile \(max-height:\s*84\.99px\)\s*\{[^}]*\.entry\.fill:not\(\.small\) \.subtitle[^}]*\{[^}]*display:\s*none/);
-      expect(css).toMatch(/@container tile \(max-height:\s*75\.99px\)\s*\{[^}]*\.entry\.fill\.small \.subtitle[^}]*\{[^}]*display:\s*none/);
+      expect(css).toMatch(/@container tile \(max-height:\s*97\.79px\)\s*\{[^}]*\.entry\.fill\.small \.subtitle[^}]*\{[^}]*display:\s*none/);
+    });
+
+    it('a Small name takes two lines, and one below the two-line size', () => {
+      expect(css).toMatch(/\.small \.title\s*\{[^}]*-webkit-line-clamp:\s*2/);
+      expect(css).toMatch(/@container tile \(max-height:\s*49\.99px\)\s*\{[^}]*\.entry\.fill\.small \.title[^}]*\{[^}]*white-space:\s*nowrap/);
+      expect(SMALL_TWO_LINES_MIN_PX).toBe(50);
     });
 
     it('the size class no longer sets a fixed icon px on a fitted tile', () => {

@@ -187,12 +187,70 @@ describe('minimised', () => {
     expect(t.querySelectorAll('.preview-cell').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: /^m, folder with 3 items/ })).toBeTruthy();
   });
+  it('a Rounded tile too small for name and 2 x 2 icons: a row of two icons, its icon sized to fit', async () => {
+    shapeH = 48;
+    const r = await renderTab([folder('m', kids(4), { display: 'collapsed', size: 'small', minimisedIcon: 'own' })]);
+    const t = el(r.container, 'm');
+    expect(t.querySelector('.folder-collapsed-tile')!.classList.contains('small-round')).toBe(true);
+    expect(t.querySelector('.collapsed-name')).toBeTruthy();
+    expect(t.querySelectorAll('.preview-cell')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: /^m, folder with 4 items/ })).toBeTruthy();
+    r.unmount();
+    shapeH = 52; // two lines of name: 52 - 6 padding - 2 gap - 26.4
+    const own = await renderTab([folder('m', kids(4), { display: 'collapsed', size: 'small', minimisedIcon: 'own', icon: 'mdi:home' })]);
+    const box = el(own.container, 'm').querySelector('[data-own-icon]') as HTMLElement;
+    expect(box.style.maxWidth).toBe('17px');
+  });
+  it('a Rounded Small tile keeps both notes readable: shorter words, the name on one line when it must be', async () => {
+    shapeH = 48;
+    const r = await renderTab([folder('m', [], { display: 'collapsed', size: 'small' })]);
+    expect(el(r.container, 'm').querySelector('.empty-note')!.textContent).toBe('Empty');
+    r.unmount();
+    const broken = await renderTab([folder('m', [{ kind: 'mystery', id: 'x' }], { display: 'collapsed', size: 'small' })]);
+    const t = el(broken.container, 'm');
+    expect(t.querySelector('.empty-note.unreadable')!.textContent).toBe("Can't display");
+    expect(t.querySelector('.collapsed-name')!.classList.contains('one-line')).toBe(true);
+  });
+  it('a Rounded tile with room is unchanged; so is a tile below the two-line size on its name', async () => {
+    shapeH = 120;
+    const r = await renderTab([folder('m', kids(4), { display: 'collapsed' })]);
+    const t = el(r.container, 'm');
+    expect(t.querySelector('.folder-collapsed-tile')!.classList.contains('small-round')).toBe(false);
+    expect(t.querySelectorAll('.preview-cell')).toHaveLength(4);
+    r.unmount();
+    shapeH = 38;
+    const tiny = await renderTab([folder('m', kids(4), { display: 'collapsed', size: 'small' })]);
+    expect(el(tiny.container, 'm').querySelector('.collapsed-name')!.classList.contains('one-line')).toBe(true);
+  });
   it('the shapes are measured by the canvas\'s one ResizeObserver (Tenet 4)', async () => {
     let made = 0;
     class CountingRO extends FakeRO { constructor(cb: ResizeObserverCallback) { super(cb); made++; } }
     vi.stubGlobal('ResizeObserver', CountingRO);
     await renderTab([folder('m', kids(3), { shape: 'folder-flat', display: 'collapsed' }), folder('o', kids(2), { shape: 'folder-paper', placement: { x: 12, y: 0, w: 12, h: 8 } })]);
     expect(made).toBe(1);
+  });
+});
+
+describe('a nested box always shows where it ends', () => {
+  it('a themed look with no line of its own gets the edge a Rounded inset box has', () => {
+    for (const shape of ['simple-tab', 'folder-flat', 'folder-paper', 'folder-open'] as const) {
+      const { container, unmount } = render(FolderShape, { look: { shape }, variant: 'nested', dashboardId: 'd1', widthPx: 300, heightPx: 200 });
+      expect(container.querySelector('.nested-edge'), shape).toBeTruthy();
+      unmount();
+    }
+  });
+  it('not on a coloured look, a look with its own line, or outside a nested box', () => {
+    const none = [
+      { look: { shape: 'folder-paper', color: '#336699' }, variant: 'nested' },
+      { look: { shape: 'folder-outline' }, variant: 'nested' },
+      { look: { shape: 'folder-cartoon' }, variant: 'nested' },
+      { look: { shape: 'folder-paper' }, variant: 'open' }
+    ] as const;
+    for (const p of none) {
+      const { container, unmount } = render(FolderShape, { ...p, dashboardId: 'd1', widthPx: 300, heightPx: 200 });
+      expect(container.querySelector('.nested-edge'), JSON.stringify(p)).toBeNull();
+      unmount();
+    }
   });
 });
 

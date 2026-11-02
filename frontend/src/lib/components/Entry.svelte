@@ -391,7 +391,7 @@
     line-height: 1.2;
     width: 100%;
     flex-shrink: 0;
-    /* The name is always shown, on one line. */
+    /* The name is always shown, on one line (two at Small). */
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -448,8 +448,17 @@
     padding: 0.75rem 1rem;
   }
 
+  /* Small has little width: the name takes up to two lines, and a word too long for one is broken
+     rather than lost. */
   .small .title {
     font-size: 0.75rem;
+    line-height: 1.1;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
   }
 
   .small .icon :global(svg) {
@@ -506,7 +515,8 @@
      Large is a scaled-up Medium with its icon about 45% of the tile. Small keeps its
      smaller shares, so it is driven by the floors. Text has readable floors: a name is
      never under 12px, a description never under 11px. A description that cannot fit at its floor is
-     hidden, not shrunk. */
+     hidden, not shrunk. A Small name takes two lines, down to a 50 px tile (SMALL_TWO_LINES_MIN_PX);
+     below that the icon needs the room, so one. */
   .entry-container.sized {
     container: tile / size;
   }
@@ -540,6 +550,17 @@
   .entry.fill.large .subtitle {
     font-size: clamp(11px, var(--desc-r), 1.25rem);
   }
+  /* A note has no icon, so its title has the whole Small tile: three lines at the name's size. */
+  .entry.fill.small .note-title {
+    font-size: max(12px, var(--name-r));
+    line-height: 1.1;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
   .entry.fill .icon :global(svg),
   .entry.fill .icon img {
     width: max(12px, var(--icon-r));
@@ -551,18 +572,26 @@
   /* Hide, don't shrink: the description shows only when the tile is tall enough for it at its floor.
      The height the content needs, with s = 1cqmin in px and the text at its floors (line-height 1.2):
        padding 2 x 5s + gaps 2 x 4s + icon (Medium 34s; Small 28s; Large 45s) + name 12 x 1.2
-       + description 2 x 11 x 1.2 = 52s + 40.8 px (Small 46s + 40.8; Large 63s + 40.8).
+       + description 2 x 11 x 1.2 = 52s + 40.8 px (Small, its name two lines of 13.2: 46s + 52.8;
+     Large 63s + 40.8).
      The worst case is a tile no taller than it is wide (s = height / 100), where that needs
-     height >= 85px (Small >= 75.6px, Large >= 110.3px); a taller-than-wide tile needs less. Above the
+     height >= 85px (Small >= 97.8px, Large >= 110.3px); a taller-than-wide tile needs less. Above the
      floors the shares add up to 86.2s (Large 97.2s), so these never clip. */
   @container tile (max-height: 84.99px) {
     .entry.fill:not(.small) .subtitle {
       display: none;
     }
   }
-  @container tile (max-height: 75.99px) {
+  @container tile (max-height: 97.79px) {
     .entry.fill.small .subtitle {
       display: none;
+    }
+  }
+  @container tile (max-height: 49.99px) {
+    .entry.fill.small .title {
+      display: block;
+      line-height: 1.2;
+      white-space: nowrap;
     }
   }
   @container tile (max-height: 110.29px) {

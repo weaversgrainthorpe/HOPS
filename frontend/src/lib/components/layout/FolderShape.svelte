@@ -51,6 +51,10 @@
     });
     return { destroy: stop };
   }
+  /** Rounded draws no path, so only its minimised tile (which lays out by its size) is measured. */
+  function measuredTile(el: HTMLElement) {
+    return variant === 'minimised' ? measured(el) : undefined;
+  }
   // A given size wins; until a measurement arrives (jsdom, the first frame) a nominal size is drawn.
   const box = $derived({
     widthPx: widthPx ?? (w > 0 ? w : 160),
@@ -66,12 +70,14 @@
   const ownBackground = $derived(!!(look.background && !look.background.inherit && look.background.type));
   const pos = $derived(look.tabPosition === 'centre' || look.tabPosition === 'right' ? look.tabPosition : 'left');
   const strokeColour = $derived(parts.stroke === 'dark' ? '#0b1020' : parts.stroke === 'colour' ? (colours.themed ? 'var(--text-secondary)' : colours.base) : 'none');
+  /** A themed look with no line of its own can match the box around it: an inset box always shows its edge. */
+  const nestedEdge = $derived(variant === 'nested' && colours.themed && parts.stroke === 'none');
   const frontFill = $derived(parts.gradient ? `url(#${uid}-g)` : parts.shape === 'simple-tab' ? colours.base : colours.front);
 </script>
 
 {#if parts.shape === 'rounded'}
   <!-- Rounded: the plain surface, its colour at the folder's opacity. -->
-  <div class="folder-shape rounded" aria-hidden="true" data-folder-shape="rounded" data-shape-state={variant}>
+  <div class="folder-shape rounded" aria-hidden="true" data-folder-shape="rounded" data-shape-state={variant} use:measuredTile>
     <FolderSurface background={look.background} color={look.color || 'var(--bg-secondary)'} colorOpacity={opacity} {mode} {dashboardId} />
   </div>
 {:else}
@@ -125,6 +131,9 @@
           stroke-linejoin="round"
         />
       {/if}
+      {#if nestedEdge}
+        <path class="nested-edge" d={parts.silhouette} />
+      {/if}
     </svg>
     {#if ownBackground}
       <!-- The picture fills the front panel, clipped to it. -->
@@ -173,6 +182,13 @@
     inset: 0;
     display: block;
     overflow: visible;
+  }
+  /* The same line as a Rounded inset box's border (Folder.svelte's .nested-box). */
+  .nested-edge {
+    fill: none;
+    stroke: color-mix(in srgb, currentColor 45%, transparent);
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
   }
   .shape-front {
     position: absolute;

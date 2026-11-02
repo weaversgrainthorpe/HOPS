@@ -28,7 +28,7 @@
     folderMinCells, openFolderContentBox, phoneFlowMetrics, phonePaging, previewChildren, shapeOf, sizeSpan
   } from '$lib/layout/geometry';
   import { deriveFolderColours } from '$lib/layout/folderColours';
-  import { MINI_NAME_MIN_TILE_PX, shapeParts, tabWantPx } from '$lib/layout/folderShapePaths';
+  import { MINI_NAME_MIN_TILE_PX, SMALL_TWO_LINES_MIN_PX, shapeParts, smallIconPx, tabWantPx } from '$lib/layout/folderShapePaths';
   import FolderShape from './FolderShape.svelte';
   import { minimisedShowsOwnIcon, NO_OWN_ICON_NOTE } from '$lib/layout/folderIcon';
   import { getTextColorValue } from '$lib/utils/colorContrast';
@@ -244,27 +244,40 @@
   let tileH = $state(0);
   /** The Small silhouette: too small for a 12 px name, so only the shape and its icons. */
   const silhouette = $derived(tabbed && tileH > 0 && tileH < MINI_NAME_MIN_TILE_PX);
+  /**
+   * A Rounded tile too small for its name and the 2 x 2 icons: like a Small tile, the name on up to two
+   * lines above one row of icons (or its own icon). Tab shapes have the silhouette instead.
+   */
+  const smallRound = $derived(!tabbed && tileH > 0 && tileH < MINI_NAME_MIN_TILE_PX);
   /** A tab shape's tile lays its name and icons out on the front panel, below the tab. */
   const miniFrontPx = $derived(
     tabbed ? shapeParts(folder.shape, folder.tabPosition, 'minimised', { widthPx: tileW || 120, heightPx: tileH || 120 }).frontRect.topPx : 0
   );
+  const previews = $derived(previewChildren(folder));
+  const itemCount = $derived(Array.isArray(folder.content?.children) ? folder.content.children.length : 0);
+  // Children exist but none can be drawn: say so, never "Empty folder" (no silent failures).
+  const unreadable = $derived(previews.length === 0 && itemCount > 0);
+  /** Below two lines' room (the measured box is inside the 1 px border), or sharing the tile with the two-line note. */
+  const oneLineName = $derived(smallRound && (tileH + 2 < SMALL_TWO_LINES_MIN_PX || unreadable));
   /**
    * A tab shape's icons fit the front panel under its name: the grid (square) is no taller than the
    * room left below the tab, the name (~18 px + gap) and the bottom padding.
    */
   const miniGridPx = $derived(
-    tabbed && tileH > 0 ? Math.max(12, Math.min(64, tileH - miniFrontPx - 2 - 8 - (silhouette ? 0 : 22))) : undefined
+    tabbed && tileH > 0
+      ? Math.max(12, Math.min(64, tileH - miniFrontPx - 2 - 8 - (silhouette ? 0 : 22)))
+      : smallRound
+        ? smallIconPx({ widthPx: tileW, heightPx: tileH }, oneLineName ? 1 : 2)
+        : undefined
   );
-  const previews = $derived(previewChildren(folder));
+  /** The icons drawn on the tile: a Small Rounded tile has room for one row of two. */
+  const shownPreviews = $derived(smallRound ? previews.slice(0, 2) : previews);
   /** A minimised folder set to "Its own icon" (and with one) shows it large instead of its items' icons. */
   const ownIcon = $derived(minimisedShowsOwnIcon(folder));
   /** The own icon's uploaded image that failed to load: a folder glyph stands in (never an empty face). */
   let ownIconFailed = $state<string | null>(null);
   /** Edit mode: "Its own icon" chosen but none set — the icons inside show instead, and it says so. */
   const noOwnIcon = $derived(folder.minimisedIcon === 'own' && !ownIcon);
-  const itemCount = $derived(Array.isArray(folder.content?.children) ? folder.content.children.length : 0);
-  // Children exist but none can be drawn: say so, never "Empty folder" (no silent failures).
-  const unreadable = $derived(previews.length === 0 && itemCount > 0);
   const collapsedLabel = $derived(
     `${folder.name}, folder with ${itemCount} ${itemCount === 1 ? 'item' : 'items'}` +
       (unreadable ? " (can't display its contents)" : '')
@@ -699,6 +712,7 @@
       class="folder tile-face folder-collapsed-tile"
       class:tabbed
       class:silhouette
+      class:small-round={smallRound}
       style:padding-top={tabbed ? `${miniFrontPx + 2}px` : undefined}
       role="button"
       tabindex="0"
@@ -728,16 +742,20 @@
           tileH = mh;
         }}
       />
-      {#if !silhouette}<span class="collapsed-name">{folder.name}</span>{/if}
+      {#if !silhouette}<span class="collapsed-name" class:one-line={oneLineName}>{folder.name}</span>{/if}
       {#if unreadable}
-        <span class="empty-note unreadable">Can't display this folder's contents</span>
+        <span class="empty-note unreadable">{smallRound ? "Can't display" : "Can't display this folder's contents"}</span>
       {:else if ownIcon}
         {@render iconBacking(folder, { width: '100%', own: true })}
       {:else if previews.length === 0}
-        <span class="empty-note">Empty folder</span>
+        <span class="empty-note">{smallRound ? 'Empty' : 'Empty folder'}</span>
       {:else}
-        <div class="preview-grid" style:max-width={miniGridPx !== undefined ? `${miniGridPx}px` : undefined}>
-          {#each previews as p (p.id)}
+        <div
+          class="preview-grid"
+          style:max-width={miniGridPx !== undefined && !smallRound ? `${miniGridPx}px` : undefined}
+          style:--small-icon={smallRound ? `${miniGridPx}px` : undefined}
+        >
+          {#each shownPreviews as p (p.id)}
             <span class="preview-cell">
               {#if p.iconUrl}
                 <img src={p.iconUrl} alt="" />
@@ -1360,5 +1378,53 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     flex-shrink: 0;
+  }
+  /* A Rounded tile too small for the full layout reads as a Small tile (Entry.svelte): compact padding,
+     a 12 px name on up to two lines, then one row of icons at the size left (--small-icon). */
+  .folder.tile-face.small-round {
+    padding: 3px;
+    gap: 2px;
+    overflow: hidden;
+  }
+  .small-round .collapsed-name {
+    width: 100%;
+    font-size: 12px;
+    line-height: 1.1;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+  .small-round .collapsed-name.one-line {
+    display: block;
+    white-space: nowrap;
+  }
+  .small-round .preview-grid {
+    display: flex;
+    justify-content: center;
+    gap: 2px;
+    width: auto;
+    max-width: 100%;
+    flex: none;
+  }
+  .small-round .preview-cell {
+    flex: none;
+    width: var(--small-icon);
+    height: var(--small-icon);
+  }
+  .small-round .own-icon {
+    width: 100%;
+    flex: none;
+  }
+  .small-round .folder-icon-backing.has-bg {
+    padding: 2px;
+    border-radius: 0.2rem;
+  }
+  .small-round .empty-note {
+    font-size: 11px;
+    line-height: 1.1;
+    text-align: center;
   }
 </style>

@@ -2,7 +2,7 @@
 // FolderShape.svelte draws exactly these parts; the content inset (shapeInset) must sit on the body.
 import { describe, it, expect } from 'vitest';
 import { FOLDER_CHROME, FOLDER_SHAPES, TAB_POSITIONS, folderTabRect, shapeInset } from './geometry';
-import { shapeParts, miniTabPx, tabWantPx, MINI_NAME_FLOOR_PX, type ShapeState } from './folderShapePaths';
+import { shapeParts, miniTabPx, smallIconPx, tabWantPx, MINI_NAME_FLOOR_PX, type ShapeState } from './folderShapePaths';
 import type { FolderShape } from '$lib/types/layout';
 
 const TAB_SHAPES = FOLDER_SHAPES.filter((s) => s !== 'rounded') as FolderShape[];
@@ -104,5 +104,18 @@ describe('tab label width', () => {
   });
   it('the minimised name floor is 12 px', () => {
     expect(MINI_NAME_FLOOR_PX).toBe(12);
+  });
+});
+
+describe('smallIconPx', () => {
+  it('is what the name leaves of the tile, on one line or two', () => {
+    expect(smallIconPx({ widthPx: 100, heightPx: 60 }, 2)).toBe(25); // 60 - 6 - 2 - 26.4 = 25.6
+    expect(smallIconPx({ widthPx: 100, heightPx: 60 }, 1)).toBe(38); // 60 - 6 - 2 - 13.2 = 38.8
+  });
+  it('two side by side never pass the width', () => {
+    expect(smallIconPx({ widthPx: 48, heightPx: 80 }, 1)).toBe(20);
+  });
+  it('never below 8 px, whatever the tile', () => {
+    expect(smallIconPx({ widthPx: 0, heightPx: 0 }, 2)).toBe(8);
   });
 });
