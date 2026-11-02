@@ -299,3 +299,24 @@ describe('isAdminOnlyPath', () => {
 	});
 });
 
+
+describe('pageHasOutageNotice', () => {
+	it('Settings says it itself when the backend is down or the session is unsettled', async () => {
+		const { pageHasOutageNotice } = await import('./auth');
+		expect(pageHasOutageNotice('/settings/global', true, false)).toBe(true);
+		expect(pageHasOutageNotice('/settings', false, true)).toBe(true);
+		expect(pageHasOutageNotice('/settings', false, false)).toBe(false);
+	});
+
+	it('/add has a notice only when the session is unsettled: a form on an offline page keeps the banner', async () => {
+		const { pageHasOutageNotice } = await import('./auth');
+		expect(pageHasOutageNotice('/add', false, true)).toBe(true);
+		expect(pageHasOutageNotice('/add', true, false)).toBe(false);
+	});
+
+	it('no other page has one', async () => {
+		const { pageHasOutageNotice } = await import('./auth');
+		expect(pageHasOutageNotice('/home', true, true)).toBe(false);
+		expect(pageHasOutageNotice('/address', true, true)).toBe(false);
+	});
+});

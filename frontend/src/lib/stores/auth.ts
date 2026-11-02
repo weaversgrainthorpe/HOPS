@@ -61,6 +61,16 @@ export function isSettingsPath(path: string): boolean {
   return path === '/settings' || path.startsWith('/settings/');
 }
 
+/**
+ * The page says for itself that the server can't be reached, so the general banner stays away: one
+ * notice, not two. Settings when the backend is down or the session unsettled; Add to HOPS only when
+ * the session is unsettled (SessionCheckNotice): its form has no notice of its own.
+ */
+export function pageHasOutageNotice(path: string, backendDown: boolean, unsettled: boolean): boolean {
+  if (isSettingsPath(path)) return backendDown || unsettled;
+  return path === '/add' && unsettled;
+}
+
 // Paths that require an authenticated admin: Settings (the admin home) and the
 // tools under /admin.
 export function isAdminOnlyPath(path: string): boolean {

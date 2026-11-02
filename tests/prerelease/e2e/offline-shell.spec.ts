@@ -189,6 +189,25 @@ test("the sign-in check fails with the server reached: its words, and a way to s
   }
 });
 
+test("Add to HOPS opened with the server down shows one notice, not the general banner as well", async ({ browser }) => {
+  const ctx = await newContext(browser);
+  try {
+    const page = await ctx.newPage();
+    await underWorker(page, '/add?url=https%3A%2F%2Fexample.lan%2F&title=Example');
+    await expect(page.getByRole('heading', { name: 'Add to HOPS' })).toBeVisible();
+
+    stopServer();
+
+    await page.goto('/add?url=https%3A%2F%2Fexample.lan%2F&title=Example&first-offline-page');
+    await expect(page.getByRole('alert').filter({ hasText: "Can't reach the server" })).toBeVisible();
+    // Long enough for the app to notice it is offline: the banner would be up by then.
+    await expect(page.getByRole('button', { name: 'Backend offline' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('status').filter({ hasText: "You're offline" })).toHaveCount(0);
+  } finally {
+    await ctx.close();
+  }
+});
+
 test("Add to HOPS with the server out of reach says so, and Retry carries on", async ({ browser }) => {
   const ctx = await newContext(browser, 'block');
   try {
