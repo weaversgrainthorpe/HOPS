@@ -2154,20 +2154,20 @@ test.describe('tile size sets the space it takes', () => {
       if (fit === 'compact') await expect(b).toHaveClass(/\bcompact\b/);
       else await expect(b).not.toHaveClass(/\bcompact\b/);
       await info.attach(`tiles-${width}`, { body: await page.screenshot(), contentType: 'image/png' });
-      // Medium's icon scales with its tile (about a third of its shorter side) at either
-      // fit; Small is clearly smaller beside it.
+      // Medium's icon scales with its tile (two-thirds of its inner height: about 55-60% of its
+      // shorter side, TileContent) at either fit; Small is clearly smaller beside it.
       const med = await looks(page, g.id('b'));
       const tb = (await b.boundingBox())!;
       const side = Math.min(tb.width, tb.height);
-      expect(med.icon, `${width}px Medium icon ${med.icon}px on a ${side}px tile`).toBeGreaterThanOrEqual(0.28 * side);
-      expect(med.icon, `${width}px Medium icon ${med.icon}px on a ${side}px tile`).toBeLessThanOrEqual(0.4 * side);
+      expect(med.icon, `${width}px Medium icon ${med.icon}px on a ${side}px tile`).toBeGreaterThanOrEqual(0.5 * side);
+      expect(med.icon, `${width}px Medium icon ${med.icon}px on a ${side}px tile`).toBeLessThanOrEqual(0.7 * side);
       clearlySmaller(await looks(page, g.id('a')), med, `${fit} (${width}px)`);
     }
   });
 });
 
-// One arrangement at every size and fit (name, icon, description, kept together and centred,
-// never space-between), and the content scales with the tile (container query units).
+// One arrangement at every size and fit (TileContent): the name at the top, the icon a fixed share
+// under it, the description in the room left below; the content scales with the tile (container units).
 test.describe('tile content layout', () => {
   type R = { top: number; bottom: number; left: number; right: number; width: number; height: number };
   type Look = { tile: R; title: R; icon: R; sub: R | null; font: number; subFont: number | null; subLines: number | null; fit: string };
@@ -2210,7 +2210,7 @@ test.describe('tile content layout', () => {
     `icon y ${f1(l.icon.top - l.tile.top)} size ${f1(l.icon.width)}; ` +
     `description ${l.sub ? 'y ' + f1(l.sub.top - l.tile.top) + ' font ' + l.subFont + 'px' : 'hidden'}; name font ${l.font}px`;
 
-  /** Name above icon above description; small gaps; centred together; nothing spills out of the tile. */
+  /** Name at the top, above the icon, above the description; small gaps; nothing spills out of the tile. */
   function arranged(l: Look, what: string) {
     const h = l.tile.height;
     expect(l.title.bottom, `${what}: the name is above the icon`).toBeLessThanOrEqual(l.icon.top + 0.5);
@@ -2223,10 +2223,10 @@ test.describe('tile content layout', () => {
       expect(gapBot, `${what}: icon-description gap ${f1(gapBot)}px <= 12% of ${f1(h)}px`).toBeLessThanOrEqual(0.12 * h);
       last = l.sub.bottom;
     }
-    // Kept together and centred: the space above the name and below the last line match (within 6%).
+    // The name keeps its place at the top: only the padding (at most ~7.5% of the tile) above it.
     const above = l.title.top - l.tile.top;
     const below = l.tile.bottom - last;
-    expect(Math.abs(above - below), `${what}: centred (above ${f1(above)}, below ${f1(below)})`).toBeLessThanOrEqual(0.06 * h + 2);
+    expect(above, `${what}: the name is at the top (${f1(above)}px down)`).toBeLessThanOrEqual(0.08 * Math.min(h, l.tile.width) + 4);
     expect(above, `${what}: the name is inside the tile`).toBeGreaterThanOrEqual(0);
     expect(below, `${what}: the content is inside the tile`).toBeGreaterThanOrEqual(0);
     for (const [k, b] of [['name', l.title], ['icon', l.icon]] as const) {
@@ -2280,15 +2280,15 @@ test.describe('tile content layout', () => {
     expect((await look(page, f.id('md'))).sub, `${width}px: Medium shows its description`).not.toBeNull();
   });
 
-  test('a Medium at a typical width (1600px) looks like the old Medium: a ~48px icon and a ~14px name', async ({ page, context }) => {
+  test('a Medium at a typical width (1600px) uses its tile: the icon over half its height, a 12-14px name', async ({ page, context }) => {
     await page.setViewportSize({ width: 1600, height: 900 });
     const f = await layoutDash(page, context);
     await page.goto(f.path);
     const md = await look(page, f.id('md'));
-    expect(md.icon.width, describeLook(md)).toBeGreaterThanOrEqual(40);
-    expect(md.icon.width, describeLook(md)).toBeLessThanOrEqual(56);
-    expect(md.font, describeLook(md)).toBeGreaterThanOrEqual(12.5);
-    expect(md.font, describeLook(md)).toBeLessThanOrEqual(15.5);
+    expect(md.icon.height / md.tile.height, describeLook(md)).toBeGreaterThanOrEqual(0.5);
+    expect(md.icon.height / md.tile.height, describeLook(md)).toBeLessThanOrEqual(0.7);
+    expect(md.font, describeLook(md)).toBeGreaterThanOrEqual(12);
+    expect(md.font, describeLook(md)).toBeLessThanOrEqual(14.5);
   });
 
   test('a long name stays on one line and a long description on at most two', async ({ page, context }) => {
@@ -2323,7 +2323,8 @@ test.describe('tile content layout', () => {
       const l = await look(page, f.id(k));
       expect(l.fit, `phone ${k}: stacked tiles have no fit`).toBe('none');
       arranged(l, `phone ${k}`);
-      expect(l.sub, `phone ${k}: shows its description`).not.toBeNull();
+      // A phone's Small tile (100px) has no room left under its icon; Medium and Large do.
+      if (k !== 'sm') expect(l.sub, `phone ${k}: shows its description`).not.toBeNull();
     }
   });
 });

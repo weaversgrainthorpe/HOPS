@@ -589,13 +589,13 @@ test.describe('the Showcase Shapes tab', () => {
         await checkInset(page, shape, f.id as string, tt, `Showcase ${shape} ${mode}`);
       }
       expect([...positions].sort(), `${mode}: all three tab positions`).toEqual(['centre', 'left', 'right']);
-      // The Small minimised folder: the Small silhouette (no name drawn; it stays the accessible name).
+      // The Small minimised folder: its name drawn, as on a Small tile (the old silhouette is gone).
       const mini = node(page, id('sc-sh-min-s')).locator('.folder-collapsed-tile');
       await expect(mini.locator(':scope > [data-folder-shape]')).toHaveAttribute('data-shape-state', 'minimised');
       await expect(mini.locator(':scope > [data-folder-shape]')).toHaveAttribute('data-folder-shape', 'folder-cartoon');
       const mb = await box(mini);
       expect(Math.max(mb.width, mb.height), `${mode}: Small is a small tile`).toBeLessThan(84);
-      await expect(mini.locator('.collapsed-name')).toHaveCount(0);
+      await expect(mini.locator('.collapsed-name')).toHaveCount(1);
       await expect(mini).toHaveAccessibleName(/Minimised Small cartoon/);
     }
     // Nested looks 2 deep: Flat > Paper > Open flap, each drawn in its own look with its tab.

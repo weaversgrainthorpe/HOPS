@@ -144,17 +144,25 @@ describe('Entry size class', () => {
 describe('Entry content layout', () => {
   const withDesc = { ...entry, description: 'Search Engine' } as EntryType;
   const parts = (c: HTMLElement) =>
-    [...c.querySelector('button.entry')!.children]
-      .map((el) => el.className.split(' ').find((k) => ['title', 'icon', 'subtitle'].includes(k)))
+    [...c.querySelector('button.entry .tc')!.children]
+      .map((el) => el.className.split(' ').find((k) => ['title', 'tc-icon', 'tc-desc-slot'].includes(k)))
       .filter(Boolean);
 
+  // ONE arrangement at every size and fit, on a phone too (fit none): name, icon, then the description.
   for (const fit of [undefined, 'fill', 'compact'] as const)
     for (const size of ['small', 'medium', 'large'] as const)
       it(`${size}, fit ${fit ?? 'none'}: name, then icon, then description`, async () => {
         const { container } = render(Entry, { entry: { ...withDesc, size }, fit });
         await tick();
-        expect(parts(container)).toEqual(['title', 'icon', 'subtitle']);
+        expect(parts(container)).toEqual(['title', 'tc-icon', 'tc-desc-slot']);
+        expect(container.querySelector('.tc')!.classList.contains(size)).toBe(true);
       });
+
+  it('no description: no description slot (the icon keeps its place either way)', async () => {
+    const { container } = render(Entry, { entry, fit: 'fill' });
+    await tick();
+    expect(parts(container)).toEqual(['title', 'tc-icon']);
+  });
 
   it('a fitted tile is a size container (the tile scales its content); an unfitted one is not', async () => {
     const { container, rerender } = render(Entry, { entry: withDesc, fit: 'compact' });
@@ -167,86 +175,57 @@ describe('Entry content layout', () => {
     expect(box().classList.contains('sized')).toBe(false);
   });
 
-  describe('the component styles', () => {
-    const src = readFileSync(resolve(process.cwd(), 'src/lib/components/Entry.svelte'), 'utf8');
+  it('a long single word gets its width in em, so its font can shrink to fit before it breaks', async () => {
+    const { container } = render(Entry, { entry: { ...entry, name: 'HomeAssistant', size: 'small' }, fit: 'compact' });
+    await tick();
+    const em = Number((container.querySelector('.tc-box') as HTMLElement).style.getPropertyValue('--name-word-em'));
+    expect(em).toBeGreaterThan(5);
+  });
+
+  describe('the content rule (TileContent styles)', () => {
+    const src = readFileSync(resolve(process.cwd(), 'src/lib/components/layout/TileContent.svelte'), 'utf8');
     const css = src.slice(src.indexOf('<style>'));
     const rule = (sel: string) => {
       const i = css.indexOf(`\n  ${sel} {`);
-      return i < 0 ? '' : css.slice(i, css.indexOf('}', i));
+      return i < 0 ? '' : css.slice(i, css.indexOf('\n  }', i));
     };
+    const entryCss = (() => {
+      const s = readFileSync(resolve(process.cwd(), 'src/lib/components/Entry.svelte'), 'utf8');
+      return s.slice(s.indexOf('<style>'));
+    })();
 
-    it('never spreads the content apart (no space-between) and never reorders it', () => {
+    it('never spreads the content apart and never reorders it; the name stays at the top', () => {
       expect(css).not.toMatch(/space-between/);
       expect(css).not.toMatch(/\border\s*:/);
+      expect(rule('.tc')).toMatch(/justify-content:\s*flex-start/);
+      expect(entryCss).not.toMatch(/\.compact/);
     });
 
-    it('has no compact-only arrangement: compact and fill differ in nothing but the class', () => {
-      expect(css).not.toMatch(/\.compact/);
+    it('the box is a size container and the scale comes from --content-scale (1 when unset)', () => {
+      expect(rule('.tc-box')).toMatch(/container:\s*tc\s*\/\s*size/);
+      expect(rule('.tc-box')).toMatch(/--s:\s*var\(--content-scale,\s*1\)/);
     });
 
-    it('the fitted tile is a size container; icon and text use cqmin-based values with floors (max())', () => {
-      expect(rule('.entry-container.sized')).toMatch(/container:\s*tile\s*\/\s*size/);
-      // The ratios are cqmin custom properties (the size class sets them); max() adds the floors
-      // (no caps).
-      const scaled = (v: string) => new RegExp(`max\\([^;]*var\\(--${v}-r\\)`);
-      for (const v of ['icon', 'name', 'desc']) expect(rule('.entry.fill')).toMatch(new RegExp(`--${v}-r:\\s*[\\d.]+cqmin`));
-      expect(css).toMatch(/\.fill \.icon :global\(svg\)[^{]*\{[^}]*max\([^;]*var\(--icon-r\)/);
-      expect(css.slice(css.indexOf('.entry.fill .title {'))).toMatch(scaled('name'));
-      expect(css.slice(css.indexOf('.entry.fill .subtitle {'))).toMatch(scaled('desc'));
+    it('the icon is 60% of the inner height times the scale, clamped to the box', () => {
+      expect(rule('.tc')).toMatch(/--icon:\s*max\(12px,\s*min\(calc\(var\(--inner-h\)\s*\*\s*0\.6\s*\*\s*var\(--s\)\),\s*var\(--inner-w\)\)\)/);
     });
 
-    it('the description hides only when the tile is too short (a container height query)', () => {
-      expect(css).toMatch(/@container tile \(max-height:[^)]*\)\s*\{[^}]*\.subtitle[^}]*\{[^}]*display:\s*none/);
+    it('the description takes only the room left under the icon (basis 0), and hides when no line fits', () => {
+      expect(rule('.tc-desc-slot')).toMatch(/flex:\s*1 1 0/);
+      expect(rule('.tc-desc-slot')).toMatch(/container:\s*tcdesc\s*\/\s*size/);
+      expect(css).toMatch(/@container tcdesc \(max-height:\s*1\.19em\)\s*\{[^}]*\.tc-desc\s*\{[^}]*display:\s*none/);
     });
 
-    // Readable floors; hide, don't shrink. No caps —
-    // the content scales with the tile at every size (Large is a scaled-up Medium).
-    it('a fitted name is never under 12px and a description never under 11px; neither (nor the icon) has a cap', () => {
-      expect(css.slice(css.indexOf('.entry.fill .title {'))).toMatch(/^[^}]*font-size:\s*max\(12px,\s*var\(--name-r\)\)/);
-      expect(css.slice(css.indexOf('.entry.fill .subtitle {'))).toMatch(/^[^}]*font-size:\s*max\(11px,\s*var\(--desc-r\)\)/);
-      expect(css).toMatch(/\.entry\.fill \.icon img \{[^}]*width:\s*max\(12px,\s*var\(--icon-r\)\)/);
-      expect(css).not.toMatch(/var\(--(name|desc|icon)-r\),\s*[\d.]+px\)/);
-      // The unfitted (phone) sizes keep the floors too.
-      expect(rule('.small .subtitle')).toMatch(/font-size:\s*(0\.6875rem|11px)/);
-    });
-
-    // One rule (the cqmin ratios above) for every size; the size class only
-    // sets the ratios. Medium keeps its ratios (it looks as before); Large is a scaled-up Medium with
-    // its icon about 45% of the tile's shorter side; Small keeps its floors-driven ratios.
-    it('the ratios: Medium 34 / 10.5 / 9, Large the same text with a 45cqmin icon, Small 28 / 9 / 8', () => {
-      const r = (sel: string, v: string) => rule(sel).match(new RegExp(`--${v}-r:\\s*([\\d.]+)cqmin`))?.[1];
-      expect([r('.entry.fill', 'icon'), r('.entry.fill', 'name'), r('.entry.fill', 'desc')]).toEqual(['34', '10.5', '9']);
-      expect(r('.entry.fill.large', 'icon')).toBe('45');
-      expect(rule('.entry.fill.large')).not.toMatch(/--(name|desc)-r/);
-      expect([r('.entry.fill.small', 'icon'), r('.entry.fill.small', 'name'), r('.entry.fill.small', 'desc')]).toEqual(['28', '9', '8']);
-    });
-
-    // Large's description scales with the tile like the rest, but has
-    // an upper bound (at 1920 it reached about 28px, larger than the navbar title): 1.25rem at most.
-    it('Large\'s description has an upper bound (1.25rem), its floor still 11px; the name and icon stay uncapped', () => {
-      expect(rule('.entry.fill.large .subtitle')).toMatch(/font-size:\s*clamp\(11px,\s*var\(--desc-r\),\s*1\.25rem\)/);
-      expect(css).not.toMatch(/\.large \.title \{[^}]*(min|clamp)\(/);
-    });
-
-    it('Large hides its description below the height its floors need (110.3px)', () => {
-      expect(css).toMatch(/@container tile \(max-height:\s*110\.29px\)\s*\{[^}]*\.entry\.fill\.large \.subtitle[^}]*\{[^}]*display:\s*none/);
-    });
-
-    it('the description hide thresholds are the heights its floors need (85px, Small 98px with its two-line name), not a fixed 72px', () => {
-      expect(css).not.toMatch(/71\.99px/);
-      expect(css).toMatch(/@container tile \(max-height:\s*84\.99px\)\s*\{[^}]*\.entry\.fill:not\(\.small\) \.subtitle[^}]*\{[^}]*display:\s*none/);
-      expect(css).toMatch(/@container tile \(max-height:\s*97\.79px\)\s*\{[^}]*\.entry\.fill\.small \.subtitle[^}]*\{[^}]*display:\s*none/);
+    it('readable floors (times a phone text size): a name 12px (10px for a long word fitted to the width), a description 11px', () => {
+      expect(rule('.tc')).toMatch(/--name-nominal:\s*calc\(max\(12px,\s*calc\(10cqmin \* var\(--s\)\)\)\s*\*\s*var\(--tk\)\)/);
+      expect(rule('.tc-name')).toMatch(/font-size:\s*max\(calc\(10px \* var\(--tk\)\),\s*min\(var\(--name-nominal\),\s*var\(--name-fit\)\)\)/);
+      expect(rule('.tc-desc-slot')).toMatch(/font-size:\s*calc\(max\(11px,/);
     });
 
     it('a Small name takes two lines, and one below the two-line size', () => {
-      expect(css).toMatch(/\.small \.title\s*\{[^}]*-webkit-line-clamp:\s*2/);
-      expect(css).toMatch(/@container tile \(max-height:\s*49\.99px\)\s*\{[^}]*\.entry\.fill\.small \.title[^}]*\{[^}]*white-space:\s*nowrap/);
+      expect(css).toMatch(/\.small \.tc-name\s*\{[^}]*-webkit-line-clamp:\s*2/);
+      expect(css).toMatch(/@container tc \(max-height:\s*47\.99px\)\s*\{[^}]*\.small \.tc-name[^}]*\{[^}]*white-space:\s*nowrap/);
       expect(SMALL_TWO_LINES_MIN_PX).toBe(50);
-    });
-
-    it('the size class no longer sets a fixed icon px on a fitted tile', () => {
-      expect(css).not.toMatch(/\.fill\.small \.icon/);
-      expect(css).not.toMatch(/\.fill\.large \.icon/);
     });
   });
 });

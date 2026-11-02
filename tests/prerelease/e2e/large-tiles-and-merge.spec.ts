@@ -118,14 +118,6 @@ async function look(page: Page, id: string): Promise<Look> {
   });
 }
 const show = (l: Look) => `side ${l.side.toFixed(1)}: icon ${l.icon.toFixed(1)}, name ${l.name}px, desc ${l.desc ?? 'hidden'}px`;
-/** The share of the tile's height its content (name top to last line) fills. */
-const filled = (l: Look) => (l.h - l.top - l.bottom) / l.h;
-
-/** Medium as it was drawn before Large was scaled up: it must not change. */
-const MEDIUM_BEFORE: Record<number, { icon: number; name: number; desc: number; fill: number }> = {
-  1280: { icon: 34.44, name: 12, desc: 11, fill: (101.31 - 15.59 - 15.61) / 101.31 },
-  1920: { icon: 52.58, name: 16.24, desc: 13.92, fill: (154.66 - 26.78 - 26.78) / 154.66 }
-};
 
 async function sizesDash(page: Page, context: BrowserContext) {
   return importDash(page, context, (id) => [
@@ -135,59 +127,48 @@ async function sizesDash(page: Page, context: BrowserContext) {
   ]);
 }
 
-for (const width of [1280, 1920]) test.describe(`Large is a scaled-up Medium (${width}px)`, () => {
+// ONE rule at every size (TileContent): the name at the top, the icon 60% of the inner height (about
+// half the tile), the description in the room left under it.
+for (const width of [1280, 1920]) test.describe(`one content rule at every size (${width}px)`, () => {
   test.use({ viewport: { width, height: 1000 } });
 
-  test('the Large icon is 40-50% of the tile\'s shorter side', async ({ page, context }) => {
+  test('the icon is about half the tile at Small, Medium and Large alike (it was 45% / 34% / 28%)', async ({ page, context }) => {
     const f = await sizesDash(page, context);
     await page.goto(f.path);
     await expect(node(page, f.id('lg')).locator('.icon svg')).toBeVisible();
-    const lg = await look(page, f.id('lg'));
-    expect(lg.icon / lg.side, `Large: ${show(lg)}`).toBeGreaterThanOrEqual(0.4);
-    expect(lg.icon / lg.side, `Large: ${show(lg)}`).toBeLessThanOrEqual(0.5);
+    for (const k of ['lg', 'md', 'sm']) {
+      const l = await look(page, f.id(k));
+      expect(l.icon / l.side, `${k}: ${show(l)}`).toBeGreaterThanOrEqual(0.45);
+      expect(l.icon / l.side, `${k}: ${show(l)}`).toBeLessThanOrEqual(0.6);
+    }
   });
 
-  test('a Large tile is a scaled-up Medium: the text in Medium\'s proportions, filled like Medium, centred', async ({ page, context }, info) => {
+  test('Large and Medium: the name at the top in the same share, the description shown under the icon', async ({ page, context }, info) => {
     const f = await sizesDash(page, context);
     await page.goto(f.path);
     await expect(node(page, f.id('lg')).locator('.icon svg')).toBeVisible();
     const [md, lg] = [await look(page, f.id('md')), await look(page, f.id('lg'))];
     await info.attach(`sizes-${width}.png`, { body: await page.screenshot(), contentType: 'image/png' });
     const what = `Medium ${show(md)}; Large ${show(lg)}`;
-    // The name and description are the same share of the tile as Medium's (within 20%: Medium at 1280
-    // sits at its 12 / 11 px floors, a little above its ratios).
+    // The same share of the tile (within 25%: Medium at 1280 sits at its 12 px floor, a little above it).
     const near = (a: number, b: number) => Math.abs(a - b) / b;
-    expect(near(lg.name / lg.side, md.name / md.side), `name share: ${what}`).toBeLessThanOrEqual(0.2);
+    expect(near(lg.name / lg.side, md.name / md.side), `name share: ${what}`).toBeLessThanOrEqual(0.25);
     expect(lg.desc, `Large shows its description: ${what}`).not.toBeNull();
     expect(md.desc, `Medium shows its description: ${what}`).not.toBeNull();
-    // Its description is Medium's share too, up to its upper bound (1.25rem, 20 px at
-    // the default text size) — at 1920 the bound applies.
-    const descWant = Math.min((md.desc! / md.side) * lg.side, 20);
-    expect(lg.desc!, `description: ${what}`).toBeLessThanOrEqual(20.01);
-    expect(near(lg.desc!, descWant), `description share (or its bound): ${what}`).toBeLessThanOrEqual(0.2);
-    // The icon is at least Medium's share (about 45%, Medium about a third).
-    expect(lg.icon / lg.side, `icon share: ${what}`).toBeGreaterThanOrEqual(md.icon / md.side);
-    // No more empty space than Medium: the content fills at least Medium's share of the height (-5%).
-    expect(filled(lg), `filled: Large ${filled(lg).toFixed(2)} vs Medium ${filled(md).toFixed(2)}`).toBeGreaterThanOrEqual(filled(md) - 0.05);
-    // Centred, and inside the tile.
-    expect(lg.top).toBeGreaterThanOrEqual(0);
-    expect(lg.bottom).toBeGreaterThanOrEqual(0);
-    expect(Math.abs(lg.top - lg.bottom), `centred: ${what}`).toBeLessThanOrEqual(0.06 * lg.h + 2);
+    expect(lg.desc!, `Large's description has its bound (20px): ${what}`).toBeLessThanOrEqual(20.01);
+    for (const l of [md, lg]) {
+      expect(l.top, `the name at the top: ${what}`).toBeLessThanOrEqual(0.08 * l.side + 4);
+      expect(l.bottom, `inside: ${what}`).toBeGreaterThanOrEqual(0);
+    }
   });
 
-  test('Medium is unchanged (icon, name, description, fill) and Small keeps its floors-driven look', async ({ page, context }) => {
+  test('Small: a 12px name and a smaller icon than Medium beside it', async ({ page, context }) => {
     const f = await sizesDash(page, context);
     await page.goto(f.path);
     await expect(node(page, f.id('md')).locator('.icon svg')).toBeVisible();
-    const md = await look(page, f.id('md'));
-    const was = MEDIUM_BEFORE[width];
-    expect(Math.abs(md.icon - was.icon), `Medium icon: ${show(md)} vs ${was.icon}`).toBeLessThanOrEqual(1);
-    expect(Math.abs(md.name - was.name), `Medium name: ${show(md)} vs ${was.name}`).toBeLessThanOrEqual(0.5);
-    expect(Math.abs(md.desc! - was.desc), `Medium description: ${show(md)} vs ${was.desc}`).toBeLessThanOrEqual(0.5);
-    expect(Math.abs(filled(md) - was.fill), `Medium fill ${filled(md).toFixed(3)} vs ${was.fill.toFixed(3)}`).toBeLessThanOrEqual(0.02);
-    const sm = await look(page, f.id('sm'));
+    const [sm, md] = [await look(page, f.id('sm')), await look(page, f.id('md'))];
     expect(sm.name, `Small: ${show(sm)}`).toBe(12);
-    expect(sm.icon / sm.side, `Small: ${show(sm)}`).toBeLessThanOrEqual(0.3);
+    expect(sm.icon, `Small ${show(sm)} vs Medium ${show(md)}`).toBeLessThanOrEqual(0.6 * md.icon);
   });
 
   test('the floors hold: a name is never under 12px, a description never under 11px, nothing spills out', async ({ page, context }) => {
@@ -198,7 +179,8 @@ for (const width of [1280, 1920]) test.describe(`Large is a scaled-up Medium (${
       await expect(node(page, f.id('sm')).locator('.icon svg')).toBeVisible();
       for (const k of ['sm', 'md', 'lg']) {
         const l = await look(page, f.id(k));
-        expect(l.name, `${k} at ${vw}px: ${show(l)}`).toBeGreaterThanOrEqual(12);
+        // 12px, or down to 10px only for a word too wide for the tile at 12px (it shrinks before it breaks).
+        expect(l.name, `${k} at ${vw}px: ${show(l)}`).toBeGreaterThanOrEqual(l.side < 60 ? 10 : 12);
         if (l.desc !== null) expect(l.desc, `${k} at ${vw}px: ${show(l)}`).toBeGreaterThanOrEqual(11);
         expect(l.top, `${k} at ${vw}px: inside`).toBeGreaterThanOrEqual(0);
         expect(l.bottom, `${k} at ${vw}px: inside`).toBeGreaterThanOrEqual(0);

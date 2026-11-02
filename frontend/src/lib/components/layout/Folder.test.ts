@@ -513,10 +513,11 @@ describe('a minimised folder can show its own icon', () => {
       unmount();
     }
   });
-  it('the Small silhouette shows the own icon (and still no visible name)', async () => {
+  it('a Small tile shows the own icon, under its name (as a Small tile shows its icon)', async () => {
     const { container } = await renderTab([min({ minimisedIcon: 'own', iconUrl: '/icons/f.png', size: 'small' })]);
     expect(tileOf(container).querySelector('[data-own-icon]')).not.toBeNull();
     expect(tileOf(container).querySelector('.preview-grid')).toBeNull();
+    expect(tileOf(container).querySelector('.collapsed-name')).not.toBeNull();
   });
   it('a tab look shows it on the front panel, under the name', async () => {
     const { container } = await renderTab([min({ minimisedIcon: 'own', iconUrl: '/icons/f.png', shape: 'folder-paper' })]);

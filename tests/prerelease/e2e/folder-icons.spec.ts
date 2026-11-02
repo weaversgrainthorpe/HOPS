@@ -161,7 +161,9 @@ test.describe('at the Small size', () => {
     const cell = (s: string) => page.locator(`.tab-canvas [data-node-id="${d.id(s)}"]`);
     const title = await cell('t').locator('.title').evaluate((t) => t.getBoundingClientRect().height / parseFloat(getComputedStyle(t).lineHeight));
     expect(Math.round(title), 'the name wraps to two lines').toBe(2);
-    await expect(cell('none').locator('.preview-cell')).toHaveCount(2);
+    // One rule with the tiles: its name (on two lines too) above the preview of all its icons (up to 4).
+    await expect(cell('none').locator('.preview-cell')).toHaveCount(3);
+    await expect(cell('none').locator('.collapsed-name')).toBeVisible();
     for (const s of ['t', 'none', 'has', 'empty']) {
       const inside = await cell(s).evaluate((c) => {
         const box = c.getBoundingClientRect();

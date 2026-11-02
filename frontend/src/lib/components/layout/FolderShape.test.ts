@@ -175,33 +175,33 @@ describe('tab shapes: the name on the tab, the controls at the top-right of the 
 });
 
 describe('minimised', () => {
-  it('a tab shape shows the name on the front; the Small silhouette hides it (accessible name stays)', async () => {
-    shapeH = 120;
-    const r = await renderTab([folder('m', kids(3), { shape: 'folder-flat', display: 'collapsed' })]);
-    expect(el(r.container, 'm').querySelector('.collapsed-name')).toBeTruthy();
-    r.unmount();
-    shapeH = 50;
-    const r2 = await renderTab([folder('m', kids(3), { shape: 'folder-flat', display: 'collapsed', size: 'small' })]);
-    const t = el(r2.container, 'm');
-    expect(t.querySelector('.collapsed-name')).toBeNull();
-    expect(t.querySelectorAll('.preview-cell').length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: /^m, folder with 3 items/ })).toBeTruthy();
+  it('a tab shape shows its name at every size, Small too, inside the body below the tab', async () => {
+    for (const [h, size] of [[120, 'medium'], [50, 'small']] as const) {
+      shapeH = h;
+      const r = await renderTab([folder('m', kids(3), { shape: 'folder-flat', display: 'collapsed', size })]);
+      const t = el(r.container, 'm');
+      expect(t.querySelector('.collapsed-name')!.textContent).toBe('m');
+      expect(t.querySelectorAll('.preview-cell')).toHaveLength(3);
+      // The content starts below the tab: the front panel's top (shapeParts), never over the tab.
+      const top = parseFloat((t.querySelector('.tc-box') as HTMLElement).style.getPropertyValue('--tc-top'));
+      expect(top).toBeGreaterThan(0);
+      expect(screen.getByRole('button', { name: /^m, folder with 3 items/ })).toBeTruthy();
+      r.unmount();
+    }
   });
-  it('a Rounded tile too small for name and 2 x 2 icons: a row of two icons, its icon sized to fit', async () => {
-    shapeH = 48;
-    const r = await renderTab([folder('m', kids(4), { display: 'collapsed', size: 'small', minimisedIcon: 'own' })]);
-    const t = el(r.container, 'm');
-    expect(t.querySelector('.folder-collapsed-tile')!.classList.contains('small-round')).toBe(true);
-    expect(t.querySelector('.collapsed-name')).toBeTruthy();
-    expect(t.querySelectorAll('.preview-cell')).toHaveLength(2);
-    expect(screen.getByRole('button', { name: /^m, folder with 4 items/ })).toBeTruthy();
-    r.unmount();
-    shapeH = 52; // two lines of name: 52 - 6 padding - 2 gap - 26.4
-    const own = await renderTab([folder('m', kids(4), { display: 'collapsed', size: 'small', minimisedIcon: 'own', icon: 'mdi:home' })]);
-    const box = el(own.container, 'm').querySelector('[data-own-icon]') as HTMLElement;
-    expect(box.style.maxWidth).toBe('17px');
+  it('a Rounded tile at every size: its name above the 2 x 2 preview (one rule with the tiles; no Small-only layout)', async () => {
+    for (const [h, size] of [[48, 'small'], [120, 'medium'], [250, 'large']] as const) {
+      shapeH = h;
+      const r = await renderTab([folder('m', kids(4), { display: 'collapsed', size })]);
+      const t = el(r.container, 'm');
+      expect(t.querySelector('.tc')!.classList.contains(size)).toBe(true);
+      expect(t.querySelector('.collapsed-name')!.textContent).toBe('m');
+      expect(t.querySelectorAll('.preview-cell')).toHaveLength(4);
+      expect(parseFloat((t.querySelector('.tc-box') as HTMLElement).style.getPropertyValue('--tc-top'))).toBe(0);
+      r.unmount();
+    }
   });
-  it('a Rounded Small tile keeps both notes readable: shorter words, the name on one line when it must be', async () => {
+  it('a Small tile keeps both notes readable: shorter words', async () => {
     shapeH = 48;
     const r = await renderTab([folder('m', [], { display: 'collapsed', size: 'small' })]);
     expect(el(r.container, 'm').querySelector('.empty-note')!.textContent).toBe('Empty');
@@ -209,18 +209,7 @@ describe('minimised', () => {
     const broken = await renderTab([folder('m', [{ kind: 'mystery', id: 'x' }], { display: 'collapsed', size: 'small' })]);
     const t = el(broken.container, 'm');
     expect(t.querySelector('.empty-note.unreadable')!.textContent).toBe("Can't display");
-    expect(t.querySelector('.collapsed-name')!.classList.contains('one-line')).toBe(true);
-  });
-  it('a Rounded tile with room is unchanged; so is a tile below the two-line size on its name', async () => {
-    shapeH = 120;
-    const r = await renderTab([folder('m', kids(4), { display: 'collapsed' })]);
-    const t = el(r.container, 'm');
-    expect(t.querySelector('.folder-collapsed-tile')!.classList.contains('small-round')).toBe(false);
-    expect(t.querySelectorAll('.preview-cell')).toHaveLength(4);
-    r.unmount();
-    shapeH = 38;
-    const tiny = await renderTab([folder('m', kids(4), { display: 'collapsed', size: 'small' })]);
-    expect(el(tiny.container, 'm').querySelector('.collapsed-name')!.classList.contains('one-line')).toBe(true);
+    expect(t.querySelector('.collapsed-name')!.textContent).toBe('m');
   });
   it('the shapes are measured by the canvas\'s one ResizeObserver (Tenet 4)', async () => {
     let made = 0;

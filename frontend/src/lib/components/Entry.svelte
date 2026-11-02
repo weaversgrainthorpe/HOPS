@@ -6,6 +6,7 @@
   import IframeModal from './IframeModal.svelte';
   import PopupModal from './PopupModal.svelte';
   import StatusIndicator from './StatusIndicator.svelte';
+  import TileContent from './layout/TileContent.svelte';
   import { safeOpenUrl, isValidUrl, safeFrameUrl, tileUrlProblem } from '$lib/utils/url';
   import { toast } from '$lib/stores/toast';
   import { isSshUrl, openSshInPlace } from '$lib/utils/ssh';
@@ -173,32 +174,23 @@
         <div class="note-body" style:opacity={textOpacity}>{entry.description}</div>
       {/if}
     {:else}
-      <div class="title" style:opacity={textOpacity}>{entry.name}</div>
-
-      <div class="icon" style:opacity={iconOpacity}>
-        <!-- icon-backing exists on every tile so layout doesn't shift when
-             the optional background is added/removed. It's only visually
-             present (padding + rounding + bg) when entry.iconBgColor is set. -->
-        <div
-          class="icon-backing"
-          class:has-bg={entry.iconBgColor}
-          style:background-color={entry.iconBgColor}
-        >
-        {#if entry.iconUrl}
-          <img src={entry.iconUrl} alt="" />
-        {:else if entry.icon}
-          <ColoredIcon icon={entry.icon} width="48" />
-        {:else}
-          <ColoredIcon icon="mdi:application" width="48" />
-        {/if}
-        </div>
-      </div>
-
-      <!-- One arrangement at every size and fit. The description is hidden only by a
-           container height query, when the tile is too short to fit it. -->
-      {#if entry.description}
-        <div class="subtitle" style:opacity={textOpacity}>{entry.description}</div>
-      {/if}
+      <!-- ONE rule for what's inside (TileContent): the name at the top, the icon a fixed share of the
+           tile, the description under it without moving the icon. -->
+      <TileContent name={entry.name} size={sizeClass} description={entry.description || undefined} {textOpacity}>
+        {#snippet icon()}
+          <!-- icon-backing exists on every tile so layout doesn't shift when the optional background is
+               added/removed. It's only visually present (padding + rounding + bg) when entry.iconBgColor is set. -->
+          <div class="icon" style:opacity={iconOpacity}>
+            <div class="icon-backing" class:has-bg={entry.iconBgColor} style:background-color={entry.iconBgColor}>
+              {#if entry.iconUrl}
+                <img src={entry.iconUrl} alt="" />
+              {:else}
+                <ColoredIcon icon={entry.icon || 'mdi:application'} width="100%" />
+              {/if}
+            </div>
+          </div>
+        {/snippet}
+      </TileContent>
 
       <!-- Status checks: a tile switched On (or holding a setting HOPS can't read, shown as
            such) asks the server, which applies the gates above it; an Off tile is never checked. -->
@@ -260,6 +252,8 @@
     object-fit: contain;
   }
   .chip-name {
+    font-weight: 600;
+    line-height: 1.2;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -384,175 +378,68 @@
     word-break: break-word;
   }
 
-  .title {
-    font-weight: 600;
-    text-align: center;
-    font-size: 0.875rem;
-    line-height: 1.2;
-    width: 100%;
-    flex-shrink: 0;
-    /* The name is always shown, on one line (two at Small). */
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
+  /* What's inside a link tile is TileContent's (one rule at every size; the dashboard's Tile content
+     size scales it). These style only the icon in its square: it fills the square, a badge included. */
   .icon {
+    width: 100%;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--accent-text);
-    flex: 0 0 auto;
   }
 
   /* Wrapper around the icon graphic. Invisible by default — only takes on
      padding + rounded corners + a background when the user has set
      iconBgColor (giving a "logo badge" look that rescues dark logos on
-     dark tiles). */
+     dark tiles). The badge is the icon's square, so it never needs more room. */
   .icon-backing {
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
     display: flex;
     align-items: center;
     justify-content: center;
   }
 
   .icon-backing.has-bg {
-    padding: 0.5rem;
-    border-radius: 0.5rem;
+    padding: 8%;
+    border-radius: 12%;
   }
 
-  .icon img {
-    width: 48px;
-    height: 48px;
+  .icon img,
+  .icon :global(svg) {
+    width: 100%;
+    height: 100%;
     object-fit: contain;
   }
 
-  /* The description: at most two lines, with an ellipsis. */
-  .subtitle {
-    font-size: 0.75rem;
-    line-height: 1.2;
-    color: var(--text-secondary);
-    text-align: center;
-    width: 100%;
-    flex-shrink: 0;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    overflow: hidden;
-    overflow-wrap: anywhere;
-  }
-
-  /* Size variants: the v2 sizes of an unfitted tile (phone stacking). */
+  /* Phone (stacked) tiles keep their own outer sizes, the v2 sizes (geometry.PHONE_TILE_MIN_PX); inside,
+     the same rule. A link tile's content is positioned in it, so the tile needs no padding of its own. */
   .small {
     min-height: 100px;
-    padding: 0.75rem 1rem;
   }
-
-  /* Small has little width: the name takes up to two lines, and a word too long for one is broken
-     rather than lost. */
-  .small .title {
-    font-size: 0.75rem;
-    line-height: 1.1;
-    white-space: normal;
-    overflow-wrap: anywhere;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-  }
-
-  .small .icon :global(svg) {
-    width: 32px;
-    height: 32px;
-  }
-
-  .small .icon img {
-    width: 32px;
-    height: 32px;
-  }
-
-  .small .subtitle {
-    font-size: 0.6875rem; /* 11px: the description's readable floor */
-  }
-
   .medium {
     min-height: 120px;
   }
-
-  .medium .icon :global(svg) {
-    width: 48px;
-    height: 48px;
-  }
-
   .large {
     min-height: 160px;
-    padding: 1.25rem 1.5rem;
+  }
+  .entry:not(.entry-note) {
+    padding: 0;
   }
 
-  .large .title {
-    font-size: 1rem;
-  }
-
-  .large .icon :global(svg) {
-    width: 64px;
-    height: 64px;
-  }
-
-  .large .icon img {
-    width: 64px;
-    height: 64px;
-  }
-
-  .large .subtitle {
-    font-size: 0.875rem;
-  }
-
-  /* Layout renderer fit: the cell sets the tile's size (inline height and
-     min-height) and the tile is a size container, so its content scales with it: 1cqmin is 1% of
-     the tile's shorter side. ONE rule at every size: icon, name,
-     description, padding and gaps are a share of the tile, with no caps, so a bigger tile is the same
-     tile scaled up; the size class only sets the shares. Medium: icon 34%, name 10.5%, description 9%.
-     Large is a scaled-up Medium with its icon about 45% of the tile. Small keeps its
-     smaller shares, so it is driven by the floors. Text has readable floors: a name is
-     never under 12px, a description never under 11px. A description that cannot fit at its floor is
-     hidden, not shrunk. A Small name takes two lines, down to a 50 px tile (SMALL_TWO_LINES_MIN_PX);
-     below that the icon needs the room, so one. */
+  /* Layout renderer fit: the cell sets the tile's size (inline height and min-height). A note's
+     text scales with the tile (a size container: 1cqmin is 1% of its shorter side). */
   .entry-container.sized {
     container: tile / size;
   }
-  .entry.fill {
-    --icon-r: 34cqmin;
-    --name-r: 10.5cqmin;
-    --desc-r: 9cqmin;
+  .entry.fill.entry-note {
     padding: max(3px, 5cqmin);
-    gap: max(2px, 4cqmin);
-  }
-  .entry.fill.small {
-    --icon-r: 28cqmin;
-    --name-r: 9cqmin;
-    --desc-r: 8cqmin;
-  }
-  .entry.fill.large {
-    --icon-r: 45cqmin;
-  }
-  /* Large with an icon badge: the badge (icon plus its padding) is the 45%, so the content still fits. */
-  .entry.fill.large:has(.icon-backing.has-bg) {
-    --icon-r: calc(45cqmin - 2 * clamp(2px, 4cqmin, 8px));
-  }
-  .entry.fill .title {
-    font-size: max(12px, var(--name-r));
-  }
-  .entry.fill .subtitle {
-    font-size: max(11px, var(--desc-r));
-  }
-  /* Large's description scales too, but never past 1.25rem (at 1920 it
-     reached about 28px, bigger than the navbar title). A smaller description only needs less room. */
-  .entry.fill.large .subtitle {
-    font-size: clamp(11px, var(--desc-r), 1.25rem);
   }
   /* A note has no icon, so its title has the whole Small tile: three lines at the name's size. */
   .entry.fill.small .note-title {
-    font-size: max(12px, var(--name-r));
+    font-size: max(12px, 9cqmin);
     line-height: 1.1;
     overflow: hidden;
     overflow-wrap: anywhere;
@@ -560,44 +447,6 @@
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
     line-clamp: 3;
-  }
-  .entry.fill .icon :global(svg),
-  .entry.fill .icon img {
-    width: max(12px, var(--icon-r));
-    height: max(12px, var(--icon-r));
-  }
-  .entry.fill .icon-backing.has-bg {
-    padding: clamp(2px, 4cqmin, 8px);
-  }
-  /* Hide, don't shrink: the description shows only when the tile is tall enough for it at its floor.
-     The height the content needs, with s = 1cqmin in px and the text at its floors (line-height 1.2):
-       padding 2 x 5s + gaps 2 x 4s + icon (Medium 34s; Small 28s; Large 45s) + name 12 x 1.2
-       + description 2 x 11 x 1.2 = 52s + 40.8 px (Small, its name two lines of 13.2: 46s + 52.8;
-     Large 63s + 40.8).
-     The worst case is a tile no taller than it is wide (s = height / 100), where that needs
-     height >= 85px (Small >= 97.8px, Large >= 110.3px); a taller-than-wide tile needs less. Above the
-     floors the shares add up to 86.2s (Large 97.2s), so these never clip. */
-  @container tile (max-height: 84.99px) {
-    .entry.fill:not(.small) .subtitle {
-      display: none;
-    }
-  }
-  @container tile (max-height: 97.79px) {
-    .entry.fill.small .subtitle {
-      display: none;
-    }
-  }
-  @container tile (max-height: 49.99px) {
-    .entry.fill.small .title {
-      display: block;
-      line-height: 1.2;
-      white-space: nowrap;
-    }
-  }
-  @container tile (max-height: 110.29px) {
-    .entry.fill.large .subtitle {
-      display: none;
-    }
   }
 
   .entry.selected {
@@ -611,8 +460,8 @@
     border-color: rgba(255, 255, 255, 0.2);
   }
 
-  .entry.custom-color .title,
-  .entry.custom-color .subtitle {
+  .entry.custom-color :global(.title),
+  .entry.custom-color :global(.subtitle) {
     color: white;
   }
 

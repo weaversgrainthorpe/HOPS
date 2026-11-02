@@ -88,6 +88,11 @@ export interface LayoutDashboard {
   order?: number;
   /** Dashboard background; missing or inherit form = the global one. */
   background?: Background;
+  /**
+   * "Tile content size", in %: 75–125 in steps of 5; missing = 100 (layout/contentScale.ts). Scales what's
+   * drawn inside tiles and minimised folders, never their boxes.
+   */
+  contentScale?: number;
   /** Read-only, computed by GET /api/config from the effective settings; never stored. */
   display?: {
     animatedFolderBackgrounds?: boolean;
