@@ -497,6 +497,8 @@ Assuming HOPS lives in `C:\hops` (the program plus a `data` folder):
 > `--data "C:\hops test\data"`, not `--data "C:\hops test\data\"`. Windows
 > reads `\"` as a quote that is part of the name, and HOPS stops with a
 > "syntax is incorrect" error. Pressing Tab in PowerShell often adds that
+> backslash. If the path ends in a stray quote mark, HOPS now stops
+> before doing anything and says so, and tells you to remove the trailing
 > backslash.
 
 1. Download NSSM from [nssm.cc/download](https://nssm.cc/download), unzip

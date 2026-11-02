@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -89,5 +90,39 @@ func TestV2DataElsewhere(t *testing.T) {
 	}
 	if got := v2DataElsewhere(filepath.Join(other, "data"), other, filepath.Join(other, "hops")); got != "" {
 		t.Errorf("a directory named hops.db: got %q, want none", got)
+	}
+}
+
+func TestCheckDataDirArg(t *testing.T) {
+	cases := []struct {
+		name, path, goos string
+		want             string // "" = accepted; else a substring of the error
+	}{
+		{"trailing quote windows", `\\NAS\Jonathan\HOPS Data"`, "windows", "ends in a quote mark"},
+		{"trailing quote linux", `/srv/HOPS Data"`, "linux", "ends in a quote mark"},
+		{"quote in middle windows", `C:\HOP"S\data`, "windows", `can't contain`},
+		{"quote in middle linux", `/srv/HOP"S`, "linux", ""},
+		{"UNC path", `\\NAS721124\Jonathan\HOPS Data`, "windows", ""},
+		{"path with spaces", `C:\HOPS Data`, "windows", ""},
+		{"trailing backslash no quote", `C:\HOPS Data\`, "windows", ""},
+		{"empty", ``, "windows", ""},
+	}
+	for _, c := range cases {
+		err := checkDataDirArgOS(c.path, c.goos)
+		if c.want == "" {
+			if err != nil {
+				t.Errorf("%s: unexpected error %v", c.name, err)
+			}
+		} else if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: got %v, want %q", c.name, err, c.want)
+		}
+	}
+}
+
+func TestResetPasswordRefusesTrailingQuote(t *testing.T) {
+	var out, errb strings.Builder
+	code := resetPassword("", []string{"--data", `/srv/HOPS Data"`}, &out, &errb, dataSearch{}, accountOps{})
+	if code == 0 || !strings.Contains(errb.String(), "ends in a quote mark") {
+		t.Fatalf("code %d, stderr %q", code, errb.String())
 	}
 }
