@@ -56,6 +56,21 @@ test.afterEach(async ({ page, context }) => {
 test.use({ viewport: { width: 1280, height: 900 } });
 
 test.describe('tab order page', () => {
+  test('the reorder buttons are the Dashboards list ones: four, 44 px targets', async ({ page, context }) => {
+    const d = await seed(page, context, 6);
+    await openTabOrder(page, d.name);
+    for (const label of ['Move Tab 2 to the top', 'Move Tab 2 up', 'Move Tab 2 down', 'Move Tab 2 to the bottom']) {
+      const box = (await page.getByRole('button', { name: label }).boundingBox())!;
+      expect(box.width, label).toBeGreaterThanOrEqual(44);
+      expect(box.height, label).toBeGreaterThanOrEqual(44);
+    }
+    // The Dashboards list has the same four for its own rows.
+    await page.goto('/settings/dashboards');
+    for (const move of ['to the top', 'up', 'down', 'to the bottom']) {
+      await expect(page.getByRole('button', { name: `Move ${d.name} ${move}` })).toBeVisible();
+    }
+  });
+
   test('move one tab a long way', async ({ page, context }) => {
     const d = await seed(page, context);
     await openTabOrder(page, d.name);

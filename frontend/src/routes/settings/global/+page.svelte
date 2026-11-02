@@ -262,6 +262,14 @@
   // The row's human label: one table, in globalGroups.ts.
   const labelFor = settingLabel;
 
+  /** A number box as wide as the longest value it may hold, plus room for padding and the spinner. */
+  function numberWidth(s: SettingDef): string {
+    // With no largest value to go by, leave room for six digits.
+    const floor = s.max ? 3 : 6;
+    const digits = Math.max(String(s.max ?? '').length, String(s.min ?? '').length, String(s.default ?? '').length, floor);
+    return `calc(${digits}ch + 3.5rem)`;
+  }
+
   // --- cidr_list list-builder ---
 
   // Parse a JSON string array safely. Returns [] for empty/invalid input
@@ -414,6 +422,7 @@
               </div>
             </div>
             <div class="row-input">
+              <div class="row-control">
               {#if isHoursDays(s)}
                 <div class="mb-input">
                   <input
@@ -469,7 +478,7 @@
                       id={`setting-${s.key}`}
                       type="text"
                       bind:value={cidrDrafts[s.key]}
-                      placeholder="10.0.0.0/8 or 192.168.1.5/32"
+                      placeholder="e.g. 10.0.0.0/8"
                       onkeydown={(e) => handleCidrKeydown(e, s)}
                     />
                     <Button variant="secondary" icon="mdi:plus" onclick={() => addCidr(s)}>
@@ -498,6 +507,7 @@
                 <input
                   id={`setting-${s.key}`}
                   type="number"
+                  style:width={numberWidth(s)}
                   bind:value={drafts[s.key]}
                   min={s.min || undefined}
                   max={s.max || undefined}
@@ -506,14 +516,16 @@
               {#if perKeyError[s.key]}
                 <div class="error inline">{perKeyError[s.key]}</div>
               {/if}
+              </div>
               <div class="row-actions">
                 {#if isHoursDays(s) ? draftHours(s) !== Number(s.default) : String(drafts[s.key]) !== shown(s, s.default)}
-                  <Button variant="ghost" onclick={() => resetToDefault(s)}>
+                  <Button variant="ghost" size="small" onclick={() => resetToDefault(s)}>
                     Reset to default
                   </Button>
                 {/if}
                 <Button
                   variant="ghost"
+                  size="small"
                   onclick={() => reset(s)}
                   disabled={!isDirty(s)}
                 >
@@ -521,6 +533,7 @@
                 </Button>
                 <Button
                   variant="primary"
+                  size="small"
                   onclick={() => save(s)}
                   disabled={!isDirty(s) || savingKey === s.key}
                 >
@@ -566,13 +579,17 @@
     gap: 0.75rem;
   }
 
-  /* Two columns — the description (at most 75ch of its 0.92rem text, i.e. 69ch of the
-     row's font) with its control right beside it; the card still spans the column, so at 1920 the
-     spare room is at the row's end, never between a description and its control. */
+  /* Every row has the same shape: the label and description take the room on the left; on the
+     right sit the control (in a column of its own width) and then Reset, Revert and Save, in a
+     column of theirs. Both columns have a fixed width, so controls and buttons line up down the
+     page whatever the row holds. Each control is sized to its content (see .row-control). */
+  .rows {
+    container-type: inline-size;
+  }
+
   .row {
     display: grid;
-    grid-template-columns: fit-content(69ch) minmax(280px, 380px);
-    justify-content: start;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 1.5rem;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
@@ -635,9 +652,18 @@
   }
 
   .row-input {
+    display: grid;
+    grid-template-columns: 14rem 19rem;
+    column-gap: 1rem;
+    align-items: start;
+  }
+
+  .row-control {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    align-items: flex-start;
+    min-width: 0;
   }
 
   .row-input input,
@@ -650,7 +676,13 @@
     padding: 0.5rem 0.65rem;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 0.95rem;
-    width: 100%;
+    box-sizing: border-box;
+    max-width: 100%;
+  }
+
+  /* A select is as wide as its longest option; a number box is sized inline from its largest value. */
+  .row-input select {
+    width: auto;
   }
 
   .row-input textarea {
@@ -677,6 +709,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    width: 100%;
   }
 
   .cidr-chip {
@@ -730,9 +763,12 @@
 
   .cidr-add input {
     flex: 1;
+    min-width: 0;
   }
 
+  /* Reset to default, Revert, Save: right-aligned in their column, so Revert and Save never move. */
   .row-actions {
+    white-space: nowrap;
     display: flex;
     justify-content: flex-end;
     gap: 0.5rem;
@@ -774,7 +810,8 @@
     gap: 0.5rem;
   }
   .mb-input input {
-    flex: 1;
+    flex: none;
+    width: calc(9ch + 1.5rem);
     min-width: 0;
   }
   .mb-unit {
@@ -835,10 +872,23 @@
     }
   }
 
-  /* Narrow (a phone, or a tablet beside the settings sidebar): one column, the control under its text. */
-  @media (max-width: 900px) {
+  /* Narrow (a phone, or a tablet beside the settings sidebar): the text on top; the control and
+     its buttons on one line under it, wrapping if they do not fit. */
+  @container (max-width: 54rem) {
     .row {
       grid-template-columns: minmax(0, 1fr);
+    }
+    .row-input {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem 1rem;
+    }
+    .row-control {
+      max-width: 100%;
+    }
+    .row-actions {
+      justify-content: flex-start;
     }
   }
 </style>

@@ -55,6 +55,7 @@
   p {
     margin: 0.4rem 0;
     line-height: 1.45;
+    overflow-wrap: anywhere;
   }
   .muted {
     color: var(--text-secondary);
