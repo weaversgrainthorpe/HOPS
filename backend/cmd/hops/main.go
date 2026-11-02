@@ -78,6 +78,11 @@ func run() bool {
 	flag.Usage = usage
 	flag.Parse()
 
+	if err := checkDataDirArg(*dataDir); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+
 	// `hops reset-password` is a one-shot command on the data folder; --data
 	// may come before it or after it.
 	if flag.Arg(0) == resetPasswordCommand {

@@ -70,6 +70,10 @@ func resetPassword(dataDir string, args []string, stdout, stderr io.Writer, sear
 	if *data != "" {
 		dataDir = *data
 	}
+	if err := checkDataDirArg(dataDir); err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
 	program := "hops"
 	if search.exe != "" {
 		program = search.exe
