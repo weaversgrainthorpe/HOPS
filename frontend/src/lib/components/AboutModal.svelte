@@ -20,7 +20,8 @@
     ready: 'Ready',
     'needs-https': 'Needs https:// or localhost',
     unavailable: 'Not available in this browser',
-    failed: "Couldn't be saved"
+    failed: "Couldn't be saved",
+    'update-failed': "Couldn't be updated; the previous version is still kept"
   };
 
   onMount(async () => {

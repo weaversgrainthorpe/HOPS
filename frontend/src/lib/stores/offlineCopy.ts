@@ -9,13 +9,17 @@ import { toast } from './toast';
 /**
  * 'needs-https': browsers run a service worker only on https:// or localhost.
  * 'unavailable': this browser can't, or it is blocked here; nothing went wrong.
+ * 'update-failed': a newer copy couldn't be saved; the previous one is still kept and works.
  */
-export type OfflineCopyState = 'checking' | 'ready' | 'needs-https' | 'unavailable' | 'failed';
+export type OfflineCopyState = 'checking' | 'ready' | 'needs-https' | 'unavailable' | 'failed' | 'update-failed';
 
 export const offlineCopy = writable<OfflineCopyState>('checking');
 
 export const OFFLINE_COPY_FAILED =
   "HOPS couldn't save its offline copy, so this browser may not open it while the server is down.";
+
+export const OFFLINE_COPY_UPDATE_FAILED =
+  "HOPS couldn't update its offline copy; the previous version is still kept.";
 
 function failed(): void {
   offlineCopy.set('failed');
@@ -30,7 +34,13 @@ function follow(registration: ServiceWorkerRegistration): void {
     worker.addEventListener('statechange', () => {
       if (worker.state === 'activated') offlineCopy.set('ready');
       // An install that fails ends here. Replaced by a newer one, that one is now installing.
-      else if (worker.state === 'redundant' && !registration.installing && !registration.waiting) failed();
+      // With an older copy still active, only the update failed: that copy still opens.
+      else if (worker.state === 'redundant' && !registration.installing && !registration.waiting) {
+        if (registration.active) {
+          offlineCopy.set('update-failed');
+          toast.error(OFFLINE_COPY_UPDATE_FAILED);
+        } else failed();
+      }
     });
   };
   const pending = registration.installing ?? registration.waiting;
@@ -52,7 +62,10 @@ export async function startOfflineCopy(): Promise<void> {
     const registration = await navigator.serviceWorker.register('/service-worker.js');
     if (registration) follow(registration);
     else offlineCopy.set('unavailable');
-  } catch {
-    failed();
+  } catch (e) {
+    // A browser that blocks service workers here (a private window, site data blocked) refuses with
+    // a SecurityError: nothing went wrong, so no toast; About still says it isn't available.
+    if (e instanceof DOMException && e.name === 'SecurityError') offlineCopy.set('unavailable');
+    else failed();
   }
 }

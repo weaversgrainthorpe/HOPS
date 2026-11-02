@@ -3,7 +3,7 @@ import { get } from 'svelte/store';
 
 vi.mock('$app/environment', () => ({ browser: true, dev: false }));
 
-import { offlineCopy, startOfflineCopy, OFFLINE_COPY_FAILED } from './offlineCopy';
+import { offlineCopy, startOfflineCopy, OFFLINE_COPY_FAILED, OFFLINE_COPY_UPDATE_FAILED } from './offlineCopy';
 import { toast } from './toast';
 
 class FakeWorker extends EventTarget {
@@ -80,7 +80,9 @@ describe('offline copy', () => {
     reg.dispatchEvent(new Event('updatefound'));
     reg.installing = null;
     update.to('redundant');
-    expect(get(offlineCopy)).toBe('failed');
+    // The older copy is still active: said as an update that failed, not as no copy.
+    expect(get(offlineCopy)).toBe('update-failed');
+    expect(toasts()).toEqual([OFFLINE_COPY_UPDATE_FAILED]);
   });
 
   it('replaced by a newer worker is not a failure', async () => {
@@ -97,6 +99,24 @@ describe('offline copy', () => {
   it('a refused registration is said on screen', async () => {
     stubRegister(async () => {
       throw new Error('refused');
+    });
+    await startOfflineCopy();
+    expect(get(offlineCopy)).toBe('failed');
+    expect(toasts()).toEqual([OFFLINE_COPY_FAILED]);
+  });
+
+  it('a browser that blocks service workers (SecurityError): unavailable, no toast', async () => {
+    stubRegister(async () => {
+      throw new DOMException('The operation is insecure.', 'SecurityError');
+    });
+    await startOfflineCopy();
+    expect(get(offlineCopy)).toBe('unavailable');
+    expect(toasts()).toEqual([]);
+  });
+
+  it('any other DOMException refusal is still a failure, said on screen', async () => {
+    stubRegister(async () => {
+      throw new DOMException('Bad script', 'TypeError');
     });
     await startOfflineCopy();
     expect(get(offlineCopy)).toBe('failed');
