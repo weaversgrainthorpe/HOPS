@@ -33,8 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tiles use their space.** The name sits at the top and the icon takes the
   rest of the tile, with room kept for one line of description, so tiles in a
   row line up whether or not they have one. Minimised folders follow the same
-  rule: their name matches the tiles beside them and their icons fill the
-  space. Small folders now show their name too. A long one-word name shrinks
+  rule and their icons fill the space. A minimised folder with a tab shows its
+  name in the tab, as it does when open. A Rounded folder, or one too small for
+  a readable tab, shows its name at the top like a tile, Small folders
+  included. A long one-word name shrinks
   to fit, and a joined-up name such as "HomeAssistant" breaks at its capital
   ("Home / Assistant") rather than mid-word. Small names can take two lines.
 - **Settings › Global settings lines up.** Every setting has its description
@@ -113,6 +115,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Now an empty page doesn't count, HOPS compares each name's page with a
   made-up name's page and keeps only the ones that differ, and the scan says
   that the domain answers every name.
+- **Discovery only adds what you can see.** After a re-scan the list shows
+  what's new, but the "selected" count and **Promote** also took in ticked
+  results the filter hid, so Promote could add tiles you hadn't seen. Now
+  only the rows shown count and are added; ticks on hidden rows are kept, and
+  a line says how many there are, with **Show all**.
 - **Notices sit above the edit toolbar,** so an error never covers Save.
 - **Add to HOPS shows one notice** when HOPS can't be reached, not several.
 - **Settings › Dashboards no longer runs off the right-hand edge** with a long
