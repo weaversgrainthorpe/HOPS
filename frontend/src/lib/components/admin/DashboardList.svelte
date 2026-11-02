@@ -201,12 +201,12 @@
           </div>
         </div>
         <div class="edit-actions">
+          <button onclick={cancelNew} class="btn-secondary btn-sm">
+            Cancel
+          </button>
           <button onclick={saveNew} class="btn-primary btn-sm" disabled={!newName.trim() || busy}>
             <Icon icon="mdi:check" width="18" />
             Save
-          </button>
-          <button onclick={cancelNew} class="btn-secondary btn-sm">
-            Cancel
           </button>
         </div>
       </div>
@@ -240,12 +240,12 @@
                 </div>
               </div>
               <div class="edit-actions">
+                <button onclick={cancelEdit} class="btn-secondary btn-sm">
+                  Cancel
+                </button>
                 <button onclick={() => saveEdit(dashboard)} class="btn-primary btn-sm" disabled={busy}>
                   <Icon icon="mdi:check" width="18" />
                   Save
-                </button>
-                <button onclick={cancelEdit} class="btn-secondary btn-sm">
-                  Cancel
                 </button>
               </div>
             </div>
@@ -443,6 +443,7 @@
 
   .edit-actions {
     display: flex;
+    justify-content: flex-end;
     gap: 0.5rem;
   }
 

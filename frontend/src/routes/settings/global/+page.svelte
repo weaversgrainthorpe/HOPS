@@ -507,13 +507,11 @@
                 <div class="error inline">{perKeyError[s.key]}</div>
               {/if}
               <div class="row-actions">
-                <Button
-                  variant="primary"
-                  onclick={() => save(s)}
-                  disabled={!isDirty(s) || savingKey === s.key}
-                >
-                  {savingKey === s.key ? 'Saving…' : 'Save'}
-                </Button>
+                {#if isHoursDays(s) ? draftHours(s) !== Number(s.default) : String(drafts[s.key]) !== shown(s, s.default)}
+                  <Button variant="ghost" onclick={() => resetToDefault(s)}>
+                    Reset to default
+                  </Button>
+                {/if}
                 <Button
                   variant="ghost"
                   onclick={() => reset(s)}
@@ -521,11 +519,13 @@
                 >
                   Revert
                 </Button>
-                {#if isHoursDays(s) ? draftHours(s) !== Number(s.default) : String(drafts[s.key]) !== shown(s, s.default)}
-                  <Button variant="ghost" onclick={() => resetToDefault(s)}>
-                    Reset to default
-                  </Button>
-                {/if}
+                <Button
+                  variant="primary"
+                  onclick={() => save(s)}
+                  disabled={!isDirty(s) || savingKey === s.key}
+                >
+                  {savingKey === s.key ? 'Saving…' : 'Save'}
+                </Button>
               </div>
             </div>
           </div>
@@ -734,6 +734,7 @@
 
   .row-actions {
     display: flex;
+    justify-content: flex-end;
     gap: 0.5rem;
     flex-wrap: wrap;
   }

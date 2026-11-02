@@ -489,8 +489,8 @@
               <form class="rename" onsubmit={(e) => { e.preventDefault(); void saveRename(c); }}>
                 <label class="sr-only" for={`rename-${c.id}`}>New name for {c.name}</label>
                 <input id={`rename-${c.id}`} type="text" bind:value={renameText} maxlength="100" />
-                <Button type="submit" size="small" loading={catBusy}>Save</Button>
                 <Button variant="ghost" size="small" onclick={() => (renamingId = null)}>Cancel</Button>
+                <Button type="submit" size="small" loading={catBusy}>Save</Button>
               </form>
               {#if renameError}<p class="field-error" role="alert">{renameError}</p>{/if}
             {:else}

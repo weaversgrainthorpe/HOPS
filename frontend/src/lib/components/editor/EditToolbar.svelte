@@ -147,6 +147,42 @@
 <div class="edit-toolbar" role="toolbar" aria-label="Editing" bind:this={barEl}>
   <div class="controls">
     <div class="group">
+      <button type="button" class="tb" onclick={() => openDialog({ kind: 'tile', to: currentContainer(tabId) })}>
+        <Icon icon="mdi:plus-box-outline" width="18" /> Add tile
+      </button>
+      <button type="button" class="tb" onclick={() => openDialog({ kind: 'folder', to: currentContainer(tabId) })}>
+        <Icon icon="mdi:folder-plus-outline" width="18" /> Add folder
+      </button>
+      <button type="button" class="tb" onclick={onAddTab}>
+        <Icon icon="mdi:tab-plus" width="18" /> Add tab
+      </button>
+    </div>
+    {#if onEditDashboard}
+      <div class="group">
+        <!-- The dashboard's own edit handle: one labelled pencil, always shown while editing. -->
+        <EditHandle name="Dashboard" label="Dashboard" placement="inline" onEdit={onEditDashboard} />
+      </div>
+    {/if}
+    <!-- Save is last, as in every dialog: the main action sits at the right-hand end. -->
+    <div class="group">
+      <!-- Its space is always reserved (an invisible copy, drawn by CSS), so no button moves when it appears. -->
+      <span class="unsaved-slot">
+        {#if $dirty}
+          <span class="unsaved" role="status">
+            <Icon icon="mdi:circle-medium" width="18" />Unsaved changes
+          </span>
+        {/if}
+      </span>
+      <button type="button" class="tb" onclick={undo} disabled={!canUndo}
+        title={!canUndo && $session?.undoDropped ? `Nothing more to undo: Undo keeps your last ${UNDO_CAP} changes` : 'Undo (Ctrl+Z)'}>
+        <Icon icon="mdi:undo" width="18" /> Undo
+      </button>
+      <button type="button" class="tb" onclick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z or Ctrl+Y)">
+        <Icon icon="mdi:redo" width="18" /> Redo
+      </button>
+      <button type="button" class="tb" onclick={() => discard()} disabled={!$dirty || saving} title="Discard all unsaved changes">
+        <Icon icon="mdi:close-circle-outline" width="18" /> Discard
+      </button>
       <span class="save-slot">
         <!-- While a save is in flight it says so (a big dashboard on a small server takes seconds). Both
              labels share one cell, so the button keeps its width and nothing beside it moves. -->
@@ -164,42 +200,7 @@
         <!-- Drawn only while its flourish plays (invisible otherwise); the toast says "Changes saved" either way. -->
         <span class="saved-tick" data-saved-tick aria-hidden="true" bind:this={tickEl}><Icon icon="mdi:check-circle" width="20" /></span>
       </span>
-      <button type="button" class="tb" onclick={() => discard()} disabled={!$dirty || saving} title="Discard all unsaved changes">
-        <Icon icon="mdi:close-circle-outline" width="18" /> Discard
-      </button>
-      <button type="button" class="tb" onclick={undo} disabled={!canUndo}
-        title={!canUndo && $session?.undoDropped ? `Nothing more to undo: Undo keeps your last ${UNDO_CAP} changes` : 'Undo (Ctrl+Z)'}>
-        <Icon icon="mdi:undo" width="18" /> Undo
-      </button>
-      <button type="button" class="tb" onclick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z or Ctrl+Y)">
-        <Icon icon="mdi:redo" width="18" /> Redo
-      </button>
-      <!-- Its space is always reserved (an invisible copy, drawn by CSS), so no button moves when it appears. -->
-      <span class="unsaved-slot">
-        {#if $dirty}
-          <span class="unsaved" role="status">
-            <Icon icon="mdi:circle-medium" width="18" />Unsaved changes
-          </span>
-        {/if}
-      </span>
     </div>
-    <div class="group">
-      <button type="button" class="tb" onclick={() => openDialog({ kind: 'tile', to: currentContainer(tabId) })}>
-        <Icon icon="mdi:plus-box-outline" width="18" /> Add tile
-      </button>
-      <button type="button" class="tb" onclick={() => openDialog({ kind: 'folder', to: currentContainer(tabId) })}>
-        <Icon icon="mdi:folder-plus-outline" width="18" /> Add folder
-      </button>
-      <button type="button" class="tb" onclick={onAddTab}>
-        <Icon icon="mdi:tab-plus" width="18" /> Add tab
-      </button>
-    </div>
-    {#if onEditDashboard}
-      <div class="group">
-        <!-- The dashboard's own edit handle: one labelled pencil, always shown while editing. -->
-        <EditHandle name="Dashboard" label="Dashboard" placement="inline" onEdit={onEditDashboard} />
-      </div>
-    {/if}
   </div>
   <!-- A failed background image per level: compact, inside the toolbar, never moving the page. -->
   <div class="notes">
@@ -385,9 +386,20 @@
       gap: 0.5rem;
       padding-bottom: 2px;
     }
+    /* The groups step aside so Save can stay pinned to the right of the whole row, however far it
+       is scrolled: the main action is never off-screen. */
     .group {
-      flex-wrap: nowrap;
+      display: contents;
+    }
+    .group > :global(*) {
       flex: none;
+    }
+    .save-slot {
+      position: sticky;
+      right: 0;
+      z-index: 1;
+      padding-left: 0.5rem;
+      background: var(--bg-secondary);
     }
     .tb {
       padding: 0.4rem 0.6rem;

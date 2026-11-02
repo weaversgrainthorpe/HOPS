@@ -421,8 +421,8 @@
         {/if}
 
         <div class="actions">
-          <button type="submit" class="btn-primary" disabled={busy}>{busy ? 'Adding…' : 'Add'}</button>
           <button type="button" class="btn-secondary" onclick={leave}>Cancel</button>
+          <button type="submit" class="btn-primary" disabled={busy}>{busy ? 'Adding…' : 'Add'}</button>
         </div>
       </form>
       {#if closeNote}<p class="muted" role="status">{closeNote}</p>{/if}
@@ -485,6 +485,7 @@
   }
   .actions {
     display: flex;
+    justify-content: flex-end;
     gap: 0.6rem;
     margin-top: 1rem;
     flex-wrap: wrap;

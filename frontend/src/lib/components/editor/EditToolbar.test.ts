@@ -52,6 +52,13 @@ describe('EditToolbar', () => {
     expect((screen.getByRole('button', { name: /^Undo/ }) as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it('Save is the last button, at the right-hand end, as in every dialog', () => {
+    render(EditToolbar, { tabId: 't1', onAddTab: vi.fn(), onEditDashboard: vi.fn() });
+    const buttons = within(screen.getByRole('toolbar', { name: 'Editing' })).getAllByRole('button');
+    expect(buttons.at(-1)).toBe(screen.getByRole('button', { name: /^Save/ }));
+    expect(buttons.at(-2)).toBe(screen.getByRole('button', { name: /^Discard/ }));
+  });
+
   it('Undo / Redo buttons step the draft', async () => {
     render(EditToolbar, { tabId: 't1', onAddTab: vi.fn() });
     rename('a', 'Changed');
