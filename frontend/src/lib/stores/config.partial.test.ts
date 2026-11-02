@@ -636,6 +636,35 @@ describe('showing a kept copy', () => {
     expect(get(showingKept)).toBe(true);
   });
 
+  // A global display change (Animations, say) moves configRevision but not the dashboard's revision.
+  // Offline the kept index and the kept one-dashboard copy can come from either side of it; a reload
+  // brings back the same two cached copies, so it could never converge.
+  it('a kept one-dashboard copy at the same dashboard revision but another configRevision is taken, marked, with no reload', async () => {
+    getConfigFor.mockResolvedValue({ config: noteKept(doc(full('a', 1), index('b', 4))), configRevision: 'r1' });
+    getConfig.mockImplementation(() => new Promise(() => {}));
+    await loadConfig({ dashboard: 'a' });
+    expect(getConfigFor).toHaveBeenCalledTimes(1);
+    getDashboard.mockResolvedValue(noteKept({ dashboard: full('b', 4), revision: 4, configRevision: 'r0' }));
+    await fetchDashboard('b');
+    await flush();
+    const b = get(config)!.dashboards.find((d) => d.id === 'b')!;
+    expect(b.partial).toBeUndefined();
+    expect(get(dashboardFetches)).toEqual({});
+    expect(get(showingKept)).toBe(true);
+    expect(get(keptFailure)).not.toBeNull();
+    expect(getConfigFor).toHaveBeenCalledTimes(1); // no reload spent
+  });
+
+  it('a kept one-dashboard copy at another dashboard revision is still not taken', async () => {
+    getConfigFor.mockResolvedValue({ config: noteKept(doc(full('a', 1), index('b', 4))), configRevision: 'r1' });
+    getConfig.mockImplementation(() => new Promise(() => {}));
+    await loadConfig({ dashboard: 'a' });
+    getDashboard.mockResolvedValue(noteKept({ dashboard: full('b', 5), revision: 5, configRevision: 'r0' }));
+    await fetchDashboard('b');
+    await flush();
+    expect(get(config)!.dashboards.find((d) => d.id === 'b')!.partial).toBe(true);
+  });
+
   it('stays on through a failed read, and only a read from the server ends it', async () => {
     getConfig.mockResolvedValue(keptWhole());
     await loadConfig();

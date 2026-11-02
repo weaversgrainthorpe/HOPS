@@ -515,8 +515,8 @@ export async function ensureFullConfig(): Promise<void> {
 
 /**
  * Fetch one dashboard the store holds only as an index entry (the route opened it before the
- * background load arrived). Taken only when it matches the held index (same configRevision);
- * otherwise the page reloads index + open dashboard + rest at the new state, once: copies that
+ * background load arrived). Taken only when it matches the held index (same configRevision), or
+ * is a kept copy at the held dashboard revision (shown marked as a saved copy); otherwise the page reloads index + open dashboard + rest at the new state, once: copies that
  * still disagree (kept copies offline never converge) are a failure. A failure is kept in
  * dashboardFetches for the route to show, with Retry, which starts afresh.
  */
@@ -544,7 +544,11 @@ export async function fetchDashboard(id: string): Promise<void> {
       settle(); // the background copy arrived meanwhile
       return;
     }
-    if (answer.configRevision !== heldConfigRevision || answer.revision !== entry.revision) {
+    // A kept copy at the same dashboard revision is taken even at another configRevision (a global
+    // display change between the two kept copies): reloading would bring back the same cached
+    // copies, and the page is marked as a saved copy below.
+    const keptSameDashboard = isKept(answer) && answer.revision === entry.revision;
+    if (!keptSameDashboard && (answer.configRevision !== heldConfigRevision || answer.revision !== entry.revision)) {
       if (mismatchReloaded.has(id)) {
         settle({ error: DASHBOARD_MISMATCH });
         return;
