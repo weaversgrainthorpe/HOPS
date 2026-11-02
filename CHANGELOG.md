@@ -28,8 +28,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   An installed HOPS app always keeps the gear, since it has no address bar.
   If HOPS can't read the setting, the buttons show. This only tidies the bar:
   who can sign in and what they can do stay the same.
+- **Tile content size.** Each dashboard has a **Tile content size** slider
+  (Edit Dashboard › Settings), from 75% to 125% in steps of 5. It makes the
+  icon, name and description in every tile and minimised folder on that
+  dashboard bigger or smaller. Tiles and folders keep their size and place.
+  Small tiles change least: their text is already at its smallest readable
+  size.
 
 ### Changed
+- **Tiles use their space.** The name sits at the top and the icon takes the
+  rest of the tile, with room kept for one line of description, so tiles in a
+  row line up whether or not they have one. Minimised folders follow the same
+  rule: their name matches the tiles beside them and their icons fill the
+  space. Small folders now show their name too. A long one-word name shrinks
+  to fit, and a joined-up name such as "HomeAssistant" breaks at its capital
+  ("Home / Assistant") rather than mid-word. Small names can take two lines.
+- **Settings › Global settings lines up.** Every setting has its description
+  on the left, then the control, then Reset to default, Revert and Save beside
+  it. Boxes are sized to what goes in them: the port box fits five digits.
+- **One set of reorder buttons:** Settings › Dashboards and Tab order both
+  have to top, up, down and to bottom, large and clear. Dashboards gained to
+  top and to bottom.
 - **Opening a folder inside a folder makes room for all its items.** Before,
   a sub-folder that didn't fit its outer box said "Not enough room", and a
   viewer couldn't fix that. Now the outer box is drawn taller, up to about one
@@ -48,7 +67,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   search box is now a button you can click or tap.
 - **Tab bar:** the `«` `‹` `›` `»` arrows are bigger (44 px) and easier to hit
   on a touch screen, and the Tab key stops once on the row of tabs, then Left,
-  Right, Home and End move between them, in edit mode as well.
+  Right, Home and End move between them, in edit mode as well. While you drag,
+  a tab near the end of the row can be held open.
 - **Save is in the same place everywhere:** Cancel, then the main action, at
   the right-hand end. In the edit toolbar, the add buttons and Dashboard moved
   to the left and Save to the right. On a phone, Save stays in view while the
@@ -86,6 +106,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   come from HOPS, but restored it would have stopped the dashboards loading.
 - **A `?` in the data folder's path stopped HOPS starting.** It starts, and
   keeps its database there.
+- **A data folder on a network share (`\\server\share\…`) works on Windows,**
+  including backups and reset-password. If the share can't keep HOPS's
+  database in its normal mode, the log warns and Settings shows a notice,
+  instead of saying nothing.
+- **A Windows path ending in a backslash gets a plain error.** In PowerShell
+  and cmd, `--data "C:\HOPS Data\"` passes a stray quote mark, and Windows only
+  said the "syntax is incorrect". HOPS now says to remove the trailing `\`.
+- **Notices sit above the edit toolbar,** so an error never covers Save.
+- **Add to HOPS shows one notice** when HOPS can't be reached, not several.
+- **Settings › Dashboards no longer runs off the right-hand edge** with a long
+  dashboard name or address.
 
 ## [3.0.1] - 2026-10-30 — One row of tabs, and big setups that stay quick
 
