@@ -295,7 +295,7 @@
     --sb-border: #1e293b;
     display: flex;
     align-items: stretch;
-    min-height: calc(100vh - 70px);
+    min-height: calc(100vh - var(--navbar-bar));
     color: var(--text-primary);
   }
 

@@ -75,7 +75,7 @@
 
 <style>
   .home {
-    min-height: calc(100vh - 70px);
+    min-height: calc(100vh - var(--navbar-bar));
     padding: 2rem 1rem;
   }
 

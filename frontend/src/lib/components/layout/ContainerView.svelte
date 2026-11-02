@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { innerHeight } from 'svelte/reactivity/window';
   import type { Container, FolderNode, LayoutDashboard, LayoutNode, LayoutTab } from '$lib/types/layout';
   import type { CanvasPlan, ContainerMetrics } from '$lib/layout/geometry';
-  import { clampPlacement, hasPosition, isPlaced, isRenderable, readingOrder, nodeFit, spanFit, screenGrowth, screenRows } from '$lib/layout/geometry';
+  import { clampPlacement, hasPosition, isPlaced, isRenderable, placeholderKey, readingOrder, nodeFit, spanFit, screenGrowth, screenRows } from '$lib/layout/geometry';
+  import { screenRoomPx } from '$lib/layout/screenRoom';
   import { folderNavFor, resolveDrill } from '$lib/stores/folderView';
   import type { Placement } from '$lib/types/layout';
   import Entry from '../Entry.svelte';
@@ -116,11 +116,11 @@
   // rule 3: render-only growth on a tab grid. View mode draws it; edit mode draws the SAVED
   // boxes (drag/drop geometry stays exact) and a folder that would grow says so in place (option A).
   // A folder drilled into a sub-folder that doesn't fit grows the same way, read here from the same
-  // memory the folder reads, in the same render. The window's height is read only when one is drilled.
+  // memory the folder reads, in the same render. The room on screen is measured only when one is drilled.
   const nav = $derived(folderNavFor(dashboard.id));
   const drill = $derived({
     path: (f: FolderNode) => resolveDrill(f, $nav.drill[f.id]),
-    maxRows: () => screenRows(innerHeight.current ?? 0, metrics.rowPx)
+    maxRows: () => screenRows(screenRoomPx(), metrics.rowPx)
   });
   const growth = $derived(!isFolder && effective === 'grid' ? screenGrowth(ordered, metrics, editing ? undefined : drill) : new Map());
   const drawGrowth = $derived(!editing);
@@ -172,8 +172,10 @@
   function rawPlacement(n: unknown): Placement {
     return (n as { placement: Placement }).placement;
   }
-  function placeholderStyle(n: unknown): string {
-    const p = clampPlacement(rawPlacement(n), columns);
+  /** `i`: its place in `ordered`, the list the growth was worked out from. */
+  function placeholderStyle(n: unknown, i: number): string {
+    const g = drawGrowth ? growth.get(placeholderKey(i)) : undefined;
+    const p = clampPlacement(g ? g.placement : rawPlacement(n), columns);
     return `grid-column: ${p.x + 1} / span ${p.w}; grid-row: ${p.y + 1} / span ${p.h}; z-index: ${topZ};`;
   }
   function nodeId(n: unknown): string {
@@ -231,7 +233,7 @@
     {:else if !inPlace}
       <NodePlaceholder id={nodeId(node)} reason="missing or invalid placement/content" />
     {:else if hasPosition(node)}
-      <NodePlaceholder id={nodeId(node)} reason="missing or invalid placement/content" style={placeholderStyle(node)} />
+      <NodePlaceholder id={nodeId(node)} reason="missing or invalid placement/content" style={placeholderStyle(node, i)} />
     {/if}
   {/each}
 {/snippet}

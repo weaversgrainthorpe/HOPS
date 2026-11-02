@@ -83,6 +83,64 @@ async function allShown(page: Page, subId: string, tileIds: string[]) {
 }
 
 test.describe('a folder opened inside a folder makes room', () => {
+  test('the cap is one screen below the navbar, measured from the one navbar height', async ({ page, context }) => {
+    const d = await importDash(page, context, (id) => [
+      folder(id('home'), 'Home', { x: 0, y: 0, w: 24, h: 4 }, [folder(id('sub'), 'Sub', null, kids(id, 80))])
+    ]);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(d.path);
+    await openSub(page, d.id('sub'));
+    await expect(nested(page, d.id('sub'))).toBeVisible();
+    for (const size of [{ width: 1280, height: 800 }, { width: 1000, height: 600 }]) {
+      await page.setViewportSize(size);
+      const m = await page.evaluate(() => ({
+        room: document.querySelector('.screen-room-probe')!.getBoundingClientRect().height,
+        navbar: document.querySelector('.navbar')!.getBoundingClientRect().height
+      }));
+      expect(m.navbar, 'the probe knows the real navbar').toBeGreaterThan(0);
+      expect(m.room).toBeCloseTo(size.height - m.navbar, 0);
+    }
+  });
+
+  test('a placeholder below the folder moves down with everything else', async ({ page, context }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const d = await importDash(page, context, (id) => [
+      folder(id('home'), 'Home', { x: 0, y: 0, w: 24, h: 4 }, [kid(id('a'), 'Alpha'), folder(id('sub'), 'Sub', null, kids(id, 24))]),
+      tile(id('t'), 'Below', 0, 4),
+      tile(id('odd'), 'Odd', 2, 4)
+    ]);
+    // A node this build can't draw never gets past the server: the read is altered on its way in.
+    const spoil = (o: unknown): void => {
+      if (Array.isArray(o)) o.forEach(spoil);
+      else if (o && typeof o === 'object') {
+        const n = o as Record<string, unknown>;
+        if (n.id === d.id('odd')) n.kind = 'widget';
+        Object.values(n).forEach(spoil);
+      }
+    };
+    await page.route(/\/api\/config/, async (route) => {
+      const res = await route.fetch();
+      const json = await res.json();
+      spoil(json);
+      await route.fulfill({ response: res, json });
+    });
+    const logged: string[] = [];
+    page.on('console', (m) => { if (m.type() === 'error') logged.push(m.text()); });
+    await page.goto(d.path);
+    const held = page.locator('.tab-canvas .node-placeholder');
+    await expect(held).toBeVisible();
+    const before = await rect(held);
+    await openSub(page, d.id('sub'));
+    await expect(nested(page, d.id('sub'))).toBeVisible();
+    const box = await rect(node(page, d.id('home')));
+    const after = await rect(held);
+    const below = await rect(node(page, d.id('t')));
+    expect(after.y, 'it moved').toBeGreaterThan(before.y);
+    expect(after.y, 'it is not under the folder').toBeGreaterThanOrEqual(box.y + box.height - 1);
+    expect(after.y, 'level with the tile beside it').toBeCloseTo(below.y, 0);
+    expect(logged.some((t) => t.includes("can't display node"))).toBe(true);
+  });
+
   test('all its items show, what is below moves down, closing puts it back, nothing is saved, and it works signed out', async ({ page, context, browser }) => {
     const d = await importDash(page, context, (id) => [
       folder(id('home'), 'Home', { x: 0, y: 0, w: 24, h: 4 }, [

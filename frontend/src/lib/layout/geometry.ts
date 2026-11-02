@@ -638,13 +638,18 @@ export function tabSpan(
 
 // ---------------------------------------------------------------- render-only growth 
 
-/** The navbar's height (Navbar.svelte: a 70 px bar and its 1 px border). */
-export const NAVBAR_PX = 71;
-
-/** Whole rows of `rowPx` in one screen below the navbar: the most a drilled folder grows to. */
-export function screenRows(viewportHeightPx: number, rowPx: number): number {
+/** Whole rows of `rowPx` in `roomPx`, one screen below the navbar (screenRoomPx): the most a drilled folder grows to. */
+export function screenRows(roomPx: number, rowPx: number): number {
   if (!(rowPx > 0)) return 0;
-  return Math.max(0, Math.floor((nonNeg(viewportHeightPx) - NAVBAR_PX) / rowPx));
+  return Math.max(0, Math.floor(nonNeg(roomPx) / rowPx));
+}
+
+/**
+ * Where screenGrowth files a placeholder (a node that can't be drawn, kept at its stored position),
+ * by its place in the list given: such a node's id is as untrustworthy as the rest of it.
+ */
+export function placeholderKey(index: number): string {
+  return `placeholder:${index}`;
 }
 
 /**
@@ -682,7 +687,10 @@ export function drilledFolderRows(
  * way, to the larger of that and drilledFolderRows: the two are one height, never added, and each is
  * measured at this cell. Proof of no new overlap: if A is above B in a shared column (A.y + A.h <= B.y) then
  * delta(B) >= delta(A) + extra(A), so B.y' >= A.y' + A.h'. Items in disjoint columns cannot meet.
- * Returns only the nodes whose drawn placement differs, by id, with `extra` rows of growth.
+ * A positioned node that can't be drawn (its placeholder keeps that position) never grows but moves
+ * and pushes like any other, so it is never slid under. Nodes with no position are not on the grid.
+ * Returns only the nodes whose drawn placement differs, by id (a placeholder: placeholderKey), with
+ * `extra` rows of growth.
  */
 export function screenGrowth(
   kids: unknown[], m: ContainerMetrics, drill?: { path: (f: FolderNode) => FolderNode[]; maxRows: () => number }
@@ -691,8 +699,14 @@ export function screenGrowth(
   if (!(m.unitPx > 0) || m.flow) return out;
   type N = { id: string; p: Placement; extra: number; delta: number };
   const nodes: N[] = [];
-  for (const k of kids) {
-    if (!isPlaced(k)) continue;
+  for (const [i, k] of kids.entries()) {
+    if (!isPlaced(k)) {
+      if (hasPos(k)) {
+        const stored = (k as { placement: Placement }).placement;
+        nodes.push({ id: placeholderKey(i), p: clampPlacement(stored, m.columns), extra: 0, delta: 0 });
+      }
+      continue;
+    }
     const p = clampPlacement(k.placement, m.columns);
     let extra = 0;
     if (k.kind === 'folder' && (k as FolderNode).display !== 'collapsed') {

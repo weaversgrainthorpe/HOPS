@@ -674,7 +674,7 @@
     display: flex;
     align-items: center;
     gap: 2rem;
-    height: 70px;
+    height: var(--navbar-bar);
   }
 
   .nav-left {
@@ -1076,10 +1076,6 @@
   @media (max-width: 768px) {
     .center-title {
       font-size: 1.125rem;
-    }
-
-    .nav-content {
-      height: 60px;
     }
 
     .logo img {

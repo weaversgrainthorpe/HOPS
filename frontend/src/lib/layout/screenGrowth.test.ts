@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   screenGrowth, clampPlacement, drilledFolderRows, minOpenFolderCells, nestedPaging, nodeBox, openFolderContentBox, screenRows, sizeSpan,
-  NAVBAR_PX, REFERENCE_CELL_PX, type ContainerMetrics
+  placeholderKey, REFERENCE_CELL_PX, type ContainerMetrics
 } from './geometry';
 import type { FolderNode, Placement } from '../types/layout';
 
@@ -196,11 +196,11 @@ describe('drilledFolderRows (the rows a drilled folder wants)', () => {
 });
 
 describe('screenRows (the cap: one screen below the navbar)', () => {
-  it('whole rows of the window below the navbar', () => {
-    expect(screenRows(1000 + NAVBAR_PX, 50)).toBe(20);
-    expect(screenRows(1049 + NAVBAR_PX, 50)).toBe(20);
+  it('whole rows of the room below the navbar', () => {
+    expect(screenRows(1000, 50)).toBe(20);
+    expect(screenRows(1049, 50)).toBe(20);
   });
-  it('an unmeasured window or row is no rows, never NaN or Infinity', () => {
+  it('an unmeasured room or row is no rows, never NaN or Infinity', () => {
     expect(screenRows(0, 50)).toBe(0);
     expect(screenRows(1000, 0)).toBe(0);
   });
@@ -324,5 +324,40 @@ describe('screenGrowth with a drilled folder', () => {
     const small = screenGrowth(list, m(50), drills({ f: [sub('s', 2, { contentSize: 'small' })] })).get('f');
     expect(sizeSpan('large')).toBeGreaterThan(sizeSpan('small'));
     expect(large.extra).toBeGreaterThan(small?.extra ?? 0);
+  });
+});
+
+describe('screenGrowth: positioned placeholders (unrenderable nodes)', () => {
+  const bad = (id: unknown, pl: unknown) => ({ kind: 'mystery', id, placement: pl });
+
+  it('moves down with everything else, and passes the push on to what is below it', () => {
+    const list = [folder('f', p(0, 0, 24, 4)), bad('b', p(0, 4, 2, 2)), tile('t', p(0, 6, 2, 2))];
+    const g = screenGrowth(list, m(40));
+    expect(g.get('f')!.extra).toBe(1);
+    expect(g.get(placeholderKey(1))).toEqual({ placement: p(0, 5, 2, 2), extra: 0 });
+    expect(g.get('t')!.placement).toEqual(p(0, 7, 2, 2));
+  });
+
+  it('never grows, and one with no id or a broken size is still pushed, each on its own', () => {
+    const list = [
+      folder('f', p(0, 0, 24, 4)), bad(undefined, { x: 3, y: 4, w: 'wide' }), bad(undefined, { x: 9, y: 4 })
+    ];
+    const g = screenGrowth(list, m(40));
+    expect(g.get(placeholderKey(1))).toEqual({ placement: p(3, 5, 1, 1), extra: 0 });
+    expect(g.get(placeholderKey(2))).toEqual({ placement: p(9, 5, 1, 1), extra: 0 });
+  });
+
+  it('with no position it stays out of it (it stacks after the grid), and beside the folder nothing moves', () => {
+    const list = [folder('f', p(0, 0, 12, 4)), { kind: 'mystery', id: 'x' }, bad('beside', p(12, 0, 2, 2))];
+    const g = screenGrowth(list, m(40));
+    expect(g.get(placeholderKey(1))).toBeUndefined();
+    expect(g.get(placeholderKey(2))).toBeUndefined();
+  });
+
+  it('a placeholder sharing a real id keeps both apart', () => {
+    const list = [folder('f', p(0, 0, 24, 4)), tile('same', p(0, 4, 2, 2)), bad('same', p(4, 4, 2, 2))];
+    const g = screenGrowth(list, m(40));
+    expect(g.get('same')!.placement).toEqual(p(0, 5, 2, 2));
+    expect(g.get(placeholderKey(2))!.placement).toEqual(p(4, 5, 2, 2));
   });
 });

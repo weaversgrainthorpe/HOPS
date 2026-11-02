@@ -5,6 +5,7 @@ import TabCanvas from './TabCanvas.svelte';
 import { layoutStale } from '$lib/stores/config';
 import { editMode } from '$lib/stores/editMode';
 import { resetFolderViewsForTests, setFolderDrill } from '$lib/stores/folderView';
+import { SCREEN_ROOM_CLASS } from '$lib/layout/screenRoom';
 import type { LayoutDashboard, LayoutTab } from '$lib/types/layout';
 
 let width = 1440;
@@ -47,23 +48,42 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
-describe('a drilled folder and the window height', () => {
-  const realHeight = window.innerHeight;
+describe('a drilled folder and the room below the navbar', () => {
+  let room = 0;
+  let probeResized: (() => void) | null = null;
+  class ProbeRO extends FakeRO {
+    observe(el: Element) {
+      if (el.classList.contains(SCREEN_ROOM_CLASS)) probeResized = () => this.cb([], this as unknown as ResizeObserver);
+      else super.observe(el);
+    }
+  }
+  beforeEach(() => {
+    vi.stubGlobal('ResizeObserver', ProbeRO);
+    const real = Element.prototype.getBoundingClientRect;
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      return this.classList.contains(SCREEN_ROOM_CLASS) ? ({ height: room } as DOMRect) : real.call(this);
+    });
+  });
   afterEach(() => {
-    window.innerHeight = realHeight;
+    window.innerHeight = 768;
     resetFolderViewsForTests();
   });
-  it('the cap follows the window: a resize re-draws the box at the new height', async () => {
+  it('the cap is the measured room, not the window: a URL bar hiding changes nothing, a real resize re-draws', async () => {
     const kids = Array.from({ length: 60 }, (_, i) => kid(`k${i}`, `K${i}`));
     const { dash, tab } = mk([folder('f', 'F', 0, 0, 12, 4, [sub('s', 'S', kids)])]);
     setFolderDrill('d1', 'f', ['s']);
-    window.innerHeight = 791; // (791 - 71) / 60 = 12 rows, 4 stored
+    room = 720; // 720 / 60 = 12 rows, 4 stored
     const { container } = render(TabCanvas, { dashboard: dash, tab });
     await tick();
     const box = container.querySelector('[data-node-id="f"]') as HTMLElement;
     expect(box.getAttribute('data-render-grown')).toBe('8');
-    window.innerHeight = 491; // 7 rows
+    // A tablet's URL bar hiding: the window gets taller, the stable room does not.
+    window.innerHeight = 1000;
     window.dispatchEvent(new Event('resize'));
+    await tick();
+    expect(box.getAttribute('data-render-grown')).toBe('8');
+    room = 420; // 7 rows: a turned tablet or a resized window, which the probe reports
+    probeResized!();
     await tick();
     expect(box.getAttribute('data-render-grown')).toBe('3');
   });
@@ -147,6 +167,24 @@ describe('TabCanvas', () => {
     expect(grid.compareDocumentPosition(stack) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect([...stack.querySelectorAll('.node-placeholder')].map((e) => e.getAttribute('data-node-id'))).toEqual(['no-pos', 'no-pos2']);
     expect(grid.querySelector('[data-node-id="no-pos"]')).toBeNull();
+  });
+
+  it('a positioned placeholder moves with what is around it when a folder is drawn taller, in view mode only', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    width = 960; // a 40 px cell: this folder's stored box is one row short
+    const posBad: any = { kind: 'widget', id: 'pos-bad', placement: { x: 0, y: 4, w: 2, h: 2 } };
+    const kids = Array.from({ length: 12 }, (_, i) => kid(`k${i}`, `K${i}`));
+    const { dash, tab } = mk([folder('f', 'F', 0, 0, 24, 4, kids), posBad]);
+    const shown = render(TabCanvas, { dashboard: dash, tab });
+    await tick();
+    const style = () => shown.container.querySelector('.node-placeholder')!.getAttribute('style');
+    const grown = Number(shown.container.querySelector('[data-node-id="f"]')!.getAttribute('data-render-grown'));
+    expect(grown).toBeGreaterThan(0);
+    expect(style()).toContain(`grid-row: ${5 + grown} / span 2`);
+    shown.unmount();
+    const edit = render(TabCanvas, { dashboard: dash, tab, editing: true });
+    await tick();
+    expect(edit.container.querySelector('.node-placeholder')!.getAttribute('style')).toContain('grid-row: 5 / span 2');
   });
 
   it('clamps an out-of-range placement instead of dropping it', async () => {
