@@ -304,6 +304,53 @@ describe('consistency', () => {
     expect(get(dashboardFetches)).toEqual({ b: { error: DASHBOARD_MISMATCH } });
   });
 
+  it('a one-dashboard read that succeeds forgets its reload: a later change gets its own', async () => {
+    vi.mocked(api.getConfig).mockImplementation(() => new Promise(() => {}));
+    vi.mocked(api.getConfigFor).mockResolvedValue(idx('r2', full('a', 3), index('b', 7), index('c', 8)));
+    await loadConfig({ dashboard: 'a' });
+    // b disagrees once, its reload settles it, and the read then succeeds.
+    vi.mocked(api.getDashboard).mockResolvedValueOnce({ dashboard: full('b', 6), revision: 6, configRevision: 'r1' });
+    await fetchDashboard('b');
+    await flush();
+    vi.mocked(api.getDashboard).mockResolvedValueOnce({ dashboard: full('b', 7), revision: 7, configRevision: 'r2' });
+    await fetchDashboard('b');
+    await flush();
+    expect(get(dashboardFetches)).toEqual({});
+    // Another dashboard's mismatch reloads the index, so b is an index entry again.
+    vi.mocked(api.getDashboard).mockResolvedValueOnce({ dashboard: full('c', 6), revision: 6, configRevision: 'r1' });
+    await fetchDashboard('c');
+    await flush();
+    expect(api.getConfigFor).toHaveBeenCalledTimes(3);
+    expect(hasPartialDashboards(get(config))).toBe(true);
+    // b changes elsewhere later on: that is one more reload, not the "still disagrees" failure.
+    vi.mocked(api.getDashboard).mockResolvedValueOnce({ dashboard: full('b', 6), revision: 6, configRevision: 'r1' });
+    await fetchDashboard('b');
+    await flush();
+    expect(get(dashboardFetches)).toEqual({});
+    expect(api.getConfigFor).toHaveBeenCalledTimes(4);
+  });
+
+  it('a reload that brings the dashboard in full counts as its read succeeding', async () => {
+    vi.mocked(api.getConfig).mockImplementation(() => new Promise(() => {}));
+    vi.mocked(api.getConfigFor).mockResolvedValueOnce(idx('r1', full('a', 3), index('b', 7), index('c', 8)));
+    await loadConfig({ dashboard: 'a' });
+    // b disagrees; its reload (the route is on b) answers with b in full.
+    vi.mocked(api.getConfigFor).mockResolvedValueOnce(idx('r2', index('a', 3), full('b', 7), index('c', 8)));
+    vi.mocked(api.getDashboard).mockResolvedValueOnce({ dashboard: full('b', 6), revision: 6, configRevision: 'old' });
+    await fetchDashboard('b');
+    await flush();
+    // c's own mismatch reloads, and b is an index entry again.
+    vi.mocked(api.getConfigFor).mockResolvedValue(idx('r3', full('a', 3), index('b', 7), index('c', 9)));
+    vi.mocked(api.getDashboard).mockResolvedValueOnce({ dashboard: full('c', 8), revision: 8, configRevision: 'old' });
+    await fetchDashboard('c');
+    await flush();
+    vi.mocked(api.getDashboard).mockResolvedValueOnce({ dashboard: full('b', 6), revision: 6, configRevision: 'old' });
+    await fetchDashboard('b');
+    await flush();
+    expect(get(dashboardFetches)).toEqual({});
+    expect(api.getConfigFor).toHaveBeenCalledTimes(4);
+  });
+
   it('a failed one-dashboard fetch is kept for the page to show, with Retry', async () => {
     vi.mocked(api.getConfigFor).mockResolvedValueOnce(idx('r1', full('a', 3), index('b', 7)));
     vi.mocked(api.getConfig).mockImplementation(() => new Promise(() => {}));

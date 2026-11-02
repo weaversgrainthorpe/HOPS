@@ -236,7 +236,8 @@ export const WHOLE_LOAD_TIMEOUT_MS = 60_000;
 let heldConfigRevision: string | null = null;
 let rest: { seq: number; promise: Promise<void> } | null = null;
 // Dashboards whose one-dashboard read disagreed with the index and already had their one reload.
-// Only a load that does not come from a mismatch (a Retry, say) forgets them.
+// A load that does not come from a mismatch (a Retry, say) forgets them, and so does the dashboard
+// arriving whole: that read worked, so a later change gets its own reload.
 const mismatchReloaded = new Set<string>();
 
 /** The failure when a dashboard's own read still disagrees with the index after one reload. */
@@ -373,6 +374,7 @@ export function configReadRunning(): boolean {
 }
 
 function adoptLoaded(data: Config): void {
+  for (const d of data.dashboards ?? []) if (d.partial !== true) mismatchReloaded.delete(d.id);
   config.set(withoutDismissed(data));
   showingKept.set(isKept(data));
   keptFailure.set(isKept(data) ? KEPT_READ_FAILED : null);
@@ -502,6 +504,7 @@ export async function fetchDashboard(id: string): Promise<void> {
     const held = get(config);
     const entry = held?.dashboards.find((d) => d.id === id);
     if (!held || !entry || entry.partial !== true) {
+      mismatchReloaded.delete(id);
       settle(); // the background copy arrived meanwhile
       return;
     }
@@ -515,6 +518,7 @@ export async function fetchDashboard(id: string): Promise<void> {
       void loadConfig({ background: true, dashboard: viewerKey(), afterMismatch: true });
       return;
     }
+    mismatchReloaded.delete(id);
     settle();
     config.set({ ...held, dashboards: held.dashboards.map((d) => (d.id === id ? answer.dashboard : d)) });
     if (isKept(answer)) {
