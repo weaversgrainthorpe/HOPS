@@ -1,6 +1,7 @@
 package configdoc
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -201,11 +202,19 @@ func minimisedIconDash(v any, nested bool) Obj {
 	return currentDash(f)
 }
 
+// describeMinimisedIcon labels a test value: nil means the field is absent.
+func describeMinimisedIcon(v any) string {
+	if v == nil {
+		return "(absent)"
+	}
+	return fmt.Sprintf("%#v", v)
+}
+
 func TestFolderMinimisedIcon_AcceptsKnownAndAbsent(t *testing.T) {
 	for _, nested := range []bool{false, true} {
 		for _, v := range []any{nil, "contents", "own"} {
 			if err := VerifyDashboard(minimisedIconDash(v, nested)); err != nil {
-				t.Errorf("nested=%v minimisedIcon %v refused: %v", nested, v, err)
+				t.Errorf("nested=%v minimisedIcon %s refused: %v", nested, describeMinimisedIcon(v), err)
 			}
 		}
 	}
