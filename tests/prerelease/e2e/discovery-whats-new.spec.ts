@@ -109,6 +109,19 @@ c.commit()
 		await expect(gone.locator('tr', { hasText: '192.0.2.4' })).not.toContainText('tile may be dead');
 	});
 
+	test('with the New filter only the rows you can see are counted, and hidden ticks are called out', async () => {
+		await page.goto('/settings/discovery/rescan');
+		// 4 rows shown (all ticked, high confidence); the 5th, unchanged, is hidden but also ticked.
+		await expect(page.locator('table.results tbody tr')).toHaveCount(4);
+		await expect(page.getByText('4 selected', { exact: true })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Promote 4 to dashboard' })).toBeVisible();
+		await expect(page.getByTestId('hidden-ticked')).toContainText("1 ticked result isn't shown by this filter and won't be added.");
+		await page.getByTestId('hidden-ticked').getByRole('button', { name: 'Show all' }).click();
+		await expect(page.locator('table.results tbody tr')).toHaveCount(5);
+		await expect(page.getByText('5 selected', { exact: true })).toBeVisible();
+		await expect(page.getByTestId('hidden-ticked')).toHaveCount(0);
+	});
+
 	test('the scans list shows +N / −M for the re-scan and nothing for the first scan', async () => {
 		await page.goto('/settings/discovery');
 		const newRow = page.locator('table.scans tbody tr').filter({ hasText: '192.0.2.0/24' }).first();
