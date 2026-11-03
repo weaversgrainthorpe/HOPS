@@ -1988,7 +1988,11 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 				}
 				delete(used, targetID) // reserved above for exactly this dashboard
 				idRenames += makeIDsUnique(d, used)
-				existing[replaceAt[rows[i].Clash.ID]] = d
+				at, found := replaceAt[rows[i].Clash.ID]
+				if !found || at < 0 || at >= len(existing) { // checkChoices refuses this; never index outside
+					return nil, nil, newAPIError(http.StatusConflict, fmt.Sprintf("Import refused — the stored dashboard %q to replace could not be found. Check the file again. Nothing was imported.", rows[i].Clash.Name))
+				}
+				existing[at] = d
 				summary.Replaced = append(summary.Replaced, dashboardLabel(d))
 				names = append(names, dashboardLabel(d))
 				continue

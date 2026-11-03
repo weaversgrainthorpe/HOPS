@@ -240,6 +240,11 @@ func checkChoices(rows []importRow, cs, targets []string) *apiError {
 		if row.Clash == nil && (c == importReplace || c == importKeep) {
 			return newAPIError(http.StatusConflict, fmt.Sprintf("Import refused — no dashboard is called %q any more, so it can't be replaced or kept alongside. Check the file again. Nothing was imported.", row.Name))
 		}
+		// Only hand-edited data has a dashboard without an id; Replace or
+		// Keep both could not tell which dashboard it means.
+		if row.Clash != nil && row.Clash.ID == "" && (c == importReplace || c == importKeep) {
+			return newAPIError(http.StatusConflict, fmt.Sprintf("Import refused — the stored dashboard called %q has no id, so it can't be replaced or kept alongside. Choose Skip for it, or restore a backup from before it was damaged (Settings › Backups). Nothing was imported.", row.Clash.Name))
+		}
 		now := ""
 		if row.Clash != nil {
 			now = row.Clash.ID
