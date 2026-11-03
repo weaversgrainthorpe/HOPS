@@ -92,6 +92,12 @@ HOPS 3 is a big rework of how dashboards are laid out and edited.
 - **New ways to install:** a one-line Linux installer and a Proxmox VE
   container script.
 
+Since 3.0, HOPS also has **Export all** and an import that asks about each
+dashboard, **Text colour** on tiles and tabs, folder descriptions, an
+**offline copy** that opens your dashboards when the server can't be
+reached, and a dashboard that loads first while the rest arrive in the
+background. See the [Changelog](CHANGELOG.md) for everything.
+
 ## Screenshots
 
 <table>
@@ -193,6 +199,13 @@ mkdir data
 .\hops-windows-amd64.exe --data .\data
 ```
 
+If the data folder's path has spaces and you put it in quotes, don't end it
+with a backslash: `--data "C:\HOPS Data"`, not `--data "C:\HOPS Data\"`.
+HOPS says so if you do. A data folder on a network share
+(`\\server\share\…`) works too. If the share can't keep HOPS's database in
+its normal mode, which is slower, the log warns and Settings shows a notice.
+On any system, a `?` or `#` in the data folder's path is fine.
+
 Then open `http://<your-server>:8080` and sign in with `admin` / `admin`.
 HOPS makes you choose a new password straight away.
 
@@ -237,18 +250,27 @@ and [Rolling back from 3.x to 2.2.1](DEPLOY.md#rolling-back-from-3x-to-221).
 - Tabs on each dashboard; tiles and folders on each tab's grid, in Small,
   Medium and Large
 - Folders inside folders (up to 12 levels), paging when full, minimisable,
-  in seven looks with their own colours, text colour and **Contents size**
+  in seven looks with their own colours, text colour, description and
+  **Contents size**
+- A minimised folder shows a preview of the icons inside, or its own icon
+  (**When minimised, show** in its dialog)
+- A folder opened inside another folder makes its outer folder taller, so
+  you see all its items. Only the view changes, not the saved layout
 - Drag and drop for tabs, folders and tiles; hold a tile over another to make
   a folder; resize folders by their edges
 - Select several with Ctrl-click; copy, cut and paste, and **Move or copy
   to…** any dashboard, tab or folder
 - Right-click menus on tiles, folders, tabs and the empty space inside them
+- **Duplicate** in the tile, folder and tab dialogs, as well as on
+  right-click
 - Undo / redo; edits are a draft until you click **Save**
 - Edit mode switches itself off after a while with no activity, and never
   throws away unsaved changes
 - Search (`/`) finds tiles and folders at any depth on the dashboard you're
-  viewing, and can show you where each one lives
+  viewing, and can show you where each one lives. **Esc** closes it
 - Arrow-key navigation between tiles
+- Hover over a tile or folder (or move to it with the keyboard) to see its
+  name, then its description
 
 ### Tiles
 - **Link** (opens a URL), **SSH** (opens your SSH app) and **Note** (text
@@ -257,8 +279,11 @@ and [Rolling back from 3.x to 2.2.1](DEPLOY.md#rolling-back-from-3x-to-221).
 - **Address** and optional **Away address**, with a per-browser Home / Away
   switch
 - Status badge with response time; tiles On / Off; dashboard, tab, folder and global gates
-- Descriptions, custom colours with Auto / Light / Dark text, and separate
-  background, text and icon opacity
+- Descriptions, custom colours, and separate background, text and icon
+  opacity
+- **Text colour** on tiles, folders and tabs: *Auto* picks whichever of
+  black or white is easier to read on the colour, or choose *Light* or
+  *Dark*. HOPS warns you if your choice would be hard to read
 
 ### Look
 - 8 theme presets with Dark, Light and Auto modes, and four text sizes, chosen
@@ -270,6 +295,8 @@ and [Rolling back from 3.x to 2.2.1](DEPLOY.md#rolling-back-from-3x-to-221).
   and your own uploads; **Settings › Icons** shows where each upload is used
 - Optional animations for drops and folder moves (On / Always / Off)
 - Header with your own text and title
+- Tabs with their own icon, colour, **Text colour** and background; a
+  coloured tab shows hover with its border, so its text stays readable
 
 ### Network Discovery
 - **Scan your network**: an IP range (`192.168.1.0/24`, `192.168.1.1-50`,
@@ -305,27 +332,57 @@ and [Rolling back from 3.x to 2.2.1](DEPLOY.md#rolling-back-from-3x-to-221).
   each
 - **Add to HOPS** bookmark, **Dead links**, **Duplicates** and **Blocked status
   checks**
-- Export one dashboard or all of them, and import from Homer, Dashy,
-  Heimdall and HOPS exports; a dashboard with a name you already have asks
-  Replace, Keep both or Skip. Exports carry their uploaded icons and
-  backgrounds
+- Export one dashboard, or every dashboard in one file with **Export all**.
+  Exports hold dashboards only, with their uploaded icons and backgrounds;
+  settings and the theme are in backups
+- Import from Homer, Dashy, Heimdall and HOPS exports. Import lists the
+  file's dashboards before it changes anything: one with a name you already
+  have offers **Replace**, **Keep both** or **Skip**, and any other can be
+  added or skipped, so you can take only part of a file. Fields HOPS doesn't
+  recognise are listed, before and after
 - **Backups**: create, download, upload, restore and clean up, with
   retention rules. A failed backup shows a warning until one succeeds
-- **Global settings**: every server setting, grouped, each with its default
+- **Global settings**: every server setting, grouped, each with its default.
+  Turn off **Show the edit and Settings buttons when signed out** for a
+  tidier bar for people who only view; go to `/settings` on your HOPS
+  address to sign in. An installed HOPS app always keeps the gear, since it
+  has no address bar
 - **Logs**, **Password** and **Factory reset** (which backs up first)
 
 ### Phones and tablets
 - Responsive layout for phones and tablets
-- Add HOPS to your phone's home screen; over HTTPS it opens full screen like
-  an app
-- Editing is hidden on phones (480 pixels wide or less). Tablets can edit,
-  though a mouse is easier
+- Add HOPS to your home screen. On Android, open HOPS in Chrome, tap **⋮**,
+  then **Add to Home screen** (or **Install app**). On an iPhone or iPad,
+  open it in Safari (it must be Safari), tap **Share**, then **Add to Home
+  Screen**
+- Over `https://` (or behind a reverse proxy with a certificate), HOPS
+  installs as a full-screen app and keeps an offline copy. Over plain
+  `http://`, it's a home-screen shortcut that opens in a normal browser
+  window, with no offline copy. See [HTTPS](DEPLOY.md#https)
+- Editing is hidden on phones (480 pixels wide or narrower). Tablets and
+  foldables can edit, though a mouse is easier. Settings works on a phone
+  once you're signed in
+
+### Speed and offline
+- Opening a dashboard loads that dashboard first. The others arrive in the
+  background, and HOPS says if they can't be loaded, with **Retry**
+- When HOPS can't be reached, a browser that has the offline copy still
+  shows your dashboards as last seen, with a banner saying so. The page
+  updates by itself when HOPS is back. Signed in, **About HOPS** shows
+  whether this browser has the copy. Browsers only keep it on `https://` addresses and
+  `localhost`
 
 ### Security
 - No login to view; one admin login to edit and change settings
 - Bcrypt password hashing, forced change of the default password on first
   sign-in
-- Forgotten password: `hops reset-password`, run on the HOPS computer itself
+- Forgotten password: run the HOPS program with `reset-password` on the HOPS
+  computer itself. It finds your data and prints a temporary password. For
+  example `sudo /opt/hops/hops reset-password` (installer),
+  `docker exec hops ./hops reset-password` (Docker),
+  `./hops-darwin-arm64 reset-password` (macOS), or
+  `.\hops-windows-amd64.exe reset-password` from the HOPS folder (Windows,
+  as Administrator). Add `--data <folder>` if it can't find your data
 - HttpOnly session cookies and CSRF protection
 - Login rate limiting per IP (20 a minute by default)
 - Browser security headers, checked uploads, and hardened outbound requests
@@ -340,7 +397,7 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability.
 | `/` | Search this dashboard | Anywhere |
 | `↑ ↓ ← →` | Move between tiles | Viewing |
 | `Enter` | Open the highlighted tile | Viewing |
-| `Escape` | Close a dialog or search | Anywhere |
+| `Escape` | Close a dialog, or search (wherever the focus is) | Anywhere |
 | `Ctrl+S` | Save the draft | Edit |
 | `Ctrl+Z` / `Ctrl+Shift+Z` or `Ctrl+Y` | Undo / redo | Edit |
 | `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | Copy / cut / paste | Edit |

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### You'll notice
+After upgrading, a few things look or behave differently. Details are below.
+- **Some coloured tiles and tabs now have black text.** Text colour *Auto*
+  picks whichever of black or white is easier to read on the colour. To keep
+  white text, set the tile's or tab's **Text colour** to *Light*.
+- **The top bar's Export All saves dashboards only.** Settings and the theme
+  are in backups (Settings › Backups).
+- **Buttons say the same thing everywhere.** "Revert" is now **Discard**;
+  "Save order", "Save Background" and "Save changes" are now **Save**; Help's
+  "Got it!" is now **Close**.
+- **The edit toolbar uses the same buttons as the pages,** with the add
+  buttons and Dashboard on the left and Save on the right.
+- **A coloured tab shows hover with its border,** instead of brightening.
+- **A new app icon.** Reinstall HOPS on a phone to see it.
+
 ### Added
 - **"When minimised, show" for folders.** In a folder's dialog, choose
   **Icons inside** (as before) or **Its own icon**. With its own icon, a
@@ -82,7 +97,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to fit, and a joined-up name such as "HomeAssistant" breaks at its capital
   ("Home / Assistant") rather than mid-word. Small names can take two lines.
 - **Settings › Global settings lines up.** Every setting has its description
-  on the left, then the control, then Reset to default, Revert and Save beside
+  on the left, then the control, then Reset to default, Discard and Save beside
   it. Boxes are sized to what goes in them: the port box fits five digits.
 - **One set of reorder buttons:** Settings › Dashboards and Tab order both
   have to top, up, down and to bottom, large and clear. Dashboards gained to

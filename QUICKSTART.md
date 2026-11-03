@@ -78,7 +78,10 @@ mkdir data
 ```
 
 Always give `--data`: it is the folder that holds your dashboards, backups
-and uploads. HOPS prints a line like
+and uploads. On Windows, if you put a path with spaces in quotes, don't end
+it with a backslash: `--data "C:\HOPS Data"` works, but
+`--data "C:\HOPS Data\"` doesn't (HOPS says so). A `?` or `#` in the path is
+fine. HOPS prints a line like
 `msg="server starting" version="HOPS v3.0.1" addr=:8080` when it is ready.
 
 > On macOS, a file downloaded with a web browser may be blocked as "from an
@@ -148,8 +151,17 @@ host. For all the options, see [Proxmox container](DEPLOY.md#proxmox-container-h
 
 You can change the password later under **Settings › Password**. If you
 ever forget it, run the program with `reset-password` on the computer that
-runs HOPS (for example `sudo /opt/hops/hops reset-password`); the sign-in
-dialog's **Forgot password?** shows the command for each kind of install. A
+runs HOPS. It finds your data, prints a temporary password and signs out
+every browser; sign in with it and choose a new password. For example:
+
+- Installer or Proxmox: `sudo /opt/hops/hops reset-password`
+- Docker: `docker exec hops ./hops reset-password`
+- macOS: `./hops-darwin-arm64 reset-password` (or `hops-darwin-amd64`)
+- Windows: `.\hops-windows-amd64.exe reset-password`, from the HOPS folder
+  in a PowerShell window opened as Administrator
+
+If it can't find your data, add `--data` and the folder. The sign-in
+dialog's **Forgot password?** shows these commands too. A
 **Log out** button sits at the right of the top bar (on a phone, it's in
 Settings instead).
 
@@ -236,14 +248,17 @@ the end it's your dashboard: organise it the way that suits you.
 
 If you aren't in edit mode already, click the **pencil** in the top bar.
 It turns into an **Editing** badge and a toolbar appears, pinned to the
-bottom of the screen:
+bottom of the screen. On the left:
 
-- **Save** (Ctrl+S) and **Discard**.
-- **Undo** (Ctrl+Z) and **Redo** (Ctrl+Shift+Z or Ctrl+Y).
 - **Add tile**, **Add folder**, **Add tab**.
 - **Dashboard**: the dashboard's own settings, in three parts: **Header**,
   **Background** and **Settings**. Step 6 covers the header and
   background; status checks (in **Settings**) are in Step 5.
+
+On the right:
+
+- **Undo** (Ctrl+Z) and **Redo** (Ctrl+Shift+Z or Ctrl+Y).
+- **Discard** and **Save** (Ctrl+S).
 
 Click **Editing** again to leave edit mode.
 
@@ -280,8 +295,9 @@ away: it asks Save, Discard or Keep editing, and waits.
    is only an example, not a value. If the address isn't one HOPS can
    open (a typo such as `http:\\192.168.1.1`, say), the dialog says so
    under the field.
-4. Optional: a **Subtitle/Description**, an **Icon** (click **Edit icon**
-   to search the built-in icons or upload your own), and the **Size**.
+4. Optional: a **Description**, an **Icon** (click **Edit icon** to search
+   the built-in icons or upload your own), and the **Size**. Hovering over
+   a tile shows its name, then its description.
 5. Leave everything else as it is for now: how the tile opens, its colours,
    status checks and away address are all in Step 5.
 6. Click **Create**.
@@ -299,9 +315,9 @@ Try each way of making a folder with your four tiles:
    it there: the cue says *Hold to make a folder*, then *Make a folder*.
    Let go. The new folder's settings open: name it `Network` and click the
    dialog's **Save**.
-2. **With the button.** Click **Add folder**, type a **Folder name**
-   (`Media`), and click **Create**. **Look** (*Folder (flat)* is the
-   default) and the colour are optional; Step 5 shows every look.
+2. **With the button.** Click **Add folder**, type a **Name** (`Media`),
+   and click **Create**. A **Description**, the **Look** (*Folder (flat)*
+   is the default) and the colour are optional; Step 5 shows every look.
 3. **Drag things in.** Drag *NAS* and then *Plex* onto the *Media* folder.
 4. **A folder inside a folder.** Right-click inside *Media* and choose
    **Add folder here**; call it `Streaming`, then drag *Plex* into it.
@@ -319,7 +335,9 @@ Other ways to move things:
   folder here** and **Paste here**.
 - Right-click a tile or folder for **Edit**, **Duplicate**, **Cut**,
   **Copy**, **Move/Copy to…**, **Minimise** and **Delete**.
-- Every item also has a small pencil button that opens its settings.
+- Every item also has a small pencil button that opens its settings. The
+  tile and folder dialogs have **Duplicate** too; save your changes in the
+  dialog first, since it copies the saved item.
 
 Resize a folder by dragging its edges (or select it and press
 Shift+Arrow keys). Drag items to move them around the grid. Every move
@@ -328,7 +346,8 @@ can be undone.
 ### Add a tab
 
 Click **Add tab**, give it a **Tab Name** (and an icon or colour if you
-like), and click **Create**. Drag tabs to reorder them. To change a tab
+like), and click **Create**. A coloured tab has a **Text colour** like tiles
+and folders: *Auto* picks black or white, whichever is easier to read. Drag tabs to reorder them. To change a tab
 later, click the pencil next to its name (or right-click it): the **Edit
 Tab** dialog also has **Duplicate** and **Delete**.
 
@@ -340,9 +359,10 @@ is no right answer.
 ### Editing on phones and tablets
 
 On screens 480 pixels wide or narrower (phones), the edit button is hidden:
-phones are for viewing. On tablets and other touch screens wider than that,
-editing works, but dragging and the larger dialogs are fiddly, so a
-computer with a mouse is recommended.
+phones are for viewing. On tablets, foldables and other touch screens wider
+than that, editing works, but dragging and the larger dialogs are fiddly,
+so a computer with a mouse is recommended. Settings works on a phone once
+you're signed in.
 
 ## Step 5: Tiles and folders in depth
 
@@ -363,16 +383,19 @@ Everything here is in the item's dialog: in edit mode, click the item's pencil (
 
 - **Size**: *Small*, *Medium* (the default) or *Large*. Inside a folder,
   a tile is shown at the folder's **Contents size** instead (see below).
-- **Background Color**: pick a swatch, any colour, or *None* to use the
-  theme's colour.
+- **Colour**: pick a swatch, any colour, or *None* to use the theme's
+  colour.
 - **Background opacity**, **Text opacity** and **Icon opacity**: fade each
   part on its own. Lower lets the background picture show through.
+- **Text colour**: on a coloured tile, *Auto* (the default) picks whichever
+  of black or white is easier to read. Choose *Light* or *Dark* to fix it;
+  HOPS warns you if that would be hard to read.
 - **Edit icon**: type a name for suggestions, browse the icon library,
   upload your own, and set an **Icon background**. Click **Done**.
 
 ### How a tile opens
 
-**Open Mode** decides what a click does:
+**Open mode** decides what a click does:
 
 - **New Tab** (the default): opens the address in a new browser tab.
 - **Same Tab**: replaces HOPS with the service.
@@ -381,7 +404,7 @@ Everything here is in the item's dialog: in edit mode, click the item's pencil (
 - **Popup Modal**: asks first, with **Open in New Tab** and **Open in Same
   Tab** buttons.
 
-SSH tiles always open your SSH app, so they have no Open Mode choice.
+SSH tiles always open your SSH app, so they have no Open mode choice.
 
 ### Status checks
 
@@ -436,9 +459,13 @@ box*, *Simple tab*, *Folder (flat)*, *Folder with paper*, *Folder
 Rounded box has a tab; **Tab position** puts it on the *Left*, *Centre* or
 *Right*.
 
-Under **Colour**: the **Folder colour** (or *None* for the theme's colour),
-its **Opacity**, and the **Text colour** (*Auto*, *Light* or *Dark*). HOPS
-warns you if the text would be hard to read.
+Under **Colour**: the folder's colour (or *None* for the theme's colour),
+its **Background opacity**, and the **Text colour** (*Auto*, *Light* or
+*Dark*), the same choice as on tiles and tabs. HOPS warns you if the text
+would be hard to read. An outlined folder is see-through, so its colour
+draws only the outline and it has no Background opacity.
+
+A folder can have a **Description** too, shown when you hover over it.
 
 ### Folder size and pages
 
@@ -542,13 +569,13 @@ only where they help you find things.
 
 **Tab background.** Open the tab's dialog and click **Configure Tab
 Background**. Choose **Same as the dashboard** or **Its own background**
-(the same choices as above), then **Save Background**. The tab dialog also
-has its own **Background Color** and **Opacity**.
+(the same choices as above), then **Save**. The tab dialog also has its own
+**Background Color**, **Opacity** and **Text colour**.
 
 **Folder background.** In **Edit Folder**, the folder's colour and opacity
 are under **Colour**. For a picture, click **Background…** and choose **Its
 own picture** (an *Image* or a *Slideshow*) or **No picture of its own —
-show what's behind**, then **Save Background**. Folder slideshows play only
+show what's behind**, then **Save**. Folder slideshows play only
 while **Animated folder backgrounds** is on (it is by default:
 Settings › Global settings › Look & motion, or per dashboard in
 **Dashboard › Settings**). On a device that asks for reduced motion, they
@@ -617,15 +644,17 @@ skipped. If any dashboard in the file is broken, nothing is imported and HOPS
 says which one and why. If the path is taken, the new one gets a suffix
 (`/home` becomes `/home-1`). Anything HOPS can't bring across (an icon it
 can't draw, a Dashy widget) is listed when the import finishes, so you know
-what to tidy up. A backup file can't be imported here: restore it in
-**Settings › Backups**.
+what to tidy up. If a HOPS file has fields this HOPS doesn't recognise (from
+a newer or changed version, say), they are still imported, and HOPS lists
+them for each dashboard before and after the import. A backup file can't be
+imported here: restore it in **Settings › Backups**.
 
 ### Export and share
 
-The **Export** button next to a dashboard in Settings › Dashboards (or
-**Export Dashboard** in the top bar while editing) saves that dashboard as a
-HOPS JSON file. **Export all**, at the top of Settings › Dashboards, saves
-every dashboard in one file. Import reads both. The file carries your
+The **Export** button next to a dashboard in Settings › Dashboards saves
+that dashboard as a HOPS JSON file. **Export all**, at the top of Settings ›
+Dashboards, saves every dashboard in one file. **Export Dashboard** in the
+top bar while editing offers both. Import reads either. The file carries your
 uploaded icons and backgrounds with it, so it can be imported into another
 HOPS. An export holds dashboards only. It is not a backup: a backup is the
 whole app (settings, icons and so on). For that, see Step 9.
@@ -643,7 +672,8 @@ Search them, or upload your own (PNG, JPG, GIF, WebP or SVG), under
 Click **Search** or press `/`. On a dashboard it searches that dashboard's
 tiles and folders, at any depth. Use ↑ and ↓ to move, **Enter** to open
 it, and **Shift**+**Enter** (or Shift-click) to show where it lives
-instead. **Esc** closes search.
+instead. **Esc** closes search wherever you are in it, and on a touch
+screen you can tap the **Esc** button in the search box.
 
 ### Keyboard
 
@@ -660,18 +690,45 @@ all your dashboards. Everyone else can use the dashboard links on the left
 of the top bar (unless you replaced them with custom text), or just go
 to the dashboard's address, such as `http://<server>:8080/media`.
 
+Opening a dashboard loads that dashboard first, so it shows quickly even in
+a big setup. The others arrive in the background. Until they have, HOPS
+says *Loading the other dashboards…* where it needs them, and if they can't
+be loaded it says why, with **Retry**. Editing and exporting wait until
+every dashboard has loaded.
+
+### When HOPS can't be reached
+
+A browser that has opened HOPS before keeps an offline copy. If HOPS can't
+be reached (the server is down, or your phone is away from home), that
+browser still opens your dashboards as last seen, with a banner saying so.
+When HOPS is back, the page updates by itself, unless you are editing.
+
+Browsers only keep the copy on `https://` addresses and on `localhost`, so
+over plain `http://` there is no offline copy. Signed in, **About HOPS**
+shows whether this browser has it, and why not. See
+[HTTPS](DEPLOY.md#https) in the Deployment guide.
+
 ### On your phone
 
 - **QR code**: on **Settings › Dashboards**, click a dashboard's QR button
   (*Show QR code (scan with phone)*) and scan it with the phone's camera.
   The dialog also has **Copy URL**.
-- **Home screen**: open HOPS in the phone's browser and use the browser's
-  *Add to Home Screen* (on iPhone: the Share button). HOPS then opens from
-  its own icon, like an app.
+- **Home screen on Android**: open HOPS in Chrome, tap the **⋮** menu,
+  then **Add to Home screen** (on some phones it says **Install app**).
+- **Home screen on iPhone or iPad**: open HOPS in Safari (it must be Safari:
+  other browsers on iOS can't do this), tap the **Share** button, then
+  **Add to Home Screen**.
+- **What you get depends on the address.** Over `https://` (or behind a
+  reverse proxy with a certificate), HOPS installs as a full-screen app with
+  its own icon and the offline copy (see *When HOPS can't be reached*
+  above). Over plain `http://`, it's a home-screen shortcut that opens in a
+  normal browser window, with no offline copy.
 - Phones are for viewing: at 480 pixels wide or narrower, the edit button
-  is hidden. The gear (Settings) is still there for backups and your
-  password (once you've signed in, if you've hidden the buttons for people
-  who are signed out: see Step 2).
+  is hidden. Tablets and foldables can edit, though a mouse is easier. The
+  gear (Settings) still works on a phone once you're signed in, for
+  backups and your password. If you've hidden the buttons for people who
+  are signed out (Step 2), go to `/settings` to sign in. An installed HOPS
+  app always shows the gear, since it has no address bar.
 
 ## Step 9: Keep it tidy and safe
 
@@ -715,9 +772,13 @@ If a backup ever fails, HOPS shows a warning in Settings until one succeeds.
 ### Other settings worth knowing
 
 - **Settings › Global settings**: every server setting in one page, in
-  groups (Server, Sign-in & security, Uploads, Editing, Look & motion,
-  Status checks, Discovery). Each shows its default, and a few say
-  **Restart required**.
+  groups (General, Server, Sign-in & security, Uploads, Editing, Look &
+  motion, Status checks, Discovery). Each shows its default, with **Reset to
+  default**, **Discard** and **Save** beside it, and a few say **Restart
+  required**.
+- If the data folder is on a network share that can't keep HOPS's database
+  in its normal mode, Settings shows a notice (and the log warns). HOPS
+  still works, but it can be slower.
 - **Settings › Logs**: what HOPS has been doing, with **Copy** and
   **Download .txt** for when you ask for help.
 - **Settings › Password**: change your password.
