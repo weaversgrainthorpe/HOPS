@@ -14,6 +14,7 @@
   import { onMount, onDestroy } from 'svelte';
   import Icon from '@iconify/svelte';
   import Button from '$lib/components/shared/Button.svelte';
+  import ActionButton from '$lib/components/shared/ActionButton.svelte';
   import { toast } from '$lib/stores/toast';
   import { listSettings, type SettingDef } from '$lib/utils/api';
   import { saveGlobalSetting } from '$lib/stores/config';
@@ -519,26 +520,10 @@
               </div>
               <div class="row-actions">
                 {#if isHoursDays(s) ? draftHours(s) !== Number(s.default) : String(drafts[s.key]) !== shown(s, s.default)}
-                  <Button variant="ghost" size="small" onclick={() => resetToDefault(s)}>
-                    Reset to default
-                  </Button>
+                  <ActionButton action="reset" small onclick={() => resetToDefault(s)} />
                 {/if}
-                <Button
-                  variant="ghost"
-                  size="small"
-                  onclick={() => reset(s)}
-                  disabled={!isDirty(s)}
-                >
-                  Revert
-                </Button>
-                <Button
-                  variant="primary"
-                  size="small"
-                  onclick={() => save(s)}
-                  disabled={!isDirty(s) || savingKey === s.key}
-                >
-                  {savingKey === s.key ? 'Saving…' : 'Save'}
-                </Button>
+                <ActionButton action="discard" small onclick={() => reset(s)} disabled={!isDirty(s)} />
+                <ActionButton action="save" small onclick={() => save(s)} disabled={!isDirty(s)} busy={savingKey === s.key} />
               </div>
             </div>
           </div>
@@ -580,7 +565,7 @@
   }
 
   /* Every row has the same shape: the label and description take the room on the left; on the
-     right sit the control (in a column of its own width) and then Reset, Revert and Save, in a
+     right sit the control (in a column of its own width) and then Reset to default, Discard and Save, in a
      column of theirs. Both columns have a fixed width, so controls and buttons line up down the
      page whatever the row holds. Each control is sized to its content (see .row-control). */
   .rows {
@@ -653,7 +638,7 @@
 
   .row-input {
     display: grid;
-    grid-template-columns: 14rem 19rem;
+    grid-template-columns: 14rem 22rem;
     column-gap: 1rem;
     align-items: start;
   }
@@ -766,7 +751,7 @@
     min-width: 0;
   }
 
-  /* Reset to default, Revert, Save: right-aligned in their column, so Revert and Save never move. */
+  /* Reset to default, Discard, Save: right-aligned in their column, so Revert and Save never move. */
   .row-actions {
     white-space: nowrap;
     display: flex;

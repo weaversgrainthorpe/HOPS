@@ -7,6 +7,7 @@
   import OpacitySlider from './OpacitySlider.svelte';
   import IconEditModal from './IconEditModal.svelte';
   import Modal from '../shared/Modal.svelte';
+  import ActionButton from '../shared/ActionButton.svelte';
   import { editMode } from '$lib/stores/editMode';
   import StatusCheckSetting from '../editor/StatusCheckSetting.svelte';
   import { tileSetting, type TileSetting, type StatusContext } from '$lib/editor/statusChecks';
@@ -520,30 +521,19 @@
     <div class="modal-actions">
       <div class="actions-left">
         {#if onDelete}
-          <button type="button" class="btn-danger" onclick={handleDelete}>
-            <Icon icon="mdi:trash-can" width="20" />
-            Delete
-          </button>
+          <ActionButton action="delete" onclick={handleDelete} />
         {/if}
         {#if entry.id && onDuplicate}
-          <button type="button" class="btn-secondary" onclick={onDuplicate} disabled={dirty}
-            aria-describedby={dirty ? 'entry-dup-hint' : undefined}>
-            <Icon icon="mdi:content-copy" width="20" />
-            Duplicate
-          </button>
+          <ActionButton action="duplicate" onclick={onDuplicate} disabled={dirty}
+            aria-describedby={dirty ? 'entry-dup-hint' : undefined} />
         {/if}
       </div>
       {#if entry.id && onDuplicate && dirty}
         <p class="dup-hint" id="entry-dup-hint" role="status">Save your changes before duplicating.</p>
       {/if}
       <div class="action-right">
-        <button type="button" class="btn-secondary" onclick={onCancel}>
-          Cancel
-        </button>
-        <button type="submit" form="entry-edit-form" class="btn-primary">
-          <Icon icon="mdi:content-save" width="20" />
-          {entry.id ? 'Save' : 'Create'}
-        </button>
+        <ActionButton action="cancel" onclick={onCancel} />
+        <ActionButton action={entry.id ? 'save' : 'create'} type="submit" form="entry-edit-form" />
       </div>
     </div>
   {/snippet}
@@ -746,18 +736,6 @@
     gap: 0.5rem;
   }
 
-  .modal-actions button {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.625rem 1.25rem;
-    border: none;
-    border-radius: 0.375rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
   /* .btn-primary, .btn-secondary, .btn-danger styles are defined globally in app.css */
 
   @media (max-width: 640px) {
@@ -775,7 +753,7 @@
       margin-left: 0;
     }
 
-    .btn-danger {
+    .actions-left :global(.btn-danger) {
       width: 100%;
     }
   }

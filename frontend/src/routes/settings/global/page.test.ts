@@ -44,7 +44,7 @@ describe('/settings/global', () => {
 		expect((screen.getByLabelText(/Log level/) as HTMLSelectElement).value).toBe('info');
 	});
 
-	it('every row has the same shape: control, then Reset/Revert/Save beside it; boxes fit their values', async () => {
+	it('every row has the same shape: control, then Reset to default/Discard/Save beside it; boxes fit their values', async () => {
 		render(Page);
 		const port = (await screen.findByLabelText(/Port/)) as HTMLInputElement;
 		for (const el of [port, screen.getByLabelText(/Log level/)]) {
@@ -52,7 +52,7 @@ describe('/settings/global', () => {
 			// The control and the buttons are the two cells of one line, in this order.
 			expect(Array.from(input.children).map((c) => c.className.split(' ')[0])).toEqual(['row-control', 'row-actions']);
 			const names = Array.from(input.querySelectorAll('.row-actions button')).map((b) => b.textContent?.trim());
-			expect(names.slice(-2)).toEqual(['Revert', 'Save']);
+			expect(names.slice(-2)).toEqual(['Discard', 'Save']);
 		}
 		// A number box is sized to its largest value (65535: five digits), not the column.
 		expect(port.style.width).toBe('calc(5ch + 3.5rem)');
@@ -60,12 +60,14 @@ describe('/settings/global', () => {
 		expect(port.closest('.row')!.firstElementChild!.classList.contains('row-label')).toBe(true);
 	});
 
-	it('Reset to default sits before Revert and Save', async () => {
+	it('Reset to default sits before Discard and Save, each with the shared action icon', async () => {
 		render(Page);
 		const port = (await screen.findByLabelText(/Port/)) as HTMLInputElement;
 		await fireEvent.input(port, { target: { value: '9090' } });
 		const names = Array.from(port.closest('.row')!.querySelectorAll('.row-actions button')).map((b) => b.textContent?.trim());
-		expect(names).toEqual(['Reset to default', 'Revert', 'Save']);
+		expect(names).toEqual(['Reset to default', 'Discard', 'Save']);
+		const icons = Array.from(port.closest('.row')!.querySelectorAll('.row-actions button')).map((b) => b.getAttribute('data-icon'));
+		expect(icons).toEqual(['mdi:restart', 'mdi:close-circle-outline', 'mdi:content-save']);
 	});
 
 	it('in a Docker container the port row says to change the port mapping instead', async () => {

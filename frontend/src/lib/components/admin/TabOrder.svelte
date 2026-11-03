@@ -14,6 +14,7 @@
   import { reorderTabs } from '$lib/editor/treeOps';
   import { moveBlock, sortByName, mergeAfterConflict } from '$lib/editor/tabOrder';
   import { toast } from '$lib/stores/toast';
+  import ActionButton from '$lib/components/shared/ActionButton.svelte';
   import ReorderButtons, { type ReorderMove } from '$lib/components/shared/ReorderButtons.svelte';
 
   let { dashboardId }: { dashboardId: string } = $props();
@@ -312,9 +313,9 @@
 
     <div class="foot">
       <span class="status" role="status">{dirty ? 'Unsaved changes' : 'No changes'}</span>
-      <button type="button" class="btn-secondary" disabled={!history.length || busy} onclick={undo}>Undo</button>
-      <button type="button" class="btn-secondary" disabled={!dirty || busy} onclick={discard}>Discard changes</button>
-      <button type="button" class="btn-primary" disabled={!dirty || busy} onclick={save}>{busy ? 'Saving…' : 'Save order'}</button>
+      <ActionButton action="undo" disabled={!history.length || busy} onclick={undo} />
+      <ActionButton action="discard" disabled={!dirty || busy} onclick={discard} />
+      <ActionButton action="save" disabled={!dirty} {busy} onclick={save} />
     </div>
   {/if}
 </section>

@@ -9,6 +9,7 @@
   import { tick } from 'svelte';
   import type { Background, HeaderConfig } from '$lib/types';
   import Modal from '../shared/Modal.svelte';
+  import ActionButton from '../shared/ActionButton.svelte';
   import HeaderSection from '../admin/HeaderSection.svelte';
   import BackgroundSection from '../admin/BackgroundSection.svelte';
   import DashboardSettingsSection from '../admin/DashboardSettingsSection.svelte';
@@ -196,11 +197,8 @@
     {#if problem}
       <p class="problem" role="alert">{problem}</p>
     {/if}
-    <button type="button" class="btn-secondary" onclick={() => !saving && onClose()} disabled={saving}>Cancel</button>
-    <button type="button" class="btn-primary" onclick={handleSave} disabled={saving || settingsInvalid}>
-      <Icon icon={saving ? 'mdi:loading' : 'mdi:content-save'} width="20" class={saving ? 'spin' : undefined} />
-      {saving ? 'Saving…' : 'Save'}
-    </button>
+    <ActionButton action="cancel" onclick={() => !saving && onClose()} disabled={saving} />
+    <ActionButton action="save" onclick={handleSave} disabled={settingsInvalid} busy={saving} />
   {/snippet}
 </Modal>
 
@@ -257,16 +255,5 @@
     margin: 0 auto 0 0;
     color: var(--color-error, #dc2626);
     font-size: 0.85rem;
-  }
-  .btn-primary,
-  .btn-secondary {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.625rem 1.25rem;
-    border: none;
-    border-radius: 0.375rem;
-    font-weight: 500;
-    cursor: pointer;
   }
 </style>

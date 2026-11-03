@@ -79,7 +79,7 @@ test.describe('tab order page', () => {
     await row.scrollIntoViewIfNeeded();
     await page.getByRole('button', { name: 'Move Tab 55 to the top' }).click();
     await expect(page.getByText('Unsaved changes')).toBeVisible();
-    await page.getByRole('button', { name: 'Save order' }).click();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByText('Tab order saved')).toBeVisible();
     await expect(page.getByText('No changes')).toBeVisible();
     expect((await serverOrder(page, d.id)).slice(0, 3)).toEqual(['Tab 55', 'Tab 1', 'Tab 2']);
@@ -92,7 +92,7 @@ test.describe('tab order page', () => {
     await expect(page.getByText('3 ticked')).toBeVisible();
     await page.getByRole('spinbutton').fill('2');
     await page.getByRole('button', { name: 'Move', exact: true }).click();
-    await page.getByRole('button', { name: 'Save order' }).click();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByText('Tab order saved')).toBeVisible();
     expect((await serverOrder(page, d.id)).slice(0, 5)).toEqual(['Tab 1', 'Tab 10', 'Tab 20', 'Tab 30', 'Tab 2']);
   });
@@ -104,7 +104,7 @@ test.describe('tab order page', () => {
     const row3 = page.locator('[data-tab-row]', { has: page.getByRole('checkbox', { name: 'Tab 3', exact: true }) });
     await row3.locator('.grip').dragTo(target);
     await expect(page.getByText('Unsaved changes')).toBeVisible();
-    await page.getByRole('button', { name: 'Save order' }).click();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByText('Tab order saved')).toBeVisible();
     expect((await serverOrder(page, d.id)).slice(0, 3)).toEqual(['Tab 3', 'Tab 1', 'Tab 2']);
   });
@@ -139,7 +139,7 @@ test.describe('tab order page', () => {
       await expect(anon.getByRole('navigation', { name: 'Settings sections' })).toBeVisible();
       await anon.getByRole('link', { name: `Tab order for ${d.name}` }).click();
       await anon.getByRole('button', { name: 'Move Tab 6 to the top' }).click();
-      await anon.getByRole('button', { name: 'Save order' }).click();
+      await anon.getByRole('button', { name: 'Save', exact: true }).click();
       await expect(anon.locator('[data-tab-order-problem]')).toHaveText(
         `Not saved: "${d.name}" is being edited (an edit session or unsaved draft is open). Save or discard that first, then save the tab order.`
       );
@@ -164,7 +164,7 @@ test.describe('tab order page', () => {
     const d = await seed(page, context, 6);
     await openTabOrder(page, d.name);
     await page.getByRole('button', { name: 'Move Tab 6 to the top' }).click();
-    await page.getByRole('button', { name: 'Save order' }).click();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByText('Tab order saved')).toBeVisible();
     await page.goto(d.path);
     await expect(page.getByRole('tab').first()).toHaveAccessibleName(/Tab 6/);
