@@ -133,6 +133,36 @@ test('Export all, then import it back with one Replace, one Keep both and Skips'
   await expect(page.getByRole('heading', { name: `${b} (2)`, level: 3 })).toBeVisible();
 });
 
+test('fields HOPS does not recognise are imported, and named before and after', async ({ page }) => {
+  const name = uniqueName('Odd fields');
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const file = {
+    dashboards: [{
+      id: slug, name, path: `/${slug}`, mood: 'sunny',
+      tabs: [{ id: `${slug}-t`, name: 'Main', groups: [{ id: `${slug}-g`, name: 'Apps',
+        entries: [{ id: `${slug}-e`, name: 'Example', url: 'https://example.com', custom: 7 }] }] }]
+    }]
+  };
+  await page.goto('/settings/dashboards');
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
+  await page.getByTestId('import-file').setInputFiles({
+    name: 'odd.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(file))
+  });
+  await page.getByRole('button', { name: 'Next' }).click();
+  const where = 'mood; tab "Main" › folder "Apps" › tile "Example" › custom';
+  await expect(page.getByTestId('import-row-unknown')).toHaveText(
+    `2 fields HOPS doesn't recognise will be kept but not used: ${where}`
+  );
+  await page.getByTestId('import-confirm').click();
+  made.push(name);
+  // Imported, but shown as something to check, never a plain success.
+  const box = page.getByTestId('import-warning');
+  await expect(box).toContainText(`Dashboard "${name}": 2 fields HOPS doesn't recognise were kept but are not used: ${where}`);
+  await expect(box).toContainText(`Added: ${name}`);
+  const stored = (await config(page)).dashboards.find((d) => d.name === name) as unknown as Record<string, unknown>;
+  expect(stored?.mood).toBe('sunny');
+});
+
 test('a backup file is refused by name, and nothing is imported', async ({ page }) => {
   const before = (await config(page)).dashboards.length;
   await page.goto('/settings/dashboards');
