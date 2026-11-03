@@ -82,7 +82,7 @@ and uploads. On Windows, if you put a path with spaces in quotes, don't end
 it with a backslash: `--data "C:\HOPS Data"` works, but
 `--data "C:\HOPS Data\"` doesn't (HOPS says so). A `?` or `#` in the path is
 fine. HOPS prints a line like
-`msg="server starting" version="HOPS v3.0.1" addr=:8080` when it is ready.
+`msg="server starting" version="HOPS v3.1.0" addr=:8080` when it is ready.
 
 > On macOS, a file downloaded with a web browser may be blocked as "from an
 > unidentified developer". Downloading with `curl` as above avoids that.

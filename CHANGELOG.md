@@ -5,7 +5,7 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.1.0] - 2026-11-03 — Move dashboards between installs, and one look everywhere
 
 3.1 lets you move dashboards between HOPS installs in one file, choosing
 what to import; choose the text colour on tiles and tabs; describe folders;
