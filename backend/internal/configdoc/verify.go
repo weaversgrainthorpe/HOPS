@@ -751,8 +751,10 @@ func (v *verifier) checkContainer(owner string, c Obj, note func(string, Obj) st
 			if _, ok := SizeSpan(km["size"]); !ok {
 				v.add("%s: size is %s, want \"small\", \"medium\" or \"large\"", n, trunc(show(km["size"])))
 			}
+			v.checkItemText(n, km)
 		case "folder":
 			v.checkBackground(n, km)
+			v.checkItemText(n, km)
 			v.noKeys(n, km, "layout")
 			v.checkFolderShape(n, km)
 			for _, k := range []string{"size", "contentSize"} {
@@ -801,6 +803,29 @@ func (v *verifier) checkFolderShape(n string, f Obj) {
 	check("shape", FolderShapes)
 	check("tabPosition", FolderTabPositions)
 	check("minimisedIcon", FolderMinimisedIcons)
+}
+
+// checkItemText requires a tile's or a folder's textColor, when present, to be
+// one of TextColors (absent means Auto) and its description, when present, to
+// be text. The same rule for both kinds; no length limit (as a tile's
+// description has always had none).
+func (v *verifier) checkItemText(n string, o Obj) {
+	if raw, has := o["textColor"]; has {
+		ok := false
+		if s, isStr := raw.(string); isStr {
+			for _, a := range TextColors {
+				ok = ok || s == a
+			}
+		}
+		if !ok {
+			v.add("%s: textColor is %s, want one of %s (or absent)", n, trunc(show(raw)), quoteList(TextColors))
+		}
+	}
+	if raw, has := o["description"]; has {
+		if _, ok := raw.(string); !ok {
+			v.add("%s: description is %T, want text (or absent)", n, raw)
+		}
+	}
 }
 
 // quoteList is names as "a", "b" or "c".
