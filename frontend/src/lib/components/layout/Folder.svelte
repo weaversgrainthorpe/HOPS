@@ -607,7 +607,7 @@
   <div
     class="nested-box"
     role="group"
-    aria-label="{shownName} folder"
+    aria-label={untitled ? shownName : `${shownName} folder`}
     aria-describedby={sub.description?.trim() ? `${descId}-${sub.id}` : undefined}
     class:tabbed={subTabbed}
     class:dragging={editing && ($drag?.ids.includes(sub.id) ?? false)}

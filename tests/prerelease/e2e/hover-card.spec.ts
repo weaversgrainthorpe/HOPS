@@ -178,7 +178,7 @@ test('both themes: the popup on a tile and on a minimised folder uses the theme 
   }
 });
 
-test('Tab onto a tile below the fold: the page scrolls it into view and its popup stays, on screen', async ({ page, context }) => {
+test('Tab onto a tile below the fold: its popup stays through that scroll, on screen; a later scroll hides it', async ({ page, context }) => {
   const f = await importDash(page, context, (id) => [
     { id: id('far'), kind: 'tile', type: 'link', name: 'Far', description: 'Down below', url: 'https://far.example.lan/', icon: 'mdi:lan',
       openMode: 'newtab', size: 'medium', order: 0, placement: { x: 0, y: 40, w: 2, h: 2 } }
@@ -196,8 +196,11 @@ test('Tab onto a tile below the fold: the page scrolls it into view and its popu
   await page.waitForTimeout(300); // any scroll from the focus has happened
   await expect(card(page).locator('.hc-name')).toHaveText('Far');
   await onScreenBeside(page, (await far.boundingBox())!);
-  await page.keyboard.press('Escape');
+  // A later, ordinary scroll (the wheel) puts it away, though the tile still has focus.
+  await page.mouse.move(600, 400);
+  await page.mouse.wheel(0, -300);
   await expect(card(page)).toHaveCount(0);
+  await expect(far).toBeFocused();
 });
 
 test('no popup at any time during an editor drag, even held over another tile', async ({ page, context }) => {

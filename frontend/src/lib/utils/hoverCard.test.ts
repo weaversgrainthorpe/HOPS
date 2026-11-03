@@ -171,6 +171,10 @@ describe('hoverCard action', () => {
     const after = get(hoverCardState);
     expect(after?.anchor).toBe(el);
     expect(after).not.toBe(before); // a new state: the popup measures and places itself again
+    // Later, an ordinary scroll (not the focus's own) puts it away, focus or not.
+    vi.advanceTimersByTime(400);
+    document.dispatchEvent(new Event('scroll'));
+    expect(get(hoverCardState)).toBeNull();
     el.blur();
     el.dispatchEvent(new FocusEvent('focusout'));
     expect(get(hoverCardState)).toBeNull();

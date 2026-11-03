@@ -914,6 +914,14 @@ describe('the hover popup (one for tiles and folders): the name, then the descri
     expect(describedText(box)).toEqual(['Inside']);
   });
 
+  it('an untitled inset box is announced "Untitled folder" (not "Untitled folder folder")', async () => {
+    const { container } = await renderTab([folder('f', [sub('s', kids(2), { name: '' })], { name: 'Outer' })]);
+    setFolderDrill('d1', 'f', ['s']);
+    await tick();
+    const box = container.querySelector('[data-nested-folder="s"]') as HTMLElement;
+    expect(box.getAttribute('aria-label')).toBe('Untitled folder');
+  });
+
   it('a Rounded untitled folder drilled in: "Back to Untitled folder", as its first line says', async () => {
     const { container } = await renderTab([folder('f', [sub('s', kids(2))], { name: '' })]);
     setFolderDrill('d1', 'f', ['s']);

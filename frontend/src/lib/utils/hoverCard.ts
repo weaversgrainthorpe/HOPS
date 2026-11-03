@@ -7,7 +7,8 @@
 // one popup to the next) and on keyboard focus. Hides: pointer leave, a press (a click or the start of
 // a drag), blur, Escape, scroll, resize. Never on a touch tap, never during an editor drag (suppressed for
 // the whole drag). Never takes a click (pointer-events: none). A keyboard focus that scrolls its item into
-// view keeps its popup (placed again), so Tab onto a tile below the fold still shows it.
+// view keeps its popup (placed again) through that scroll only (FOCUS_SCROLL_MS), so Tab onto a tile below
+// the fold still shows it; any later scroll hides it as usual.
 import { get, writable, type Readable } from 'svelte/store';
 
 export interface HoverCardContent {
@@ -22,13 +23,17 @@ export interface HoverCardContent {
 export interface HoverCardState {
   anchor: HTMLElement;
   content: HoverCardContent;
-  /** Shown for a keyboard focus (kept, and placed again, when that focus scrolls the page). */
+  /** Shown for a keyboard focus (kept, and placed again, through the scroll that focus causes). */
   byKeyboard: boolean;
+  /** When it was shown (Date.now()). */
+  shownAt: number;
 }
 
 export const HOVER_DELAY_MS = 500;
 /** Moving from one popup straight onto the next shows it at once (as native tooltips do). */
 const WARM_MS = 300;
+/** A scroll this soon after a keyboard show is the focus scrolling its item into view; later ones hide it. */
+export const FOCUS_SCROLL_MS = 300;
 
 const state = writable<HoverCardState | null>(null);
 export const hoverCardState: Readable<HoverCardState | null> = { subscribe: state.subscribe };
@@ -69,7 +74,8 @@ function ensureGlobals() {
     'scroll',
     () => {
       const s = get(state);
-      if (s?.byKeyboard && s.anchor.isConnected && s.anchor.contains(document.activeElement)) state.set({ ...s });
+      const ownScroll = !!s?.byKeyboard && Date.now() - s.shownAt < FOCUS_SCROLL_MS;
+      if (s && ownScroll && s.anchor.isConnected && s.anchor.contains(document.activeElement)) state.set({ ...s });
       else hideHoverCard();
     },
     true
@@ -105,7 +111,7 @@ export function hoverCard(node: HTMLElement, content: HoverCardContent | null) {
   };
   const show = (byKeyboard = false) => {
     cancel();
-    if (current && !suppressed && node.isConnected) state.set({ anchor: node, content: current, byKeyboard });
+    if (current && !suppressed && node.isConnected) state.set({ anchor: node, content: current, byKeyboard, shownAt: Date.now() });
   };
   const hide = () => {
     cancel();
@@ -141,7 +147,7 @@ export function hoverCard(node: HTMLElement, content: HoverCardContent | null) {
       current = next ? clean(next) : null;
       if (!active()) return;
       const s = get(state);
-      if (current) state.set({ anchor: node, content: current, byKeyboard: s?.byKeyboard ?? false });
+      if (current) state.set({ anchor: node, content: current, byKeyboard: s?.byKeyboard ?? false, shownAt: s?.shownAt ?? Date.now() });
       else hide();
     },
     destroy() {
