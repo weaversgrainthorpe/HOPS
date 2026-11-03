@@ -59,6 +59,9 @@ type MigrationResult struct {
 	// SizeChanges are v2 tiles whose unknown size this start set to Medium
 	//; the router shows them as a one-time notice.
 	SizeChanges []SizeChange
+	// V2Globals are the HOPS 2 app-wide settings (not at their default)
+	// that HOPS 3 does not use; the router shows them as a one-time notice.
+	V2Globals []V2Global
 }
 
 // Why a migration failed, so the page can say what will actually help.
@@ -152,7 +155,11 @@ func MigrateOnStartup(db *sql.DB) (MigrationResult, error) {
 		slog.Warn("tile size not recognised during config migration; set to medium", "component", "configdoc",
 			"dashboard", sc.DashboardID, "tile", sc.TileID, "name", sc.TileName, "old_size", show(sc.OldSize), "path", sc.Path)
 	}
-	return MigrationResult{Migrated: true, Renames: renames, SizeChanges: sizes}, nil
+	globals := V2GlobalsNotCarried(v2)
+	for _, g := range globals {
+		slog.Warn("HOPS 2 setting not carried over during config migration", "component", "configdoc", "setting", g.Setting)
+	}
+	return MigrationResult{Migrated: true, Renames: renames, SizeChanges: sizes, V2Globals: globals}, nil
 }
 
 func failed(kind, detail string) MigrationResult {

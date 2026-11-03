@@ -1664,6 +1664,10 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
+	// HOPS 2's app-wide settings have no HOPS 3 equivalent: each one that is
+	// not at its default is listed with the things not carried over.
+	notCarried = append(notCarried, v2GlobalLines(configdoc.V2GlobalsNotCarried(importedConfig), v2FromImport)...)
+
 	rawDashboards, ok := importedConfig["dashboards"].([]interface{})
 	if !ok {
 		writeJSONError(w, "Invalid config: missing 'dashboards' field", http.StatusBadRequest)

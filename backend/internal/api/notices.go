@@ -242,6 +242,9 @@ func (r *Router) currentNotices(stored configdoc.Obj) []notice {
 	if n, ok := r.sizeNotes.notice(); ok {
 		out = append(out, n)
 	}
+	if n, ok := r.v2Notes.notice(); ok {
+		out = append(out, n)
+	}
 	r.notices.load(r.db) // retries if the startup read failed
 	if len(out) == 0 {
 		return out
@@ -287,7 +290,7 @@ func (r *Router) handleNotices(w http.ResponseWriter, req *http.Request) {
 		writeJSONError(w, "This notice stays until the backup problem is fixed", http.StatusConflict)
 		return
 	}
-	if !knownNotices[id] && !r.sizeNotes.isCurrent(id) {
+	if !knownNotices[id] && !r.sizeNotes.isCurrent(id) && !r.v2Notes.isCurrent(id) {
 		writeJSONError(w, "Notice not found: "+id, http.StatusNotFound)
 		return
 	}
@@ -298,5 +301,6 @@ func (r *Router) handleNotices(w http.ResponseWriter, req *http.Request) {
 	}
 	r.notices.dismiss(id)
 	r.sizeNotes.clearIf(id)
+	r.v2Notes.clearIf(id)
 	writeJSONSuccess(w)
 }
