@@ -589,3 +589,37 @@ func TestImport_YAMLExportTypeAndEmptyExportAll(t *testing.T) {
 		t.Errorf("empty Export all dashboards = %v, want []", env["config"].(map[string]interface{})["dashboards"])
 	}
 }
+
+// A picture used by both a skipped and an imported dashboard is still
+// restored; one used only by skipped dashboards is not.
+func TestImport_SharedPictureOfASkippedDashboardIsRestored(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, db)
+	newDash(t, c, "Second", "/second")
+	newDash(t, c, "Third", "/third")
+	var env map[string]interface{}
+	_ = json.Unmarshal(c.export("?scope=dashboards"), &env)
+	cfg := env["config"].(map[string]interface{})
+	ds := cfg["dashboards"].([]interface{})
+	bg := func(i int, p string) {
+		ds[i].(map[string]interface{})["background"] = map[string]interface{}{"type": "image", "value": p}
+	}
+	bg(0, "/backgrounds/shared.png")       // imported
+	bg(1, "/backgrounds/shared.png")       // skipped, same picture
+	bg(2, "/backgrounds/only-skipped.png") // skipped, its own picture
+	// Both are broken, so an attempt to restore either is listed as failed.
+	cfg["assets"] = map[string]interface{}{
+		"/backgrounds/shared.png":       map[string]interface{}{"contentType": "image/png", "data": "!!!not base64!!!"},
+		"/backgrounds/only-skipped.png": map[string]interface{}{"contentType": "image/png", "data": "!!!not base64!!!"},
+	}
+	file, _ := json.Marshal(env)
+	code, resp := choose(t, c, file, "keep", "skip", "skip")
+	if code != 200 {
+		t.Fatalf("import: %d %v", code, resp)
+	}
+	failed := fmt.Sprint(resp["assetsFailed"])
+	if !strings.Contains(failed, "shared.png") || strings.Contains(failed, "only-skipped.png") {
+		t.Errorf("assetsFailed %s: want shared.png tried and only-skipped.png left alone", failed)
+	}
+}
