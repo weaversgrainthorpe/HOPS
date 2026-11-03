@@ -15,6 +15,7 @@
   import { awayMode } from '$lib/stores/awayMode';
   import { getContext } from 'svelte';
   import { RECENT_CONTEXT, type RecentContext } from '$lib/utils/recentTiles';
+  import { textColourOn } from '$lib/utils/colorContrast';
 
   interface Props {
     entry: Entry;
@@ -125,6 +126,12 @@
   // for it still has it for screen readers (and in its hover title).
   const descId = $props.id();
 
+  // The text on a coloured tile: THE one rule (textColourOn; folders use the same Auto choice). No
+  // colour, or one that can't be read, is the theme's surface and text; an unreadable one says so in
+  // edit mode (never a silent guess).
+  const text = $derived(textColourOn(entry.color, entry.textColor));
+  const coloured = $derived(!text.themed);
+
   // The size class follows the tile (a changed Size shows at once, no reload).
   const sizeClass = $derived(entry.size === 'small' || entry.size === 'large' ? entry.size : 'medium');
 </script>
@@ -160,7 +167,8 @@
     style:min-height={fit ? '0px' : undefined}
     style:box-sizing={fit ? 'border-box' : undefined}
     style:overflow={fit ? 'hidden' : undefined}
-    class:custom-color={entry.color}
+    class:custom-color={coloured}
+    style:--tile-text={coloured ? text.text : undefined}
     class:selected={editorSelected === true}
     class:entry-note={isNote}
     class:url-broken={!!urlProblem}
@@ -170,7 +178,10 @@
     aria-pressed={inEditor ? editorSelected : undefined}
     aria-describedby={!isNote && entry.description ? descId : undefined}
   >
-    <span class="entry-bg" aria-hidden="true" style:background-color={entry.color} style:opacity={bgOpacity}></span>
+    <span class="entry-bg" aria-hidden="true" style:background-color={coloured ? entry.color : undefined} style:opacity={bgOpacity}></span>
+    {#if inEditor && text.invalid}
+      <span class="url-problem colour-problem" data-testid="tile-colour-unreadable" role="note">Colour can't be read — theme colour shown</span>
+    {/if}
     {#if isNote}
       <!-- Note tile: just the name as a heading + description as body
            text. No icon, no status badge, no click-to-open. -->
@@ -281,6 +292,11 @@
     line-height: 1.2;
     text-align: center;
     z-index: 2;
+  }
+  /* An unreadable colour's note sits at the top, so it never covers an address note. */
+  .colour-problem {
+    top: 0.25rem;
+    bottom: auto;
   }
 
   .entry.url-broken {
@@ -461,19 +477,22 @@
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-solid) 30%, transparent);
   }
 
-  /* Custom color styles */
+  /* A coloured tile: its text (and an icon drawn in the text colour) is --tile-text, set from the
+     one text-colour rule (textColourOn): white or black, never a fixed white. */
   .entry.custom-color {
-    color: white;
+    color: var(--tile-text);
     border-color: rgba(255, 255, 255, 0.2);
   }
 
   .entry.custom-color :global(.title),
-  .entry.custom-color :global(.subtitle) {
-    color: white;
+  .entry.custom-color :global(.subtitle),
+  .entry.custom-color .note-title,
+  .entry.custom-color .note-body {
+    color: var(--tile-text);
   }
 
   .entry.custom-color .icon {
-    color: white;
+    color: var(--tile-text);
   }
 
   .entry.custom-color:hover {

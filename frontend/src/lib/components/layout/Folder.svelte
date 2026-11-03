@@ -27,12 +27,11 @@
     FOLDER_CHROME, NESTED_CHROME, NESTED_LEVEL_Y_PX, folderFlowMetrics, folderTabRect, hasTab, isFolderShape, nestedPaging, nodeBox,
     folderMinCells, openFolderContentBox, phoneFlowMetrics, phonePaging, previewChildren, shapeOf, sizeOf, sizeSpan
   } from '$lib/layout/geometry';
-  import { deriveFolderColours } from '$lib/layout/folderColours';
+  import { deriveFolderColours, outlineText } from '$lib/layout/folderColours';
   import { miniTabLabel, shapeParts, tabWantPx } from '$lib/layout/folderShapePaths';
   import TileContent from './TileContent.svelte';
   import FolderShape from './FolderShape.svelte';
   import { minimisedShowsOwnIcon, NO_OWN_ICON_NOTE } from '$lib/layout/folderIcon';
-  import { getTextColorValue } from '$lib/utils/colorContrast';
   import Icon from '@iconify/svelte';
   import ColoredIcon from '../ColoredIcon.svelte';
   import ContainerView from './ContainerView.svelte';
@@ -207,10 +206,13 @@
   /** Tab shapes put the name on the tab and the controls at the top-right of the body. */
   const tabbed = $derived(hasTab(folder.shape));
   const tabPos = $derived(folder.tabPosition === 'centre' || folder.tabPosition === 'right' ? folder.tabPosition : 'left');
-  /** The text colour on a look: Rounded keeps the plain title bar; a tab shape uses its contrast-safe colour. */
+  /**
+   * The text colour on a look: the one rule (deriveFolderColours, the same Auto choice as tiles) for every
+   * look with a fill. An outline is see-through, so Light and Dark are used as chosen and Auto is the
+   * theme's text (what shows through; there is no fill to contrast with).
+   */
   function lookText(f: FolderNode): string | undefined {
-    if (!hasTab(f.shape)) return f.color ? getTextColorValue(f.textColor || 'auto', f.color) : undefined;
-    if (shapeOf(f.shape) === 'folder-outline') return undefined; // see-through: the text of what shows through
+    if (shapeOf(f.shape) === 'folder-outline') return outlineText(f.textColor);
     const c = deriveFolderColours(f.color, f.textColor);
     return c.text === 'inherit' ? undefined : c.text;
   }

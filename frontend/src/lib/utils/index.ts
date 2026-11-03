@@ -15,8 +15,5 @@ export { validatePassword, validateMatch } from './validation';
 // Focus management
 export { focusTrap, createFocusTrap, type FocusTrapController } from './focusTrap';
 
-// Color utilities (only the used ones)
-export { getAutoTextColor, getTextColorValue } from './colorContrast';
-
 // Grid keyboard navigation
 export { createGridKeyboardHandler, gridNav, type GridNavOptions } from './gridKeyboardNav';

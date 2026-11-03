@@ -794,3 +794,21 @@ describe('an undersized open box is flagged, never clipped silently', () => {
     expect(el(container, 'f').hasAttribute('data-render-grown')).toBe(false);
   });
 });
+
+// Item 16 / 18: every folder look takes its Auto text from the ONE rule tiles use (most readable);
+// an outline is see-through, so Light and Dark are used as chosen and Auto is the theme's text.
+describe('folder text colour: one rule with tiles', () => {
+  const openText = (c: HTMLElement, id: string) =>
+    (c.querySelector(`[aria-label="${id} folder"]`) as HTMLElement).style.color;
+  it.each(['rounded', 'folder-flat', 'simple-tab'])('#3b82f6 gives black text on a %s folder', async (shape) => {
+    const { container } = await renderTab([folder('f', [kid('a')], { color: '#3b82f6', shape })]);
+    expect(openText(container, 'f')).toBe('rgb(0, 0, 0)');
+  });
+  it('an outlined folder uses Light and Dark as chosen; Auto is the theme text', async () => {
+    for (const [tc, want] of [['light', 'rgb(255, 255, 255)'], ['dark', 'rgb(0, 0, 0)'], ['auto', 'inherit'], [undefined, 'inherit']] as const) {
+      const { container, unmount } = await renderTab([folder('f', [kid('a')], { color: '#3b82f6', shape: 'folder-outline', textColor: tc })]);
+      expect(openText(container, 'f')).toBe(want);
+      unmount();
+    }
+  });
+});

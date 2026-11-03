@@ -256,3 +256,50 @@ describe('Entry content layout', () => {
     });
   });
 });
+
+// Item 16 / 19: a coloured tile's text follows the ONE rule folders use (most readable), or the
+// tile's own Light / Dark choice.
+describe('Entry text colour', () => {
+  const textOf = (c: HTMLElement) => (c.querySelector('button.entry') as HTMLElement).style.getPropertyValue('--tile-text');
+
+  it('#3b82f6 gives black text (as a folder in the same colour does)', async () => {
+    const { container } = render(Entry, { entry: { ...entry, color: '#3b82f6' } });
+    await tick();
+    expect(textOf(container)).toBe('#000000');
+    expect(container.querySelector('button.entry')?.classList.contains('custom-color')).toBe(true);
+  });
+
+  it('a dark colour gives white text; Light and Dark are used as chosen', async () => {
+    const a = render(Entry, { entry: { ...entry, color: '#0f172a' } });
+    await tick();
+    expect(textOf(a.container)).toBe('#ffffff');
+    a.unmount();
+    const b = render(Entry, { entry: { ...entry, color: '#3b82f6', textColor: 'light' } });
+    await tick();
+    expect(textOf(b.container)).toBe('#ffffff');
+    b.unmount();
+    const c = render(Entry, { entry: { ...entry, color: '#0f172a', textColor: 'dark' } });
+    await tick();
+    expect(textOf(c.container)).toBe('#000000');
+  });
+
+  it('a note tile uses it for its heading and body too', () => {
+    const css = readFileSync(resolve(__dirname, 'Entry.svelte'), 'utf8');
+    expect(css).toMatch(/\.entry\.custom-color \.note-title,\s*\.entry\.custom-color \.note-body\s*\{\s*color:\s*var\(--tile-text\)/);
+  });
+
+  it('no colour: the theme text (no override)', async () => {
+    const { container } = render(Entry, { entry: { ...entry, textColor: 'light' } });
+    await tick();
+    expect(textOf(container)).toBe('');
+    expect(container.querySelector('button.entry')?.classList.contains('custom-color')).toBe(false);
+  });
+
+  it('a colour that cannot be read draws the theme and says so in the editor', async () => {
+    const { container } = render(Entry, { entry: { ...entry, color: 'bluish' }, editorSelected: false });
+    await tick();
+    expect(textOf(container)).toBe('');
+    expect((container.querySelector('.entry-bg') as HTMLElement).style.backgroundColor).toBe('');
+    expect(container.querySelector('[data-testid="tile-colour-unreadable"]')?.textContent).toMatch(/Colour can't be read/);
+  });
+});
