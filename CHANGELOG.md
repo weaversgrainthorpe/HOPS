@@ -28,8 +28,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   An installed HOPS app always keeps the gear, since it has no address bar.
   If HOPS can't read the setting, the buttons show. This only tidies the bar:
   who can sign in and what they can do stay the same.
+- **Export all** on Settings › Dashboards saves every dashboard in one file.
+  It isn't a backup: a backup is the whole app (settings, icons and so on).
+  Import reads it back, as well as a single-dashboard export.
+- **Import asks before it changes anything.** It lists the file's dashboards
+  first. One with the same name as one you have offers **Replace**, **Keep
+  both** (the new one becomes "Name (2)") or **Skip**, and any other can be
+  added or skipped, so you can take only part of a file. Replace keeps your
+  dashboard's address, so links and bookmarks still work. Afterwards a summary
+  says what was added, replaced, renamed and skipped.
 
 ### Changed
+- **The top bar's Export All Dashboards** saves the same dashboards-only file
+  as Export all. Settings and theme are in backups.
 - **Tiles use their space.** The name sits at the top and the icon takes the
   rest of the tile, with room kept for one line of description, so tiles in a
   row line up whether or not they have one. Minimised folders follow the same
@@ -75,6 +86,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   result when you save.
 
 ### Fixed
+- **An import file with one broken dashboard imports nothing,** instead of
+  quietly importing the rest, and HOPS says which dashboard and why. Importing
+  a backup file says it is a backup and points to Settings › Backups.
 - **Opening HOPS when it can't be reached now shows the app.** Before, a page
   that wasn't already in the browser's cache was a bare white "Offline". Now
   it shows your dashboards as last seen, with a banner saying so. When HOPS is
