@@ -180,7 +180,7 @@ func TestImport_OtherLayoutVersionRefused(t *testing.T) {
 		}, []string{cur, "pre-release"}},
 		"no marker at all":        {func(cfg map[string]any) { delete(cfg, "layoutVersion") }, []string{cur}},
 		"layout version 1 export": {func(cfg map[string]any) { cfg["layoutVersion"] = 1 }, []string{"layout version 1", cur}},
-		"newer":                   {func(cfg map[string]any) { cfg["layoutVersion"] = configdoc.LayoutVersion + 1 }, []string{fmt.Sprintf("layout version %d", configdoc.LayoutVersion+1), cur}},
+		"newer":                   {func(cfg map[string]any) { cfg["layoutVersion"] = configdoc.LayoutVersion + 1 }, []string{fmt.Sprintf("layout version %d", configdoc.LayoutVersion+1), cur, "newer HOPS", "Update HOPS"}},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

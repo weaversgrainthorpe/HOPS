@@ -1604,6 +1604,12 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	format, err := converters.DetectFormat(fileData)
 	if err != nil {
 		slog.Warn("import: format detection failed", "component", "import", "error", err)
+		// Say what is wrong when it is known: an empty file, an export of
+		// another HOPS export version, or JSON that is cut off or broken.
+		if why := unreadableFileProblem(fileData); why != "" {
+			writeJSONError(w, "Import refused — "+why, http.StatusBadRequest)
+			return
+		}
 		writeJSONError(w, "Could not detect the file format. Supported: HOPS, Homer, Dashy, Heimdall.", http.StatusBadRequest)
 		return
 	}
@@ -1678,6 +1684,10 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	// there is no conversion of other v3 forms, so any other
 	// layoutVersion (or none: a pre-release export) is refused, naming both.
 	if format == "hops-v3" {
+		if n, ok := configdoc.LayoutVersionOf(importedConfig); ok && n > configdoc.LayoutVersion {
+			writeJSONError(w, fmt.Sprintf("Import refused — this export was made by a newer HOPS (layout version %d; this HOPS reads layout version %d). Update HOPS, then import it again.", n, configdoc.LayoutVersion), http.StatusBadRequest)
+			return
+		}
 		if lerr := configdoc.CheckLayoutVersion(importedConfig); lerr != nil {
 			writeJSONError(w, "Import refused — this HOPS export cannot be imported: "+lerr.Error()+". Import a v2 export or one made by this HOPS version instead.", http.StatusBadRequest)
 			return
