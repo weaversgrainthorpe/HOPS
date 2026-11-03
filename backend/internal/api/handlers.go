@@ -1604,6 +1604,12 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	format, err := converters.DetectFormat(fileData)
 	if err != nil {
 		slog.Warn("import: format detection failed", "component", "import", "error", err)
+		// Say what is wrong when it is known: an empty file, an export of
+		// another HOPS export version, or JSON that is cut off or broken.
+		if why := unreadableFileProblem(fileData); why != "" {
+			writeJSONError(w, "Import refused — "+why, http.StatusBadRequest)
+			return
+		}
 		writeJSONError(w, "Could not detect the file format. Supported: HOPS, Homer, Dashy, Heimdall.", http.StatusBadRequest)
 		return
 	}
@@ -1664,6 +1670,10 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
+	// HOPS 2's app-wide settings have no HOPS 3 equivalent: each one that is
+	// not at its default is listed with the things not carried over.
+	notCarried = append(notCarried, v2GlobalLines(configdoc.V2GlobalsNotCarried(importedConfig), v2FromImport)...)
+
 	rawDashboards, ok := importedConfig["dashboards"].([]interface{})
 	if !ok {
 		writeJSONError(w, "Invalid config: missing 'dashboards' field", http.StatusBadRequest)
@@ -1674,6 +1684,10 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	// there is no conversion of other v3 forms, so any other
 	// layoutVersion (or none: a pre-release export) is refused, naming both.
 	if format == "hops-v3" {
+		if n, ok := configdoc.LayoutVersionOf(importedConfig); ok && n > configdoc.LayoutVersion {
+			writeJSONError(w, fmt.Sprintf("Import refused — this export was made by a newer HOPS (layout version %d; this HOPS reads layout version %d). Update HOPS, then import it again.", n, configdoc.LayoutVersion), http.StatusBadRequest)
+			return
+		}
 		if lerr := configdoc.CheckLayoutVersion(importedConfig); lerr != nil {
 			writeJSONError(w, "Import refused — this HOPS export cannot be imported: "+lerr.Error()+". Import a v2 export or one made by this HOPS version instead.", http.StatusBadRequest)
 			return
@@ -1779,6 +1793,14 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		// The name limits of a save too.
 		if ne := nameBoundsError(d); ne != nil {
 			writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q: %s. Nothing was imported.", dashboardLabel(d), ne.Error()), http.StatusBadRequest)
+			return
+		}
+		if de := descriptionBoundsError(d, nil); de != nil {
+			writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q: %s. Nothing was imported.", dashboardLabel(d), de.Error()), http.StatusBadRequest)
+			return
+		}
+		if ie := iconURLBoundsError(d, nil); ie != nil {
+			writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q: %s. Nothing was imported.", dashboardLabel(d), ie.Error()), http.StatusBadRequest)
 			return
 		}
 	}
@@ -1974,7 +1996,11 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 				}
 				delete(used, targetID) // reserved above for exactly this dashboard
 				idRenames += makeIDsUnique(d, used)
-				existing[replaceAt[rows[i].Clash.ID]] = d
+				at, found := replaceAt[rows[i].Clash.ID]
+				if !found || at < 0 || at >= len(existing) { // checkChoices refuses this; never index outside
+					return nil, nil, newAPIError(http.StatusConflict, fmt.Sprintf("Import refused — the stored dashboard %q to replace could not be found. Check the file again. Nothing was imported.", rows[i].Clash.Name))
+				}
+				existing[at] = d
 				summary.Replaced = append(summary.Replaced, dashboardLabel(d))
 				names = append(names, dashboardLabel(d))
 				continue

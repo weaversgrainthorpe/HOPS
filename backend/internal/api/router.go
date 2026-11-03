@@ -64,6 +64,7 @@ type Router struct {
 	sampleProblem  string        // why the built-in Sample fails the save checks, or "" (sample_check.go)
 	cleanupStop    chan struct{} // stops the daily backup cleanup
 	sizeNotes      sizeNoteState // tiles whose unknown size became Medium (notices.go)
+	v2Notes        v2NoteState   // HOPS 2 settings the upgrade did not carry over (v2_globals.go)
 	iconLeftovers  leftoverState // deleted icon files that couldn't be removed (icons_manage.go)
 	statusHealth   func() status.Health // the status checker's own state (status_notices.go); nil until SetStatusHealth
 	csrfKeyMu      sync.Mutex    // guards csrfKey
@@ -283,6 +284,7 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settin
 		}
 		r.sizeNotes.add(sizeNoteItems(migration.SizeChanges, doc)...)
 	}
+	r.v2Notes.set(v2GlobalLines(migration.V2Globals, v2FromUpgrade))
 
 	// Retention also runs once a day, so keep_days takes effect even when no
 	// new backup is taken. A failure is recorded as a notice.

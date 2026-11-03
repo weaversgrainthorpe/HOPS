@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -60,6 +61,76 @@ func exportTypeProblem(data []byte) string {
 		return ""
 	}
 	return fmt.Sprintf("This HOPS file is a %q export, not a dashboard export. Import reads a single-dashboard export or an Export all file.", *env.ExportType)
+}
+
+// unreadableFileProblem says why a file whose format was not recognised
+// can't be read, when that is known: it is empty, it is a HOPS export of a
+// schema version this HOPS doesn't read (a newer HOPS made it), or it looks
+// like JSON but is damaged or incomplete. "" leaves "unknown format".
+func unreadableFileProblem(data []byte) string {
+	if len(bytes.TrimSpace(data)) == 0 {
+		return "the file is empty. Choose the exported file again; if it is empty on disk, export it again."
+	}
+	if why := exportVersionProblem(data); why != "" {
+		return why
+	}
+	return damagedJSONProblem(data)
+}
+
+// exportVersionProblem names a HOPS export envelope (JSON or YAML) whose
+// schemaVersion is not the one this HOPS reads.
+func exportVersionProblem(data []byte) string {
+	var env struct {
+		Format        string `json:"format" yaml:"format"`
+		SchemaVersion any    `json:"schemaVersion" yaml:"schemaVersion"`
+	}
+	if json.Unmarshal(data, &env) != nil {
+		env.Format, env.SchemaVersion = "", nil
+		if yaml.Unmarshal(data, &env) != nil {
+			return ""
+		}
+	}
+	if env.Format != "hops-export" {
+		return ""
+	}
+	var n float64
+	switch v := env.SchemaVersion.(type) {
+	case int:
+		n = float64(v)
+	case float64:
+		n = v
+	default:
+		return fmt.Sprintf("this HOPS export has no readable schema version, so it can't be imported (this HOPS reads schema version %d). Export it again.", configdoc.SchemaVersion)
+	}
+	if n > configdoc.SchemaVersion {
+		return fmt.Sprintf("this export was made by a newer HOPS (export schema version %v; this HOPS reads schema version %d). Update HOPS, then import it again.", n, configdoc.SchemaVersion)
+	}
+	if n == configdoc.SchemaVersion {
+		return "" // this version: something else is wrong with it
+	}
+	return fmt.Sprintf("this HOPS export is at schema version %v, which this HOPS can't read (it reads schema version %d).", n, configdoc.SchemaVersion)
+}
+
+// damagedJSONProblem names a file that starts like JSON (after any byte
+// order mark and white space) but does not parse, with where it goes wrong.
+func damagedJSONProblem(data []byte) string {
+	body := bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
+	body = bytes.TrimLeft(body, " \t\r\n")
+	if len(body) == 0 || (body[0] != '{' && body[0] != '[') {
+		return ""
+	}
+	var v any
+	err := json.Unmarshal(body, &v)
+	if err == nil {
+		return ""
+	}
+	var se *json.SyntaxError
+	if !errors.As(err, &se) {
+		return ""
+	}
+	skipped := int64(len(data) - len(body))
+	return fmt.Sprintf("this file looks like JSON but is damaged or incomplete (%s, at byte %d of %d). It may have been cut off while it was downloaded or copied: export it again, or choose another file.",
+		se.Error(), se.Offset+skipped, len(data))
 }
 
 // nameKey is how dashboard names are compared for a clash: case and outer
@@ -168,6 +239,11 @@ func checkChoices(rows []importRow, cs, targets []string) *apiError {
 		}
 		if row.Clash == nil && (c == importReplace || c == importKeep) {
 			return newAPIError(http.StatusConflict, fmt.Sprintf("Import refused — no dashboard is called %q any more, so it can't be replaced or kept alongside. Check the file again. Nothing was imported.", row.Name))
+		}
+		// Only hand-edited data has a dashboard without an id; Replace or
+		// Keep both could not tell which dashboard it means.
+		if row.Clash != nil && row.Clash.ID == "" && (c == importReplace || c == importKeep) {
+			return newAPIError(http.StatusConflict, fmt.Sprintf("Import refused — the stored dashboard called %q has no id, so it can't be replaced or kept alongside. Choose Skip for it, or restore a backup from before it was damaged (Settings › Backups). Nothing was imported.", row.Clash.Name))
 		}
 		now := ""
 		if row.Clash != nil {

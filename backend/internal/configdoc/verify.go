@@ -808,8 +808,9 @@ func (v *verifier) checkFolderShape(n string, f Obj) {
 
 // checkItemText requires a tile's or a folder's textColor, when present, to be
 // one of TextColors (absent means Auto) and its description, when present, to
-// be text. The same rule for both kinds; no length limit (as a tile's
-// description has always had none).
+// be text. The same rule for both kinds. Its length is capped on save and
+// import only (api: descriptionBoundsError), so stored data from before the
+// cap still loads, migrates and restores.
 func (v *verifier) checkItemText(n string, o Obj) {
 	v.checkTextColor(n, o)
 	if raw, has := o["description"]; has {

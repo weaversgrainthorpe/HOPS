@@ -80,6 +80,11 @@ func (r *Router) readLimitedUpload(w http.ResponseWriter, req *http.Request, kin
 		writeJSONError(w, "The upload could not be read (malformed form data).", http.StatusBadRequest)
 		return nil, nil, false
 	}
+	// One file per request: a second one would otherwise be ignored silently.
+	if n := countFileParts(req.MultipartForm); n > 1 {
+		writeJSONError(w, fmt.Sprintf("Send one file at a time: this request had %d files, so none of them was used.", n), http.StatusBadRequest)
+		return nil, nil, false
+	}
 	file, header, err := req.FormFile("file")
 	if err != nil {
 		writeJSONError(w, "No file provided", http.StatusBadRequest)
@@ -91,6 +96,19 @@ func (r *Router) readLimitedUpload(w http.ResponseWriter, req *http.Request, kin
 		return nil, nil, false
 	}
 	return file, header, true
+}
+
+// countFileParts is how many files a parsed multipart form holds, under any
+// field name.
+func countFileParts(form *multipart.Form) int {
+	if form == nil {
+		return 0
+	}
+	n := 0
+	for _, fhs := range form.File {
+		n += len(fhs)
+	}
+	return n
 }
 
 // handleUploadLimits returns the upload limits in bytes so the UI can

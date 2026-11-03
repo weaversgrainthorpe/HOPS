@@ -123,6 +123,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Importing a dashboard with fields HOPS doesn't recognise says so.** They
   are still imported, but before and after the import HOPS lists them for each
   dashboard, instead of keeping them without a word.
+- **Upgrading from HOPS 2 says which of its settings didn't come across.** A
+  light/dark mode, custom CSS, search shortcut or default dashboard you had
+  changed has no HOPS 3 equivalent. A one-time notice now names each one and
+  what to do instead, and importing a HOPS 2 file lists them too. Before,
+  they were dropped without a word.
+- **Import says what is wrong with a file it can't read.** A file that is cut
+  off or damaged, an empty file, and an export from a newer HOPS are each
+  named as such, instead of "Could not detect the file format". Sending more
+  than one file at once is refused, instead of importing only the first.
+- **Tile and folder descriptions are limited to 2,000 characters,** checked
+  when you save or import, naming the item. A longer one you already have is
+  kept while you leave it unchanged.
 - **Opening HOPS when it can't be reached now shows the app.** Before, a page
   that wasn't already in the browser's cache was a bare white "Offline". Now
   it shows your dashboards as last seen, with a banner saying so. When HOPS is
