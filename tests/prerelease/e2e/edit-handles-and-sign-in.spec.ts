@@ -1676,7 +1676,9 @@ test.describe('toolbar, failed backgrounds and drops', () => {
     // A point inside the toolbar's left end (the drag breadcrumb shows at the bottom centre), above
     // the auto-scroll edge zone (48px), over the grid.
     const x = tb.x + 16;
-    const y = tb.y + 8;
+    // A point on the toolbar and above the 50px auto-scroll zone (the toolbar itself is ~46px tall).
+    const y = Math.min(tb.y + 8, 800 - 51);
+    expect(y, 'the point is on the toolbar').toBeGreaterThanOrEqual(tb.y);
     expect(y, 'the point is above the auto-scroll zone').toBeLessThan(800 - 50);
     await page.mouse.move(a0.x + a0.width / 2, a0.y + a0.height / 2);
     await page.mouse.down();
@@ -1715,7 +1717,9 @@ test.describe('toolbar, failed backgrounds and drops', () => {
     const a0 = (await alpha.boundingBox())!;
     const tb = (await bar.boundingBox())!;
     const x = tb.x + 16;
-    const y = tb.y + 8;
+    // A point on the toolbar and above the 50px auto-scroll zone (the toolbar itself is ~46px tall).
+    const y = Math.min(tb.y + 8, 800 - 51);
+    expect(y, 'the point is on the toolbar').toBeGreaterThanOrEqual(tb.y);
     expect(y, 'the point is above the auto-scroll zone').toBeLessThan(800 - 50);
     await page.mouse.move(a0.x + a0.width / 2, a0.y + a0.height / 2);
     await page.mouse.down();
