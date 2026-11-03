@@ -7,20 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### You'll notice
-After upgrading, a few things look or behave differently. Details are below.
-- **Some coloured tiles and tabs now have black text.** Text colour *Auto*
-  picks whichever of black or white is easier to read on the colour. To keep
-  white text, set the tile's or tab's **Text colour** to *Light*.
-- **The top bar's Export All saves dashboards only.** Settings and the theme
-  are in backups (Settings › Backups).
-- **Buttons say the same thing everywhere.** "Revert" is now **Discard**;
-  "Save order", "Save Background" and "Save changes" are now **Save**; Help's
-  "Got it!" is now **Close**.
-- **The edit toolbar uses the same buttons as the pages,** with the add
-  buttons and Dashboard on the left and Save on the right.
-- **A coloured tab shows hover with its border,** instead of brightening.
-- **A new app icon.** Reinstall HOPS on a phone to see it.
+### What you'll notice
+Most of this release is about making HOPS easier to read and quicker to
+learn. A few things look different after upgrading, and each one is there
+for a reason:
+- **Text you can read on any colour.** Tiles, folders and tabs now use black
+  or white text, whichever is clearer on the colour you picked, so a pale
+  tile no longer has faint white text. Some of your coloured tiles and tabs
+  may switch to black. If you'd rather keep white, set **Text colour** to
+  *Light* in the tile's or tab's dialog.
+- **Buttons you only learn once.** Save, Discard, Undo, Redo, Cancel and
+  Delete look and read the same on every page, in every dialog and in the
+  edit toolbar, and deleting is always red. Before, the same action could be
+  "Revert" in one place and "Discard" in another, or "Save order" here and
+  "Save changes" there.
+- **Dialogs laid out the same way.** The tile, folder, tab and dashboard
+  dialogs have the same sections, in the same order, with the same names.
+  Once you know one, you know them all.
+- **Export and backup each do one clear job.** Export (in the top bar or
+  Settings › Dashboards) moves dashboards: it saves them with their pictures,
+  ready to import elsewhere. A backup (Settings › Backups) saves everything,
+  settings and theme included. The top bar's export used to blur the two.
+- **You can see which tab you're on while hovering.** A coloured tab now
+  shows hover with an outline instead of brightening, so it keeps its
+  colour.
+- **HOPS is easy to spot on your phone.** The home-screen and browser-tab
+  icon now uses the same bunny and hop cones as the logo in the top bar.
+  Reinstall HOPS on your phone to get the new icon.
 
 ### Added
 - **"When minimised, show" for folders.** In a folder's dialog, choose
