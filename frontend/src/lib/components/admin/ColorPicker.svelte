@@ -2,7 +2,7 @@
   interface Props {
     selectedColor?: string;
     onSelect: (color: string | undefined) => void;
-    /** Heading shown above the swatch grid. Defaults to "Background Color". */
+    /** Heading shown above the swatch grid. Defaults to "Colour". */
     label?: string;
     /** Title for the "no colour" swatch. Defaults to "None (use theme default)". */
     noneTitle?: string;
@@ -16,7 +16,7 @@
   let {
     selectedColor,
     onSelect,
-    label = 'Background Color',
+    label = 'Colour',
     noneTitle = 'None (use theme default)',
     hideLabel = false,
   }: Props = $props();

@@ -81,31 +81,31 @@
 
 <Modal
   id="export-config"
-  title="Export Configuration"
+  title="Export dashboards"
   titleIcon="mdi:tray-arrow-up"
   onClose={onClose}
   maxWidth="550px"
 >
-  <p class="description">Export your HOPS configuration as JSON. You can export all dashboards or individual dashboards.</p>
+  <p class="description">Save dashboards as a JSON file, which Import reads back. Each export holds the dashboards with their tabs, folders and tiles, and the pictures they use. Settings, the theme and the icons library are not included: they are in <a href="/settings/backups">Settings › Backups</a>.</p>
 
   <div class="export-section">
-    <h3>Export All Dashboards</h3>
-    <p class="section-description">Download your complete configuration including all dashboards, tabs, folders and tiles.</p>
+    <h3>Export all</h3>
+    <p class="section-description">Saves every dashboard in one file. It is not a backup of the app.</p>
     <button class="btn-primary" onclick={handleExportAll} disabled={exporting}>
       {#if exporting}
         <Icon icon="mdi:loading" width="20" class="spin" />
-        Exporting...
+        Exporting…
       {:else}
         <Icon icon="mdi:download-multiple" width="20" />
-        Export All ({allDashboards.length} dashboards)
+        Export all ({allDashboards.length} dashboards)
       {/if}
     </button>
   </div>
 
   {#if allDashboards.length > 0}
     <div class="export-section">
-      <h3>Export Individual Dashboard</h3>
-      <p class="section-description">Export a single dashboard. This can be imported into another HOPS instance and will be added alongside existing dashboards.</p>
+      <h3>Export one dashboard</h3>
+      <p class="section-description">Saves a single dashboard. It can be imported into another HOPS instance and will be added alongside existing dashboards.</p>
       <div class="dashboard-list">
         {#each allDashboards as dashboard (dashboard.id)}
           <div class="dashboard-item">
@@ -134,7 +134,7 @@
   <div class="info-box">
     <Icon icon="mdi:information" width="20" />
     <div>
-      <p><strong>Tip:</strong> Individual dashboard exports can be imported into any HOPS instance. The dashboard will be added alongside existing dashboards, with paths automatically adjusted if needed.</p>
+      <p><strong>Tip:</strong> A single dashboard can be imported into any HOPS instance. It is added alongside existing dashboards, with its path adjusted if needed.</p>
     </div>
   </div>
 </Modal>

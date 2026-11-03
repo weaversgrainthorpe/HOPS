@@ -45,7 +45,7 @@ describe('TabEditModal background', () => {
     const onCancel = vi.fn();
     render(TabEditModal, { tabName: 'Media', onSave, onCancel });
     await fireEvent.click(screen.getByRole('button', { name: /Configure Tab Background/ }));
-    await fireEvent.click(screen.getByRole('button', { name: /^Color$/ }));
+    await fireEvent.click(screen.getByRole('button', { name: /^Colour$/ }));
     await fireEvent.click(within(screen.getByRole('dialog', { name: /background$/i })).getByRole('button', { name: 'Save' }));
     expect(onSave).not.toHaveBeenCalled();
     expect(screen.getByText(/applies when you save/i, { selector: '.background-status' })).toBeInTheDocument();

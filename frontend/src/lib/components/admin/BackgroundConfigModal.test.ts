@@ -380,14 +380,14 @@ describe('folder background: pictures only', () => {
     expect(screen.queryByRole('button', { name: /^Image$/ })).toBeNull(); // nothing to pick until "Its own picture"
     await fireEvent.click(pictureOption());
     expect(typeButtons()).toEqual(['Image', 'Slideshow']);
-    expect(screen.queryByRole('button', { name: /^Color$/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Colour$/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /^None$/ })).toBeNull();
   });
 
   it('the dashboard and tab levels keep None, Color, Image and Slideshow', () => {
     for (const level of ['dashboard', 'tab'] as const) {
       const { unmount } = render(BackgroundConfigModal, { runtime: MOVING, level, onSave: vi.fn(), onCancel: vi.fn() });
-      expect(typeButtons()).toEqual(['None', 'Color', 'Image', 'Slideshow']);
+      expect(typeButtons()).toEqual(['None', 'Colour', 'Image', 'Slideshow']);
       unmount();
     }
   });
@@ -422,7 +422,7 @@ describe('folder background: pictures only', () => {
       open('folder', colourBg);
       expect(legacyOption().checked).toBe(true);
       expect(screen.getByText(/#123456/)).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /^Color$/ })).toBeNull();
+      expect(screen.queryByRole('button', { name: /^Colour$/ })).toBeNull();
     });
 
     it('is kept exactly when saved untouched (never dropped silently), switched on or off', async () => {
