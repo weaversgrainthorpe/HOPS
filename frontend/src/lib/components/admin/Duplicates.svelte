@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ActionButton from '$lib/components/shared/ActionButton.svelte';
   // Settings › Dashboards: tiles that point at the same address (imports, Discovery or copies),
   // with a merge that keeps one and deletes the others. A merge is a normal layout edit: one
   // revision-checked save per dashboard, never silent (a preview and a confirmation first), and
@@ -205,8 +206,8 @@
                 holds the deleted tiles and you can restore them from there.
               </p>
               <div class="btns">
-                <button type="button" class="btn-primary" disabled={busy} onclick={() => confirmMerge(g)}>{busy ? 'Merging…' : `Delete ${tileCount(doomed(g).length)}`}</button>
-                <button type="button" class="btn-secondary" disabled={busy} onclick={cancelMerge}>Cancel</button>
+                <ActionButton action="cancel" disabled={busy} onclick={cancelMerge} />
+                <ActionButton action="delete" label={busy ? 'Merging…' : `Delete ${tileCount(doomed(g).length)}`} disabled={busy} onclick={() => confirmMerge(g)} />
               </div>
             </div>
           {:else}

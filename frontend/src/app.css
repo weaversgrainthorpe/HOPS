@@ -537,12 +537,12 @@ a:focus-visible {
 }
 
 .btn-danger {
-  background: var(--color-error-dark);
+  background: var(--danger-solid);
   color: white;
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-error-dark) 80%, black);
+  background: var(--danger-solid-hover);
 }
 
 .btn-primary:disabled,

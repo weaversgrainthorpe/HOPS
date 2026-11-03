@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ActionButton from '$lib/components/shared/ActionButton.svelte';
   import Icon from '@iconify/svelte';
   import {
     listBackups, createBackup, restoreBackup, deleteBackup, uploadBackup, previewBackupCleanup, confirmBackupCleanup,
@@ -320,7 +321,7 @@
       <div class="problem pending" role="alert">
         <Icon icon="mdi:alert-outline" width="18" />
         <span>A restore is waiting to be applied when HOPS restarts (it hasn't restarted yet). Restart HOPS to apply it, or discard it.</span>
-        <button class="btn-secondary" onclick={handleDiscardPending}>Discard staged restore</button>
+        <ActionButton action="discard" label="Discard staged restore" onclick={handleDiscardPending} />
       </div>
     {/if}
 
@@ -376,7 +377,7 @@
         {#if unknownPreview.items.length === 0}
           <p>Nothing to clean up: no unknown images are left.</p>
           <div class="preview-actions">
-            <button class="btn-secondary" onclick={() => (unknownPreview = null)}>Close</button>
+            <ActionButton action="close" onclick={() => (unknownPreview = null)} />
           </div>
         {:else}
           <p><strong>These {unknownPreview.items.length} deleted image{unknownPreview.items.length === 1 ? '' : 's'} would be deleted for good:</strong></p>
@@ -394,10 +395,9 @@
             </ul>
           {/if}
           <div class="preview-actions">
-            <button class="btn-secondary" onclick={() => (unknownPreview = null)} disabled={unknownBusy}>Cancel</button>
-            <button class="btn-danger" onclick={handleUnknownConfirm} disabled={unknownBusy}>
-              Delete {unknownPreview.items.length === 1 ? 'it' : `these ${unknownPreview.items.length}`}
-            </button>
+            <ActionButton action="cancel" onclick={() => (unknownPreview = null)} disabled={unknownBusy} />
+            <ActionButton action="delete" label={`Delete ${unknownPreview.items.length === 1 ? 'it' : `these ${unknownPreview.items.length}`}`}
+              onclick={handleUnknownConfirm} disabled={unknownBusy} />
           </div>
         {/if}
       </div>
@@ -408,7 +408,7 @@
         {#if cleanupPreview.length === 0}
           <p>Nothing to clean up: the retention rules keep every backup.</p>
           <div class="preview-actions">
-            <button class="btn-secondary" onclick={() => (cleanupPreview = null)}>Close</button>
+            <ActionButton action="close" onclick={() => (cleanupPreview = null)} />
           </div>
         {:else}
           <p><strong>These {cleanupPreview.length} backups would be deleted:</strong></p>
@@ -418,10 +418,9 @@
             {/each}
           </ul>
           <div class="preview-actions">
-            <button class="btn-secondary" onclick={() => (cleanupPreview = null)} disabled={cleaning}>Cancel</button>
-            <button class="btn-danger" onclick={handleCleanupConfirm} disabled={cleaning}>
-              Delete {cleanupPreview.length === 1 ? 'it' : `these ${cleanupPreview.length}`}
-            </button>
+            <ActionButton action="cancel" onclick={() => (cleanupPreview = null)} disabled={cleaning} />
+            <ActionButton action="delete" label={`Delete ${cleanupPreview.length === 1 ? 'it' : `these ${cleanupPreview.length}`}`}
+              onclick={handleCleanupConfirm} disabled={cleaning} />
           </div>
         {/if}
       </div>

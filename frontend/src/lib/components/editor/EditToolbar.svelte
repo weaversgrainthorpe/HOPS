@@ -13,6 +13,7 @@
   import { playSavedTick } from '$lib/editor/drag/flourishes';
   import BackgroundFailedBadge from '../background/BackgroundFailedBadge.svelte';
   import type { Background } from '$lib/types';
+  import { ACTIONS } from '../shared/actions';
 
   interface Props {
     /** The active tab: adds and pastes without a target go to its root (a folder's menu adds into it). */
@@ -193,13 +194,13 @@
       </span>
       <button type="button" class="tb" onclick={undo} disabled={!canUndo}
         title={!canUndo && $session?.undoDropped ? `Nothing more to undo: Undo keeps your last ${UNDO_CAP} changes` : 'Undo (Ctrl+Z)'}>
-        <Icon icon="mdi:undo" width="18" /> Undo
+        <Icon icon={ACTIONS.undo.icon} width="18" /> {ACTIONS.undo.label}
       </button>
       <button type="button" class="tb" onclick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z or Ctrl+Y)">
-        <Icon icon="mdi:redo" width="18" /> Redo
+        <Icon icon={ACTIONS.redo.icon} width="18" /> {ACTIONS.redo.label}
       </button>
       <button type="button" class="tb" onclick={() => discard()} disabled={!$dirty || saving} title="Discard all unsaved changes">
-        <Icon icon="mdi:close-circle-outline" width="18" /> Discard
+        <Icon icon={ACTIONS.discard.icon} width="18" /> {ACTIONS.discard.label}
       </button>
       <span class="save-slot">
         <!-- While a save is in flight it says so (a big dashboard on a small server takes seconds). Both
@@ -208,11 +209,11 @@
           {#if saving}
             <Icon icon="mdi:loading" width="18" class="spin" />
           {:else}
-            <Icon icon="mdi:content-save" width="18" />
+            <Icon icon={ACTIONS.save.icon} width="18" />
           {/if}
           <span class="label-stack">
-            <span class:shown={!saving} aria-hidden={saving}>Save</span>
-            <span class:shown={saving} aria-hidden={!saving}>Saving…</span>
+            <span class:shown={!saving} aria-hidden={saving}>{ACTIONS.save.label}</span>
+            <span class:shown={saving} aria-hidden={!saving}>{ACTIONS.save.busyLabel}</span>
           </span>
         </button>
         <!-- Drawn only while its flourish plays (invisible otherwise); the toast says "Changes saved" either way. -->
@@ -318,9 +319,14 @@
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
+  /* The one disabled look (app.css): readable, a muted fill and a dashed edge, never faded. */
   .tb:disabled {
-    opacity: 0.45;
-    cursor: default;
+    background: var(--disabled-bg);
+    color: var(--disabled-text);
+    border-color: transparent;
+    outline: 1px dashed var(--disabled-edge);
+    outline-offset: -1px;
+    cursor: not-allowed;
   }
   .tb.primary.saving {
     opacity: 1;

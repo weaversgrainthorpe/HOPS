@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ActionButton from '$lib/components/shared/ActionButton.svelte';
   import { onMount, tick } from 'svelte';
   import Icon, { listIcons } from '@iconify/svelte';
   import Button from '$lib/components/shared/Button.svelte';
@@ -461,7 +462,7 @@
               <Button
                 variant="danger"
                 size="small"
-                icon="mdi:delete-outline"
+                icon="mdi:trash-can"
                 onclick={() => void startDelete(icon)}
                 loading={deletingId === icon.id}
                 disabled={deletingId !== null}
@@ -489,8 +490,8 @@
               <form class="rename" onsubmit={(e) => { e.preventDefault(); void saveRename(c); }}>
                 <label class="sr-only" for={`rename-${c.id}`}>New name for {c.name}</label>
                 <input id={`rename-${c.id}`} type="text" bind:value={renameText} maxlength="100" />
-                <Button variant="ghost" size="small" onclick={() => (renamingId = null)}>Cancel</Button>
-                <Button type="submit" size="small" loading={catBusy}>Save</Button>
+                <ActionButton action="cancel" small onclick={() => (renamingId = null)} />
+                <ActionButton action="save" type="submit" small busy={catBusy} />
               </form>
               {#if renameError}<p class="field-error" role="alert">{renameError}</p>{/if}
             {:else}
@@ -566,8 +567,8 @@
       </label>
       {#if editError}<p class="field-error" role="alert">{editError}</p>{/if}
       <div class="dialog-actions">
-        <Button variant="secondary" onclick={() => (editing = null)}>Cancel</Button>
-        <Button type="submit" loading={editSaving}>Save</Button>
+        <ActionButton action="cancel" onclick={() => (editing = null)} />
+        <ActionButton action="save" type="submit" busy={editSaving} />
       </div>
     </form>
   </Modal>
@@ -587,8 +588,8 @@
       </ul>
       {#if inUseError}<p class="field-error" role="alert">{inUseError}</p>{/if}
       <div class="dialog-actions">
-        <Button variant="secondary" onclick={() => (inUse = null)}>Keep icon</Button>
-        <Button variant="danger" loading={deletingId === target.icon.id} onclick={() => void doDelete(target.icon, true)}>Delete anyway</Button>
+        <ActionButton action="cancel" label="Keep icon" onclick={() => (inUse = null)} />
+        <ActionButton action="delete" label="Delete anyway" busy={deletingId === target.icon.id} onclick={() => void doDelete(target.icon, true)} />
       </div>
     </div>
   </Modal>
@@ -609,8 +610,8 @@
       </label>
       {#if catDeleteError}<p class="field-error" role="alert">{catDeleteError}</p>{/if}
       <div class="dialog-actions">
-        <Button variant="secondary" onclick={() => (catDelete = null)}>Cancel</Button>
-        <Button type="submit" variant="danger" loading={catBusy} disabled={!catDeleteTarget}>Move icons and delete</Button>
+        <ActionButton action="cancel" onclick={() => (catDelete = null)} />
+        <ActionButton action="delete" label="Move icons and delete" type="submit" busy={catBusy} disabled={!catDeleteTarget} />
       </div>
     </form>
   </Modal>

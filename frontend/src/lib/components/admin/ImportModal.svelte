@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ActionButton from '$lib/components/shared/ActionButton.svelte';
   import Icon from '@iconify/svelte';
   import Modal from '$lib/components/shared/Modal.svelte';
   import { importConfig, previewImport } from '$lib/utils/api';
@@ -263,9 +264,7 @@
       {#if preview}
         <button type="button" class="btn-secondary" onclick={back} disabled={importing}>Back</button>
       {/if}
-      <button type="button" class="btn-secondary" onclick={onClose}>
-        {done || partial ? 'Close' : 'Cancel'}
-      </button>
+      <ActionButton action={done || partial ? 'close' : 'cancel'} onclick={onClose} />
       {#if preview}
         <button class="btn-primary" onclick={handleImport} disabled={importing || !ready} data-testid="import-confirm">
           {#if importing}

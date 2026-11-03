@@ -15,6 +15,7 @@
    */
   import type { Background } from '$lib/types';
   import Icon from '@iconify/svelte';
+  import { ACTIONS } from '../shared/actions';
   import { BACKGROUND_PRESETS, BACKGROUND_CATEGORIES, type BackgroundImage, type BackgroundCategory } from '$lib/constants/backgrounds';
   import { getBackgrounds, uploadBackground, deleteBackground, createBackgroundCategory } from '$lib/utils/api';
   import { confirm } from '$lib/stores/confirmModal';
@@ -713,7 +714,7 @@
   <div class="form-group">
     <div class="slider-header">
       <label for="bg-opacity">{caps.opacityLabel}: {Math.round(Number(surfaceOpacity) * 100)}%</label>
-      <button class="reset-link" onclick={() => surfaceOpacity = 1}>Reset</button>
+      <button type="button" class="reset-link" onclick={() => surfaceOpacity = 1}><Icon icon={ACTIONS.reset.icon} width="14" />{ACTIONS.reset.label}</button>
     </div>
     <input id="bg-opacity" type="range" min="0" max="1" step="0.05" bind:value={surfaceOpacity} aria-describedby="bg-opacity-hint" />
     <div class="slider-labels">
@@ -738,7 +739,7 @@
     <div class="slider-header">
       <!-- svelte-ignore a11y_label_has_associated_control -->
       <label>Overlay Darkness: {Math.round(overlayOpacity * 100)}%</label>
-      <button class="reset-link" onclick={() => overlayOpacity = 0.7}>Reset</button>
+      <button type="button" class="reset-link" onclick={() => overlayOpacity = 0.7}><Icon icon={ACTIONS.reset.icon} width="14" />{ACTIONS.reset.label}</button>
     </div>
     <input type="range" min="0" max="1" step="0.05" bind:value={overlayOpacity} />
     <div class="slider-labels">
@@ -751,7 +752,7 @@
     <div class="slider-header">
       <!-- svelte-ignore a11y_label_has_associated_control -->
       <label>Overlay Blur: {overlayBlur}px</label>
-      <button class="reset-link" onclick={() => overlayBlur = 10}>Reset</button>
+      <button type="button" class="reset-link" onclick={() => overlayBlur = 10}><Icon icon={ACTIONS.reset.icon} width="14" />{ACTIONS.reset.label}</button>
     </div>
     <input type="range" min="0" max="20" step="1" bind:value={overlayBlur} />
     <div class="slider-labels">
@@ -2372,6 +2373,9 @@
   }
 
   .reset-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
     background: none;
     border: none;
     color: var(--accent-text);

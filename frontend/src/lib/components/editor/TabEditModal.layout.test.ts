@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { render, screen, fireEvent, within } from '@testing-library/svelte';
 import TabEditModal from '../admin/TabEditModal.svelte';
 import { editMode } from '$lib/stores/editMode';
 
@@ -46,7 +46,7 @@ describe('TabEditModal background', () => {
     render(TabEditModal, { tabName: 'Media', onSave, onCancel });
     await fireEvent.click(screen.getByRole('button', { name: /Configure Tab Background/ }));
     await fireEvent.click(screen.getByRole('button', { name: /^Color$/ }));
-    await fireEvent.click(screen.getByRole('button', { name: /^Save Background/ }));
+    await fireEvent.click(within(screen.getByRole('dialog', { name: /background$/i })).getByRole('button', { name: 'Save' }));
     expect(onSave).not.toHaveBeenCalled();
     expect(screen.getByText(/applies when you save/i, { selector: '.background-status' })).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
@@ -62,7 +62,7 @@ describe('TabEditModal background', () => {
     render(TabEditModal, { tabName: 'Media', tabBackground: { type: 'color', value: '#000000' }, onSave: onSave2, onCancel: vi.fn() });
     await fireEvent.click(screen.getByRole('button', { name: /Configure Tab Background/ }));
     await fireEvent.click(screen.getByRole('button', { name: /^None$/ }));
-    await fireEvent.click(screen.getByRole('button', { name: /^Save Background/ }));
+    await fireEvent.click(within(screen.getByRole('dialog', { name: /background$/i })).getByRole('button', { name: 'Save' }));
     await fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
     expect(onSave2.mock.calls[0][6]).toBeNull();
   });

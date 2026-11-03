@@ -196,7 +196,7 @@ test.describe('backgrounds in a real browser', () => {
       const { dlg, picker } = await openFolderPicker(page, sel);
       await picker.getByRole('radio', { name: 'Its own picture' }).check();
       await picker.locator(`.image-card img[src="${PRESET}"]`).first().click();
-      await picker.getByRole('button', { name: /^Save Background/ }).click();
+      await picker.getByRole('button', { name: 'Save', exact: true }).click();
       await expect(picker).toBeHidden();
       await expect(dlg.locator('.background-status')).toContainText(/applies when you save/);
       await dlg.getByRole('button', { name: /^Cancel$/ }).click();
@@ -213,7 +213,7 @@ test.describe('backgrounds in a real browser', () => {
     await expect(picker.getByText(/Overlay Blur/i)).toHaveCount(0);
     await picker.locator(`.image-card img[src="${PRESET}"]`).first().click();
     await picker.getByLabel(/^Picture opacity/).fill('0.5');
-    await picker.getByRole('button', { name: /^Save Background/ }).click();
+    await picker.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(picker).toBeHidden();
     await expect(dlg.locator('.background-status')).toContainText(/Image, 50% opacity/);
     await dlg.getByRole('button', { name: /^Save/ }).click();
@@ -255,7 +255,7 @@ test.describe('backgrounds in a real browser', () => {
     await expect(same).toBeChecked();
     // The folder-level hint that its own picture is kept.
     await expect(picker.getByText("This folder's own picture is kept for when you switch back.")).toBeVisible();
-    await picker.getByRole('button', { name: /^Save Background/ }).click();
+    await picker.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(dlg.locator('.background-status')).toContainText(/kept/);
     await dlg.getByRole('button', { name: /^Save/ }).click();
     await saveDraft(page);
@@ -267,7 +267,7 @@ test.describe('backgrounds in a real browser', () => {
     ({ dlg, picker } = await openFolderPicker(page, sel));
     await expect(picker.getByRole('radio', { name: "No picture of its own — show what's behind" })).toBeChecked();
     await picker.getByRole('radio', { name: 'Its own picture' }).check();
-    await picker.getByRole('button', { name: /^Save Background/ }).click();
+    await picker.getByRole('button', { name: 'Save', exact: true }).click();
     await dlg.getByRole('button', { name: /^Save/ }).click();
     await saveDraft(page);
     stored = await storedFolder(page, f.id('dash'), f.id('fi'));

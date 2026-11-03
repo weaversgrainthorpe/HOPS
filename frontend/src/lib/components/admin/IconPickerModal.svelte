@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ActionButton from '$lib/components/shared/ActionButton.svelte';
   import Icon from '@iconify/svelte';
   import ColoredIcon from '../ColoredIcon.svelte';
   import { createIcon, createIconCategory, deleteIcon, deleteIconCategory, uploadIconImage, IconInUseError, CategoryNotEmptyError, type Icon as IconType } from '$lib/utils/api';
@@ -452,7 +453,7 @@
               />
             </div>
             <div class="form-actions">
-              <button class="btn-secondary" onclick={() => showAddCategory = false}>Cancel</button>
+              <ActionButton action="cancel" onclick={() => showAddCategory = false} />
               <button class="btn-primary" onclick={handleAddCategory} disabled={saving || !newCategoryId || !newCategoryName || !newCategoryIcon}>
                 {saving ? 'Adding...' : 'Add Category'}
               </button>
@@ -552,7 +553,7 @@
             {/if}
 
             <div class="form-actions">
-              <button class="btn-secondary" onclick={() => { showAddIcon = false; newIconUseUpload = false; newIconImageUrl = ''; }}>Cancel</button>
+              <ActionButton action="cancel" onclick={() => { showAddIcon = false; newIconUseUpload = false; newIconImageUrl = ''; }} />
               <button
                 class="btn-primary"
                 onclick={handleAddIcon}
@@ -626,7 +627,7 @@
         <Icon icon="mdi:information-outline" width="16" />
         <span>Click an icon to select it. Add custom icons and categories on-the-fly!</span>
       </div>
-      <button class="btn-secondary" onclick={onCancel}>Cancel</button>
+      <ActionButton action="cancel" onclick={onCancel} />
     </div>
   </div>
 </div>

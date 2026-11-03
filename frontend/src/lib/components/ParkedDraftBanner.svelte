@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ActionButton from '$lib/components/shared/ActionButton.svelte';
   import { parkedDraft, discardParked } from '$lib/stores/editSession';
   import { isAuthenticated } from '$lib/stores/auth';
   import { layoutDoc, findLayoutDashboard } from '$lib/stores/config';
@@ -21,7 +22,7 @@
         You were signed out — sign in to save your changes to <strong>{name}</strong>.
       {/if}
     </span>
-    <button type="button" class="discard" onclick={() => void discardParked()}>Discard them</button>
+    <ActionButton action="discard" small onclick={() => void discardParked()} />
   </div>
 {/if}
 
@@ -41,16 +42,6 @@
   .text {
     line-height: 1.4;
     flex: 1;
-  }
-
-  .discard {
-    padding: 0.25rem 0.8rem;
-    border-radius: 0.25rem;
-    border: 1px solid #fde68a;
-    background: transparent;
-    color: #fef3c7;
-    font-weight: 600;
-    cursor: pointer;
   }
 
   @media (max-width: 600px) {

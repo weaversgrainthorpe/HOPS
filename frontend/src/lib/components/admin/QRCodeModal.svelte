@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ActionButton from '$lib/components/shared/ActionButton.svelte';
   import { buildQrSvg, withNameLabel } from '$lib/utils/qrLogo';
   import Icon from '@iconify/svelte';
   import Modal from '$lib/components/shared/Modal.svelte';
@@ -128,7 +129,7 @@
       <Button variant="secondary" icon="mdi:download" onclick={handleDownload} disabled={!qrSvg}>
         Download SVG
       </Button>
-      <Button variant="primary" onclick={onClose}>Close</Button>
+      <ActionButton action="close" onclick={onClose} />
     </div>
   {/snippet}
 </Modal>
