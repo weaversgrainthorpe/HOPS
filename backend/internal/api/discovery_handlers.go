@@ -558,6 +558,7 @@ func promoteInto(stored configdoc.Obj, t *promoteTarget, results []*discovery.Re
 	// Taken before any tile is added: a stored address v3 refuses (a v2 rdp: tile) is kept.
 	keep := configdoc.StoredTileURLs(dash)
 	keepDesc := storedLongDescriptions(configdoc.Obj{"dashboards": []any{dash}})
+	keepIcons := storedIconURLs(configdoc.Obj{"dashboards": []any{dash}})
 	tabID := t.TabID
 	if t.NewTab != nil {
 		id, ae := newNodeID("tab")
@@ -634,6 +635,9 @@ func promoteInto(stored configdoc.Obj, t *promoteTarget, results []*discovery.Re
 	dash["revision"] = cur + 1
 	if de := descriptionBoundsError(dash, keepDesc); de != nil {
 		return nil, nil, newAPIError(http.StatusBadRequest, "Promotion aborted, the result would be invalid: "+de.Error())
+	}
+	if ie := iconURLBoundsError(dash, keepIcons); ie != nil {
+		return nil, nil, newAPIError(http.StatusBadRequest, "Promotion aborted, the result would be invalid: "+ie.Error())
 	}
 	if err := configdoc.VerifyDashboardKeeping(dash, keep); err != nil {
 		return nil, nil, newAPIError(http.StatusBadRequest, "Promotion aborted, the result would be invalid: "+verifyProblems(err))

@@ -143,6 +143,9 @@ func (r *Router) handlePutDashboardV3(w http.ResponseWriter, id string, in confi
 		if de := descriptionBoundsError(nd, storedLongDescriptions(stored)); de != nil {
 			return nil, nil, de
 		}
+		if ie := iconURLBoundsError(nd, storedIconURLs(stored)); ie != nil {
+			return nil, nil, ie
+		}
 		// A stored tile address v3 refuses (a v2 rdp: tile, say) is kept while unchanged.
 		if err := configdoc.VerifyDashboardKeeping(nd, configdoc.StoredTileURLs(prev)); err != nil {
 			return nil, nil, verifyErr(err)

@@ -1799,6 +1799,10 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q: %s. Nothing was imported.", dashboardLabel(d), de.Error()), http.StatusBadRequest)
 			return
 		}
+		if ie := iconURLBoundsError(d, nil); ie != nil {
+			writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q: %s. Nothing was imported.", dashboardLabel(d), ie.Error()), http.StatusBadRequest)
+			return
+		}
 	}
 	if len(imported) == 0 {
 		msg := "No dashboards found in the import file"
