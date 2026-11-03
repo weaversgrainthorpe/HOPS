@@ -24,7 +24,7 @@ const folder = (id: string, name: string, box: { x: number; y: number; w: number
   placement: box, content: { children }, ...extra
 });
 
-async function importDash(page: Page, context: BrowserContext, children: (id: (s: string) => string) => Child[], tabExtra: Child = {}) {
+async function importDash(page: Page, context: BrowserContext, children: (id: (s: string) => string) => Child[], tabExtra: Child = {}, moreTabs: Child[] = []) {
   const p = `m6a${Date.now().toString(36)}${(seq++).toString(36)}`;
   const id = (s: string) => `${p}-${s}`;
   const dash = {
@@ -33,7 +33,7 @@ async function importDash(page: Page, context: BrowserContext, children: (id: (s
       statusChecksEnabled: null, statusCheckIntervalMinutes: null, statusCheckTimeoutSeconds: null,
       editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null
     },
-    tabs: [{ id: id('tab'), name: 'Main', order: 0, root: { columns: 24, children: children(id) }, ...tabExtra }]
+    tabs: [{ id: id('tab'), name: 'Main', order: 0, root: { columns: 24, children: children(id) }, ...tabExtra }, ...moreTabs]
   };
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
@@ -527,5 +527,42 @@ test.describe('coloured tabs use the one text colour rule', () => {
     await dlg.getByRole('button', { name: /^Save/ }).click();
     await expect(dlg).toHaveCount(0);
     await expect(tab).toHaveCSS('color', 'rgb(255, 255, 255)');
+  });
+});
+
+// Fix round 2: hover shows on the light theme; an unreadable tab colour says why in visible text and
+// keeps the focus ring.
+test.describe('coloured tabs: hover on light, unreadable colours', () => {
+  test('light theme: hovering a coloured tab changes its border to one that stands out from the page', async ({ page, context }) => {
+    await page.addInitScript(() => localStorage.setItem('hops_theme', 'light'));
+    const f = await importDash(page, context, blue, {}, [
+      { id: `amber-${Date.now().toString(36)}`, name: 'Amber', order: 1, color: '#f59e0b', root: { columns: 24, children: [] } }
+    ]);
+    await page.goto(f.path);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    // The coloured tab is not the open one: only hover changes its border.
+    const tab = page.getByRole('tab', { name: 'Switch to Amber tab' });
+    await expect(tab).not.toHaveClass(/active/);
+    const before = await tab.evaluate((e) => getComputedStyle(e).borderTopColor);
+    await tab.hover();
+    await expect.poll(() => tab.evaluate((e) => getComputedStyle(e).borderTopColor)).not.toBe(before);
+    const after = await tab.evaluate((e) => getComputedStyle(e).borderTopColor);
+    expect(after).not.toMatch(/rgba?\(255, 255, 255/);
+  });
+
+  test('edit mode: an unreadable tab colour is named in visible text, and the tab keeps its focus ring', async ({ page, context }) => {
+    const f = await importDash(page, context, blue, { color: 'bluish' });
+    await page.goto(f.path);
+    await expect(page.getByText(/can't be read/)).toHaveCount(0);
+    await enterEdit(page);
+    const note = page.getByRole('status').filter({ hasText: `"Main" tab: its colour (bluish) can't be read` });
+    await expect(note).toBeVisible();
+    const tab = page.locator(`[data-tab-button="${f.id('tab')}"]`);
+    await expect(tab).toHaveAttribute('aria-describedby', (await note.getAttribute('id'))!);
+    await tab.focus();
+    await page.keyboard.press('ArrowRight'); // keyboard use: focus-visible applies
+    await tab.focus();
+    const ring = await tab.evaluate((e) => getComputedStyle(e).outlineStyle);
+    expect(ring).not.toBe('none');
   });
 });

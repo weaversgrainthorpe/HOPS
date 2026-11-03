@@ -163,6 +163,9 @@
       selectedColor={color}
       onSelect={(c) => color = c}
     />
+    {#if textOn.invalid}
+      <p class="colour-problem" role="status" data-colour-unreadable>Its colour ({color}) can't be read, so the tab shows the theme colour. Choose a colour above.</p>
+    {/if}
 
     <OpacitySlider
       opacity={opacity}
@@ -307,6 +310,12 @@
     color: var(--accent-text);
     font-size: 0.875rem;
     font-weight: 500;
+  }
+
+  .colour-problem {
+    margin: 0.5rem 0 0;
+    font-size: 0.875rem;
+    color: var(--color-error-text);
   }
 
   .text-colour-row {

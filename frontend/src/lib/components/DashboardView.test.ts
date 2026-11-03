@@ -602,3 +602,41 @@ describe('coloured tabs use the one text colour rule', () => {
     expect(css).not.toMatch(/\.tab\.custom-color[^{]*\{[^}]*filter:\s*brightness/);
   });
 });
+
+// Fix round 2 (N2, N3): a visible hover on both themes; an unreadable tab colour says why in visible
+// text (not a tooltip only) and keeps the focus ring.
+describe('coloured tabs: hover and unreadable colours', () => {
+  const css = async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    return readFileSync(resolve(__dirname, 'Dashboard.svelte'), 'utf8');
+  };
+  it('hover draws the theme outline token (contrasts with the page on light and dark), never white', async () => {
+    const c = await css();
+    expect(c).toMatch(/\.tab\.custom-color:hover\s*\{\s*border-color:\s*var\(--tab-outline\)/);
+    expect(c).not.toMatch(/\.tab\.custom-color:hover\s*\{[^}]*rgba\(255,\s*255,\s*255/);
+  });
+  it('the unreadable-colour marker is not an outline (the focus ring stays)', async () => {
+    const c = await css();
+    const rule = /\.tab\.colour-unreadable\s*\{([^}]*)\}/.exec(c)?.[1] ?? '';
+    expect(rule).not.toMatch(/(^|[^-])outline\s*:/);
+    expect(rule).toMatch(/box-shadow/);
+  });
+  it('in edit mode a visible note names the tab and says why; it is the tab\'s accessible description', async () => {
+    const bad: LayoutDashboard = {
+      id: 'd1', name: 'Home', path: '/home', revision: 1,
+      tabs: [{ ...layoutD1.tabs[0], color: 'bluish' }, layoutD1.tabs[1]]
+    };
+    config.set(cfg([bad, v3d]));
+    enterEdit('d1');
+    const { container } = render(Dashboard, { dashboard: bad });
+    await tick();
+    const note = screen.getByText(/"Main" tab: its colour \(bluish\) can't be read — theme colour shown/);
+    expect(note.getAttribute('role')).toBe('status');
+    const tab = container.querySelector('[data-tab-button="t1"]') as HTMLElement;
+    expect(tab.classList.contains('colour-unreadable')).toBe(true);
+    expect(tab.getAttribute('aria-describedby')).toBe(note.id);
+    // Not in view mode, and not for a readable colour.
+    expect(container.querySelector('[data-tab-button="t2"]')?.hasAttribute('aria-describedby')).toBe(false);
+  });
+});

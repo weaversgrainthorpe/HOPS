@@ -71,6 +71,13 @@
   const barTabs = $derived<BarTab[]>(
     editing ? ((draft?.tabs ?? []) as unknown as BarTab[]) : (dashboard.tabs as unknown as BarTab[])
   );
+  // Edit mode: tabs whose stored colour can't be read (drawn in the theme). Each is named in a visible
+  // note under the tab bar, which is also that tab's accessible description (never a tooltip only).
+  const unreadableTabs = $derived(
+    editing ? barTabs.filter((t) => textColourOn(t.color, t.textColor).invalid) : []
+  );
+  const tabNoteId = (id: string) => `tab-colour-note-${id}`;
+
   // The dashboard-level look (background, per-tab backgrounds) the page shows: the draft's while editing.
   type Look = { background?: Background; header?: HeaderConfig };
   const look = $derived<Look>((draft ?? dashboard) as unknown as Look);
@@ -478,9 +485,8 @@
               tabindex={activeTabIndex === index ? 0 : -1}
               aria-selected={activeTabIndex === index}
               aria-label={`Switch to ${tab.name} tab`}
-              title={editing
-                ? `${tabText.invalid ? "Colour can't be read — theme colour shown. " : ''}Drag to reorder (or Alt+Left / Alt+Right); drop items here to move them to this tab`
-                : undefined}
+              title={editing ? 'Drag to reorder (or Alt+Left / Alt+Right); drop items here to move them to this tab' : undefined}
+              aria-describedby={editing && tabText.invalid ? tabNoteId(tab.id) : undefined}
               data-drag-tab={editing ? tab.id : undefined}
               data-tab-button={tab.id}
               use:tabSource={{ tabId: tab.id, enabled: editing }}
@@ -512,6 +518,9 @@
       </div>
       </TabRail>
     {/if}
+    {#each unreadableTabs as t (t.id)}
+      <p class="tab-colour-note" id={tabNoteId(t.id)} role="status">"{t.name}" tab: its colour ({t.color}) can't be read — theme colour shown. Choose a colour in its Edit Tab dialog.</p>
+    {/each}
   </div>
 
   {#if editing}
@@ -811,14 +820,22 @@
     border-color: rgba(255, 255, 255, 0.3);
   }
 
+  /* Hover: the theme's outline token (the accent, lightened on dark themes and darkened on light ones),
+     which stands out against the page in both themes; white vanished on a light page. */
   .tab.custom-color:hover {
-    border-color: rgba(255, 255, 255, 0.7);
+    border-color: var(--tab-outline);
   }
 
-  /* Edit mode: a stored colour that can't be read is drawn as the theme and marked (the title says why). */
+  /* Edit mode: a stored colour that can't be read is drawn as the theme and marked; the note under the
+     tab bar says why. An inset shadow, not an outline, so the keyboard focus ring still shows. */
   .tab.colour-unreadable {
-    outline: 2px dashed var(--color-error, #b91c1c);
-    outline-offset: -2px;
+    box-shadow: inset 0 0 0 2px var(--color-error, #b91c1c);
+  }
+
+  .tab-colour-note {
+    margin: 0.5rem 0 0;
+    font-size: 0.875rem;
+    color: var(--color-error-text);
   }
 
   .tab.custom-color.active {

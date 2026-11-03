@@ -88,3 +88,12 @@ describe('TabEditModal text colour', () => {
     expect(screen.getByText('Text colour applies when the tab has a colour.')).toBeTruthy();
   });
 });
+
+describe('TabEditModal unreadable colour (fix round 2)', () => {
+  it('a stored colour that cannot be read is named in the dialog; a picked colour clears it', async () => {
+    render(TabEditModal, { tabName: 'Media', tabColor: 'bluish', onSave: vi.fn(), onCancel: vi.fn() });
+    expect(screen.getByText(/Its colour \(bluish\) can't be read/)).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Blue' }));
+    expect(screen.queryByText(/can't be read/)).toBeNull();
+  });
+});

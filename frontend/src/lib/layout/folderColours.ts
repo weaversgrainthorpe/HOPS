@@ -11,7 +11,7 @@
  * (`invalid`), so the renderer can show a visible note.
  */
 
-import { MIN_TEXT_CONTRAST, autoTextFor, contrastRatio, parseHex, ratio, type Rgb } from '$lib/utils/colorContrast';
+import { MIN_TEXT_CONTRAST, alphaOf, autoTextFor, contrastRatio, parseHex, ratio, type Rgb } from '$lib/utils/colorContrast';
 
 /** WCAG AA for normal text (the one shared value). */
 export { MIN_TEXT_CONTRAST, contrastRatio };
@@ -46,6 +46,11 @@ export interface FolderColours {
   themed: boolean;
   /** A stored colour was given but could not be read. */
   invalid: boolean;
+  /**
+   * The colour's own alpha (#rgba / #rrggbbaa; 1 otherwise). The panels are drawn from the rgb part, so
+   * the shape fades by this too, as a tile or tab in that colour does.
+   */
+  alpha: number;
 }
 
 function toHex(c: Rgb): string {
@@ -83,7 +88,8 @@ export function deriveFolderColours(color?: string | null, textColor?: 'auto' | 
       contrast: NaN,
       contrastWarning: false,
       themed: true,
-      invalid: given
+      invalid: given,
+      alpha: 1
     };
   }
   const white: Rgb = [255, 255, 255], black: Rgb = [0, 0, 0];
@@ -108,7 +114,8 @@ export function deriveFolderColours(color?: string | null, textColor?: 'auto' | 
     contrast,
     contrastWarning: explicit && contrast < MIN_TEXT_CONTRAST,
     themed: false,
-    invalid: false
+    invalid: false,
+    alpha: alphaOf(color)
   };
 }
 

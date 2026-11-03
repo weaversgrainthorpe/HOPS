@@ -73,6 +73,10 @@
   const opacity = $derived(
     look.shape === 'folder-outline' ? 1 : typeof look.opacity === 'number' && Number.isFinite(look.opacity) ? look.opacity : 0.95
   );
+  // The painted looks draw the rgb part of the colour; a colour with an alpha (#rrggbbaa, e.g. from a
+  // Heimdall import) fades them by it, so the folder looks as a tile or tab in that colour does. Rounded
+  // draws the stored colour itself (alpha included), so it needs no extra fade.
+  const paintOpacity = $derived(look.shape === 'folder-outline' ? 1 : opacity * colours.alpha);
   const ownBackground = $derived(!!(look.background && !look.background.inherit && look.background.type));
   const pos = $derived(look.tabPosition === 'centre' || look.tabPosition === 'right' ? look.tabPosition : 'left');
   const strokeColour = $derived(parts.stroke === 'dark' ? '#0b1020' : parts.stroke === 'colour' ? (colours.themed ? 'var(--text-secondary)' : colours.base) : 'none');
@@ -96,7 +100,7 @@
     use:measured
   >
     <!-- The folder's opacity fades the painted shape only — never the focus ring below. -->
-    <div class="shape-paint" data-shape-paint style:opacity={String(opacity)}>
+    <div class="shape-paint" data-shape-paint style:opacity={String(paintOpacity)}>
     <svg class="shape-svg" width="100%" height="100%" viewBox="0 0 {box.widthPx} {box.heightPx}" preserveAspectRatio="none" focusable="false">
       {#if parts.gradient}
         <defs>

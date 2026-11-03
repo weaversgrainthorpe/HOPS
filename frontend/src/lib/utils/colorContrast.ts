@@ -32,6 +32,18 @@ export function parseHex(v: unknown): Rgb | null {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
+/**
+ * The alpha part of a #rgba / #rrggbbaa colour, 0–1 (1 when it has none). Folders draw their panels
+ * from the rgb part and fade them by this, so a colour with an alpha looks the same on a folder as on a
+ * tile or a tab (which draw the stored value).
+ */
+export function alphaOf(v: unknown): number {
+  if (typeof v !== 'string') return 1;
+  const m = /^#(?:[0-9a-f]{3}([0-9a-f])|[0-9a-f]{6}([0-9a-f]{2}))$/i.exec(v.trim());
+  if (!m) return 1;
+  return parseInt(m[1] ? m[1] + m[1] : m[2], 16) / 255;
+}
+
 /** WCAG 2 relative luminance. */
 export function luminance(c: Rgb): number {
   const [r, g, b] = c.map((x) => {
