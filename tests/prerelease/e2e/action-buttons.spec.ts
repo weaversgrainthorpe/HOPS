@@ -80,6 +80,8 @@ test('Undo, Discard and Save look the same on Tab order, a Global settings row a
   const barDisabled = await disabledLook(bar.getByRole('button', { name: 'Undo', exact: true }));
   // Enabled: a secondary toolbar button (Add tile, always enabled) and the primary Save, once a change exists.
   const barSecondary = await enabledLook(bar.getByRole('button', { name: 'Add tile', exact: true }));
+  // Every button on the bar is the same secondary button, the Dashboard pencil included.
+  expect(await enabledLook(bar.getByRole('button', { name: 'Edit Dashboard', exact: true }))).toEqual(barSecondary);
   expect(barDisabled.opacity, 'a disabled toolbar button is not faded').toBe('1');
   expect(barDisabled.outline).toBe('dashed');
   await page.locator('[aria-label="Exit Edit Mode"]').click();

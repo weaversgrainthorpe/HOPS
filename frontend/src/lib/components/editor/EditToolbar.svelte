@@ -9,7 +9,6 @@
   import { toast } from '$lib/stores/toast';
   import { get } from 'svelte/store';
   import { drag } from '$lib/editor/drag/dragController';
-  import EditHandle from './EditHandle.svelte';
   import { playSavedTick } from '$lib/editor/drag/flourishes';
   import BackgroundFailedBadge from '../background/BackgroundFailedBadge.svelte';
   import type { Background } from '$lib/types';
@@ -178,8 +177,10 @@
     </div>
     {#if onEditDashboard}
       <div class="group">
-        <!-- The dashboard's own edit handle: one labelled pencil, always shown while editing. -->
-        <EditHandle name="Dashboard" label="Dashboard" placement="inline" onEdit={onEditDashboard} />
+        <!-- The dashboard's own edit button: a pencil and "Dashboard", the same button as its neighbours. -->
+        <button type="button" class="tb btn-secondary btn-sm" onclick={onEditDashboard} aria-label="Edit Dashboard" title="Edit Dashboard">
+          <Icon icon="mdi:pencil" width="16" /> Dashboard
+        </button>
       </div>
     {/if}
     <!-- Save is last, as in every dialog: the main action sits at the right-hand end. -->
@@ -392,6 +393,10 @@
     }
     .group > :global(*) {
       flex: none;
+    }
+    /* Comfortable touch targets on phones. */
+    .tb {
+      min-height: 2.5rem;
     }
     .save-slot {
       position: sticky;

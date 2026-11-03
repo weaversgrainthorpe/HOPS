@@ -6,6 +6,9 @@
   --bg-primary: #0f172a;
   --bg-secondary: #1e293b;
   --bg-tertiary: #334155;
+  /* A hovered secondary button: set per preset and mode in lib/stores/theme.ts (secondaryHover),
+     text >= 4.5:1 on it, never the page or panel colour. These are the default preset's values. */
+  --btn-secondary-hover: #556173;
 
   /* Text colors
    * --text-secondary contrast against backgrounds (dark theme):
@@ -156,6 +159,7 @@
   --bg-primary: #f8fafc;
   --bg-secondary: #f1f5f9;
   --bg-tertiary: #e2e8f0;
+  --btn-secondary-hover: #bcc2cc;
   --text-primary: #0f172a;
   /* --text-secondary contrast (light theme):
    *   on --bg-primary  (#f8fafc): 10.2:1 (AAA)
@@ -533,10 +537,10 @@ a:focus-visible {
   color: var(--text-primary);
 }
 
-/* Hover: a step from the button's own fill towards the text colour, so it stays visible on every
-   surface (page, panel, dialog) in both themes. It was the page colour: on the page it vanished. */
+/* Hover: a step from the button's own fill (per preset, theme.ts), so it stays visible on every
+   surface (page, panel, dialog) in both themes with readable text. It was the page colour: it vanished. */
 .btn-secondary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--bg-tertiary) 82%, var(--text-primary));
+  background: var(--btn-secondary-hover);
 }
 
 .btn-danger {

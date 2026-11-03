@@ -763,7 +763,7 @@
 
   /* Hover as btn-secondary: never the page colour. */
   .btn-icon:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--bg-tertiary) 82%, var(--text-primary));
+    background: var(--btn-secondary-hover);
     color: var(--text-primary);
   }
 

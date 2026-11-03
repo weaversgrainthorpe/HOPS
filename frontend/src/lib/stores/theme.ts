@@ -240,6 +240,41 @@ const modeTokens: Record<'light' | 'dark', Record<string, string>> = {
 
 export const THEME_PRESET_IDS: readonly string[] = Object.keys(themePresets);
 
+/** Text on every button and surface (app.css --text-primary): the same in every preset. */
+export const TEXT_PRIMARY = { dark: '#f1f5f9', light: '#0f172a' } as const;
+
+function channels(h: string): number[] {
+  return [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+}
+function luminance(h: string): number {
+  const [r, g, b] = channels(h).map((x) => {
+    const v = x / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+function contrast(a: string, b: string): number {
+  const x = luminance(a), y = luminance(b);
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+/** `a` moved `t` (0–1) of the way towards `b`, as #rrggbb. */
+function mix(a: string, b: string, t: number): string {
+  const ca = channels(a), cb = channels(b);
+  return '#' + ca.map((v, i) => Math.round(v + (cb[i] - v) * t).toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * A hovered secondary button's fill: a step from its own fill (--bg-tertiary), never the page or
+ * panel colour, with the button text still >= 4.5:1 on it. It steps towards the text colour where that
+ * keeps the text readable (most presets), otherwise away from it (Ocean and Forest dark).
+ */
+export function secondaryHover(tertiary: string, mode: 'light' | 'dark'): string {
+  const text = TEXT_PRIMARY[mode];
+  const toText = mix(tertiary, text, 0.18);
+  if (contrast(text, toText) >= 4.5) return toText;
+  return mix(tertiary, mode === 'dark' ? '#000000' : '#ffffff', 0.25);
+}
+
 /** Every CSS custom property a preset sets on <html> in one mode, or null for an unknown preset. */
 export function themeTokens(presetId: string, mode: 'light' | 'dark'): Record<string, string> | null {
   const preset = themePresets[presetId];
@@ -249,6 +284,7 @@ export function themeTokens(presetId: string, mode: 'light' | 'dark'): Record<st
     '--bg-primary': c.primary,
     '--bg-secondary': c.secondary,
     '--bg-tertiary': c.tertiary,
+    '--btn-secondary-hover': secondaryHover(c.tertiary, mode),
     '--accent': c.accent,
     '--accent-hover': c.accentHover,
     '--accent-solid': c.accentSolid,

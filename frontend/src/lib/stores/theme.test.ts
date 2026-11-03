@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { THEME_PRESET_IDS, themeTokens } from './theme';
+import { THEME_PRESET_IDS, themeTokens, TEXT_PRIMARY } from './theme';
 
 const hex = (h: string) => {
   expect(h, `${h} is a #rrggbb colour`).toMatch(/^#[0-9a-f]{6}$/i);
@@ -53,6 +53,13 @@ describe('theme tokens: every preset × light/dark', () => {
             expect(ratio(t[k], page), `${k} on page`).toBeGreaterThanOrEqual(4.5);
             expect(ratio(t[k], surface), `${k} on surface`).toBeGreaterThanOrEqual(4.5);
           }
+        });
+
+        it('a hovered secondary button keeps its text >= 4.5:1 and is neither the page nor the panel colour', () => {
+          const hover = t['--btn-secondary-hover'];
+          expect(ratio(TEXT_PRIMARY[mode], t['--bg-tertiary']), 'text on the resting button').toBeGreaterThanOrEqual(4.5);
+          expect(ratio(TEXT_PRIMARY[mode], hover), 'text on the hovered button').toBeGreaterThanOrEqual(4.5);
+          for (const other of [page, surface, t['--bg-tertiary']]) expect(hover.toLowerCase()).not.toBe(other.toLowerCase());
         });
 
         it('the status dot fills are >= 3:1 against the navbar, and the glyph >= 3:1 on them', () => {
@@ -129,6 +136,13 @@ describe('no colour wired to one preset', () => {
       }
     }
     expect(hits).toEqual([]);
+  });
+
+  it('secondary hover uses the per-preset token, and app.css starts with the default preset values', () => {
+    const app = readFileSync(join(SRC, 'app.css'), 'utf8');
+    expect(app.match(/\.btn-secondary:hover:not\(:disabled\) \{[^}]*\}/)![0]).toContain('background: var(--btn-secondary-hover)');
+    const values = [...app.matchAll(/--btn-secondary-hover: (#[0-9a-f]{6});/gi)].map((m) => m[1]);
+    expect(values).toEqual([themeTokens('default', 'dark')!['--btn-secondary-hover'], themeTokens('default', 'light')!['--btn-secondary-hover']]);
   });
 
   it('section titles use the accent text token, not the raw accent', () => {
