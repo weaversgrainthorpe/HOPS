@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   An installed HOPS app always keeps the gear, since it has no address bar.
   If HOPS can't read the setting, the buttons show. This only tidies the bar:
   who can sign in and what they can do stay the same.
+- **Text colour for tiles and tabs** (Auto, Light, Dark), as folders have,
+  with the same warning when the text would be hard to read.
+- **Folders can have a description,** as tiles can.
+- **Duplicate in the tile dialog,** as in the folder dialog. In both, it
+  waits until you've saved your changes.
 - **Export all** on Settings › Dashboards saves every dashboard in one file.
   It isn't a backup: a backup is the whole app (settings, icons and so on).
   Import reads it back, as well as a single-dashboard export.
@@ -39,6 +44,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   says what was added, replaced, renamed and skipped.
 
 ### Changed
+- **One text colour rule everywhere.** On a coloured tile, folder or tab,
+  Auto now picks whichever of white or black is easier to read. Before, tiles
+  and tabs always used white and folders used another rule, so the same colour
+  could give different text. Some tiles and tabs now show black text.
+- **The tile dialog matches the folder dialog:** the same sections, order and
+  words (Colour, Display, Status check, Move or copy). "Subtitle/Description"
+  is now "Description", a folder's "Opacity" is "Background opacity", and the
+  slider for a folder's background picture is "Picture opacity".
+- **A coloured tab shows hover with its border,** not by brightening, so its
+  text stays readable. In edit mode, a tab colour HOPS can't read is marked
+  and a line under the tabs says which tab and why.
 - **The top bar's Export All Dashboards** saves the same dashboards-only file
   as Export all. Settings and theme are in backups.
 - **Tiles use their space.** The name sits at the top and the icon takes the
@@ -145,10 +161,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Every result shows while a scan runs.** A service found in the same
   second as the one before it could be missing from the list until you
   reopened the page.
-- **An outlined folder no longer offers settings it can't use.** It is
-  see-through, so its colour draws only the outline: Opacity and Text colour
-  are hidden for it, with a line saying why, and an opacity saved under
-  another look no longer fades the outline.
+- **An outlined folder no longer offers an opacity it can't use.** It is
+  see-through, so its colour draws only the outline: Background opacity is
+  hidden for it, with a line saying why, and an opacity saved under another
+  look no longer fades the outline. Its Text colour is used as chosen.
 - **Notices sit above the edit toolbar,** so an error never covers Save.
 - **Add to HOPS shows one notice** when HOPS can't be reached, not several.
 - **Settings › Dashboards no longer runs off the right-hand edge** with a long
