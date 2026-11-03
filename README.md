@@ -304,8 +304,10 @@ and [Rolling back from 3.x to 2.2.1](DEPLOY.md#rolling-back-from-3x-to-221).
   each
 - **Add to HOPS** bookmark, **Dead links**, **Duplicates** and **Blocked status
   checks**
-- Import from Homer, Dashy, Heimdall and HOPS exports; exports carry their
-  uploaded icons and backgrounds
+- Export one dashboard or all of them, and import from Homer, Dashy,
+  Heimdall and HOPS exports; a dashboard with a name you already have asks
+  Replace, Keep both or Skip. Exports carry their uploaded icons and
+  backgrounds
 - **Backups**: create, download, upload, restore and clean up, with
   retention rules. A failed backup shows a warning until one succeeds
 - **Global settings**: every server setting, grouped, each with its default

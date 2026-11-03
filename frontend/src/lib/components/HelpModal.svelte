@@ -373,7 +373,7 @@
               <Icon icon="mdi:import" width="24" />
               <div>
                 <strong>Import / Export</strong>
-                <p>Self-contained export bundles all uploaded icons and backgrounds. Import from HOPS, Homer, Dashy, or Heimdall configs; anything that can't be brought across is listed.</p>
+                <p>Export one dashboard or all of them; exports carry their uploaded icons and backgrounds. Import from HOPS, Homer, Dashy, or Heimdall configs. A dashboard with a name you already have asks Replace, Keep both or Skip, and anything that can't be brought across is listed.</p>
               </div>
             </div>
             <div class="feature">

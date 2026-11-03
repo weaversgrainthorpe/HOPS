@@ -599,24 +599,35 @@ Coming from another dashboard? On **Settings › Dashboards**, click
 - **Heimdall JSON**: Heimdall's list of apps. Signed in to Heimdall, open
   `http://<your-heimdall>/api/item` in your browser and save the page as a
   `.json` file. Each Heimdall tag becomes a folder.
-- **HOPS JSON**: an export from HOPS itself.
+- **HOPS export**: one dashboard, or an **Export all** file, from HOPS itself.
 
 **Auto-match icons** (ticked by default) finds icons from the tile names.
-Anything HOPS can't bring across (an icon it can't draw, a Dashy widget) is
-listed when the import finishes, so you know what to tidy up.
-Click **Import**. Imported dashboards are added next to yours, never over
-them: if the path is taken, the new one gets a suffix (`/home` becomes
-`/home-1`). If only part of a file could be imported, HOPS says what was
-left out.
+Click **Next**. HOPS checks the file and lists its dashboards. Nothing is
+imported yet. If a dashboard has the same name as one you already have,
+choose what to do with it:
+
+- **Replace**: the one in the file takes the place of yours (same address).
+- **Keep both**: the new one is added with a number, like "Home (2)".
+- **Skip**: it is left out.
+
+A dashboard with a new name is listed as **Add**. Click **Import** when each
+one has a choice. A summary then says what was added, replaced, renamed and
+skipped. If any dashboard in the file is broken, nothing is imported and HOPS
+says which one and why. If the path is taken, the new one gets a suffix
+(`/home` becomes `/home-1`). Anything HOPS can't bring across (an icon it
+can't draw, a Dashy widget) is listed when the import finishes, so you know
+what to tidy up. A backup file can't be imported here: restore it in
+**Settings › Backups**.
 
 ### Export and share
 
 The **Export** button next to a dashboard in Settings › Dashboards (or
-**Export Dashboard** in the top bar while editing) saves a HOPS JSON file.
-The **Export Configuration** dialog offers **Export All Dashboards** too.
-The file carries your uploaded icons and backgrounds with it, so it can be
-imported into another HOPS. An export is not a backup: for that, see
-Step 9.
+**Export Dashboard** in the top bar while editing) saves that dashboard as a
+HOPS JSON file. **Export all**, at the top of Settings › Dashboards, saves
+every dashboard in one file. Import reads both. The file carries your
+uploaded icons and backgrounds with it, so it can be imported into another
+HOPS. An export holds dashboards only. It is not a backup: a backup is the
+whole app (settings, icons and so on). For that, see Step 9.
 
 ### Icons
 
