@@ -495,7 +495,7 @@ a:focus-visible {
  * border, cursor, transition) and override only the variant-specific
  * background and hover states.
  *
- * Variants: .btn-primary, .btn-secondary, .btn-danger
+ * Variants: .btn-primary, .btn-secondary, .btn-danger, .btn-warning
  * Modifier: .btn-sm (smaller padding/font-size)
  *
  * Use them on `<button>` elements directly. Modal/page-specific layout
@@ -504,7 +504,8 @@ a:focus-visible {
  */
 .btn-primary,
 .btn-secondary,
-.btn-danger {
+.btn-danger,
+.btn-warning {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -532,8 +533,10 @@ a:focus-visible {
   color: var(--text-primary);
 }
 
+/* Hover: a step from the button's own fill towards the text colour, so it stays visible on every
+   surface (page, panel, dialog) in both themes. It was the page colour: on the page it vanished. */
 .btn-secondary:hover:not(:disabled) {
-  background: var(--bg-primary);
+  background: color-mix(in srgb, var(--bg-tertiary) 82%, var(--text-primary));
 }
 
 .btn-danger {
@@ -545,9 +548,19 @@ a:focus-visible {
   background: var(--danger-solid-hover);
 }
 
+.btn-warning {
+  background: var(--warning-solid);
+  color: white;
+}
+
+.btn-warning:hover:not(:disabled) {
+  background: var(--warning-solid-hover);
+}
+
 .btn-primary:disabled,
 .btn-secondary:disabled,
-.btn-danger:disabled {
+.btn-danger:disabled,
+.btn-warning:disabled {
   opacity: 1;
   background: var(--disabled-bg);
   color: var(--disabled-text);

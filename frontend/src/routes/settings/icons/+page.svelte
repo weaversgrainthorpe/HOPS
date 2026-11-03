@@ -588,7 +588,8 @@
       </ul>
       {#if inUseError}<p class="field-error" role="alert">{inUseError}</p>{/if}
       <div class="dialog-actions">
-        <ActionButton action="cancel" label="Keep icon" onclick={() => (inUse = null)} />
+        <!-- A "don't do it" choice: a plain secondary button, no icon (like Keep editing). -->
+        <button type="button" class="btn-secondary" onclick={() => (inUse = null)}>Keep icon</button>
         <ActionButton action="delete" label="Delete anyway" busy={deletingId === target.icon.id} onclick={() => void doDelete(target.icon, true)} />
       </div>
     </div>

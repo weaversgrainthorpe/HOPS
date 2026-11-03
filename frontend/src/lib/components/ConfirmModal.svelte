@@ -192,12 +192,4 @@
     min-width: 100px;
   }
 
-  .btn-warning {
-    background: var(--warning-solid);
-    color: white;
-  }
-
-  .btn-warning:hover {
-    background: var(--warning-solid-hover);
-  }
 </style>

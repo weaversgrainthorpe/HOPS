@@ -120,8 +120,9 @@
     color: var(--text-primary);
   }
 
+  /* Never the page colour: a hovered button must not vanish into the page (app.css, same rule). */
   .btn-secondary:hover:not(:disabled) {
-    background: var(--bg-primary);
+    background: color-mix(in srgb, var(--bg-tertiary) 82%, var(--text-primary));
   }
 
   .btn-danger {

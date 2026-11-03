@@ -61,7 +61,7 @@
         <button class="action-btn" onclick={openInNewTab} title="Open in new tab">
           <Icon icon="mdi:open-in-new" width="20" />
         </button>
-        <button class="close-btn" onclick={onClose} title="Close (Esc)">
+        <button class="close-btn" onclick={onClose} title="Close (Esc)" aria-label="Close">
           <Icon icon="mdi:close" width="24" />
         </button>
       </div>

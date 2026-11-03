@@ -258,7 +258,7 @@
   >
     <div class="modal-header">
       <h2 id="theme-settings-title">Theme Settings</h2>
-      <button class="close-btn" onclick={onClose}>
+      <button class="close-btn" onclick={onClose} aria-label="Close">
         <Icon icon="mdi:close" width="24" />
       </button>
     </div>

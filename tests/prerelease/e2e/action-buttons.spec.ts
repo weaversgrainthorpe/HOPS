@@ -44,6 +44,16 @@ async function look(b: Locator) {
     word: (el as HTMLElement).innerText.trim()
   }));
 }
+/** How an enabled button is drawn (colours and edges; size differs between small and normal). */
+async function enabledLook(b: Locator) {
+  await expect(b).toBeEnabled();
+  await b.page().mouse.move(0, 0); // never hovered
+  await b.page().waitForTimeout(300); // past the background transition
+  return b.evaluate((el) => {
+    const cs = getComputedStyle(el);
+    return { bg: cs.backgroundColor, color: cs.color, border: `${cs.borderTopWidth} ${cs.borderTopStyle} ${cs.borderTopColor}`, radius: cs.borderTopLeftRadius, weight: cs.fontWeight, opacity: cs.opacity };
+  });
+}
 /** How a disabled button is drawn. */
 async function disabledLook(b: Locator) {
   await expect(b).toBeDisabled();
@@ -68,6 +78,8 @@ test('Undo, Discard and Save look the same on Tab order, a Global settings row a
   };
   expect(ref.undo.icon).not.toBe('');
   const barDisabled = await disabledLook(bar.getByRole('button', { name: 'Undo', exact: true }));
+  // Enabled: a secondary toolbar button (Add tile, always enabled) and the primary Save, once a change exists.
+  const barSecondary = await enabledLook(bar.getByRole('button', { name: 'Add tile', exact: true }));
   expect(barDisabled.opacity, 'a disabled toolbar button is not faded').toBe('1');
   expect(barDisabled.outline).toBe('dashed');
   await page.locator('[aria-label="Exit Edit Mode"]').click();
@@ -80,6 +92,16 @@ test('Undo, Discard and Save look the same on Tab order, a Global settings row a
   expect(tabDisabled).toEqual(barDisabled);
   await page.getByRole('button', { name: 'Move Tab 3 to the top' }).click();
   expect(await look(tabUndo)).toEqual(ref.undo);
+  // Enabled, the page's Undo is drawn exactly like the toolbar's buttons (item 15).
+  expect(await enabledLook(tabUndo)).toEqual(barSecondary);
+  // A hovered secondary button never takes the page colour (it vanished on the page before).
+  const pageBg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  await tabUndo.hover();
+  await page.waitForTimeout(300);
+  const hoverBg = await tabUndo.evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(hoverBg, 'hovered Undo stays visible on the page').not.toBe(pageBg);
+  expect(hoverBg, 'hover changes the fill').not.toBe(barSecondary.bg);
+  await page.mouse.move(0, 0);
   expect(await look(page.getByRole('button', { name: 'Discard', exact: true }))).toEqual(ref.discard);
   expect(await look(page.getByRole('button', { name: 'Save', exact: true }))).toEqual(ref.save);
   await page.getByRole('button', { name: 'Discard', exact: true }).click();
@@ -120,4 +142,15 @@ test('the tile and folder dialogs: Delete and Duplicate on the left, Cancel then
     await expect(dlg).toHaveCount(0);
   }
   expect(footers['Edit Folder']).toEqual(footers['Edit Tile']);
+
+  // Delete is drawn one way everywhere: the Dashboards list row's bin is the dialog's red Delete.
+  await page.locator(`.tab-canvas [data-node-id="${d.p}-a"]`).first().click({ button: 'right', position: { x: 12, y: 12 } });
+  await page.getByRole('menuitem', { name: 'Edit' }).click();
+  const dialogDelete = await enabledLook(page.getByRole('dialog', { name: 'Edit Tile' }).getByRole('button', { name: 'Delete', exact: true }));
+  await page.keyboard.press('Escape');
+  await page.locator('[aria-label="Exit Edit Mode"]').click();
+  await page.goto('/settings/dashboards');
+  const rowDelete = await enabledLook(page.getByRole('button', { name: `Delete ${d.name}`, exact: true }));
+  expect(rowDelete.bg).toBe(dialogDelete.bg);
+  expect(rowDelete.color).toBe(dialogDelete.color);
 });

@@ -39,7 +39,7 @@
   >
     <div class="modal-header">
       <h2 id="iframe-modal-title">{title}</h2>
-      <button class="close-btn" onclick={onClose} title="Close (Esc)">
+      <button class="close-btn" onclick={onClose} title="Close (Esc)" aria-label="Close">
         <Icon icon="mdi:close" width="24" />
       </button>
     </div>

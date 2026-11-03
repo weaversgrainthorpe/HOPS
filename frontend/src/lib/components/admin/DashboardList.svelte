@@ -488,16 +488,7 @@
   }
 
   /* Base .btn-primary, .btn-secondary, .btn-danger and .btn-sm styles are in app.css */
-  /* DashboardList uses an outline-style danger button (softer for list rows) */
-  .btn-danger {
-    background: var(--bg-tertiary);
-    color: var(--color-error-text);
-  }
-
-  .btn-danger:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--color-error) 10%, var(--bg-tertiary));
-    color: var(--color-error-dark);
-  }
+  /* The row's Delete is the one Delete look (red fill, bin): no local override. */
 
   .empty-state {
     display: flex;

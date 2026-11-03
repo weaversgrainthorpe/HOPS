@@ -166,14 +166,14 @@
 <div class="edit-toolbar" role="toolbar" aria-label="Editing" bind:this={barEl}>
   <div class="controls">
     <div class="group">
-      <button type="button" class="tb" onclick={() => openDialog({ kind: 'tile', to: currentContainer(tabId) })}>
-        <Icon icon="mdi:plus-box-outline" width="18" /> Add tile
+      <button type="button" class="tb btn-secondary btn-sm" onclick={() => openDialog({ kind: 'tile', to: currentContainer(tabId) })}>
+        <Icon icon="mdi:plus-box-outline" width="16" /> Add tile
       </button>
-      <button type="button" class="tb" onclick={() => openDialog({ kind: 'folder', to: currentContainer(tabId) })}>
-        <Icon icon="mdi:folder-plus-outline" width="18" /> Add folder
+      <button type="button" class="tb btn-secondary btn-sm" onclick={() => openDialog({ kind: 'folder', to: currentContainer(tabId) })}>
+        <Icon icon="mdi:folder-plus-outline" width="16" /> Add folder
       </button>
-      <button type="button" class="tb" onclick={onAddTab}>
-        <Icon icon="mdi:tab-plus" width="18" /> Add tab
+      <button type="button" class="tb btn-secondary btn-sm" onclick={onAddTab}>
+        <Icon icon="mdi:tab-plus" width="16" /> Add tab
       </button>
     </div>
     {#if onEditDashboard}
@@ -192,24 +192,24 @@
           </span>
         {/if}
       </span>
-      <button type="button" class="tb" onclick={undo} disabled={!canUndo}
+      <button type="button" class="tb btn-secondary btn-sm" onclick={undo} disabled={!canUndo}
         title={!canUndo && $session?.undoDropped ? `Nothing more to undo: Undo keeps your last ${UNDO_CAP} changes` : 'Undo (Ctrl+Z)'}>
-        <Icon icon={ACTIONS.undo.icon} width="18" /> {ACTIONS.undo.label}
+        <Icon icon={ACTIONS.undo.icon} width="16" /> {ACTIONS.undo.label}
       </button>
-      <button type="button" class="tb" onclick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z or Ctrl+Y)">
-        <Icon icon={ACTIONS.redo.icon} width="18" /> {ACTIONS.redo.label}
+      <button type="button" class="tb btn-secondary btn-sm" onclick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z or Ctrl+Y)">
+        <Icon icon={ACTIONS.redo.icon} width="16" /> {ACTIONS.redo.label}
       </button>
-      <button type="button" class="tb" onclick={() => discard()} disabled={!$dirty || saving} title="Discard all unsaved changes">
-        <Icon icon={ACTIONS.discard.icon} width="18" /> {ACTIONS.discard.label}
+      <button type="button" class="tb btn-secondary btn-sm" onclick={() => discard()} disabled={!$dirty || saving} title="Discard all unsaved changes">
+        <Icon icon={ACTIONS.discard.icon} width="16" /> {ACTIONS.discard.label}
       </button>
       <span class="save-slot">
         <!-- While a save is in flight it says so (a big dashboard on a small server takes seconds). Both
              labels share one cell, so the button keeps its width and nothing beside it moves. -->
-        <button type="button" class="tb primary" class:saving onclick={doSave} disabled={!$dirty || saving} aria-busy={saving} title="Save (Ctrl+S)">
+        <button type="button" class="tb btn-primary btn-sm" class:saving onclick={doSave} disabled={!$dirty || saving} aria-busy={saving} title="Save (Ctrl+S)">
           {#if saving}
-            <Icon icon="mdi:loading" width="18" class="spin" />
+            <Icon icon="mdi:loading" width="16" class="spin" />
           {:else}
-            <Icon icon={ACTIONS.save.icon} width="18" />
+            <Icon icon={ACTIONS.save.icon} width="16" />
           {/if}
           <span class="label-stack">
             <span class:shown={!saving} aria-hidden={saving}>{ACTIONS.save.label}</span>
@@ -282,18 +282,10 @@
     align-items: center;
     gap: 0.4rem;
   }
+  /* The buttons are the shared page buttons (btn-secondary / btn-primary, small: app.css), so the
+     toolbar's Undo, Discard and Save look exactly like Tab order's. Only layout lives here. */
   .tb {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.4rem 0.75rem;
-    border: 1px solid var(--border);
-    border-radius: 0.375rem;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-size: 0.875rem;
     white-space: nowrap;
-    cursor: pointer;
   }
   .save-slot {
     position: relative;
@@ -312,27 +304,15 @@
     pointer-events: none;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
   }
-  .tb:hover:not(:disabled) {
-    border-color: var(--accent);
-  }
   .tb:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
-  /* The one disabled look (app.css): readable, a muted fill and a dashed edge, never faded. */
-  .tb:disabled {
-    background: var(--disabled-bg);
-    color: var(--disabled-text);
-    border-color: transparent;
-    outline: 1px dashed var(--disabled-edge);
-    outline-offset: -1px;
-    cursor: not-allowed;
-  }
-  .tb.primary.saving {
-    opacity: 1;
+  /* Saving: still the blue Save (disabled only so it can't be pressed twice), no disabled edge. */
+  .tb.btn-primary.saving {
     background: var(--accent-solid);
-    border-color: var(--accent-solid);
     color: var(--on-accent);
+    outline: none;
     cursor: progress;
   }
   .label-stack {
@@ -344,11 +324,6 @@
   }
   .label-stack > span.shown {
     visibility: visible;
-  }
-  .tb.primary:not(:disabled) {
-    background: var(--accent-solid);
-    border-color: var(--accent-solid);
-    color: var(--on-accent);
   }
   .narrow-hint {
     display: inline-flex;
@@ -424,9 +399,6 @@
       z-index: 1;
       padding-left: 0.5rem;
       background: var(--bg-secondary);
-    }
-    .tb {
-      padding: 0.4rem 0.6rem;
     }
   }
 </style>

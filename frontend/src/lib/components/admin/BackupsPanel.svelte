@@ -761,18 +761,29 @@
     transition: all 0.15s;
   }
 
+  /* Hover as btn-secondary: never the page colour. */
   .btn-icon:hover:not(:disabled) {
-    background: var(--bg-primary);
+    background: color-mix(in srgb, var(--bg-tertiary) 82%, var(--text-primary));
     color: var(--text-primary);
   }
 
-  .btn-icon-danger:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--color-error) 15%, transparent);
-    color: var(--color-error-text);
+  /* Delete is drawn one way everywhere: red fill, white bin. */
+  .btn-icon-danger {
+    background: var(--danger-solid);
+    color: #fff;
   }
 
+  .btn-icon-danger:hover:not(:disabled) {
+    background: var(--danger-solid-hover);
+    color: #fff;
+  }
+
+  /* The one disabled look (app.css). */
   .btn-icon:disabled {
-    opacity: 0.4;
+    background: var(--disabled-bg);
+    color: var(--disabled-text);
+    outline: 1px dashed var(--disabled-edge);
+    outline-offset: -1px;
     cursor: not-allowed;
   }
 

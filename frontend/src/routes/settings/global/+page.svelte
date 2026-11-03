@@ -751,7 +751,7 @@
     min-width: 0;
   }
 
-  /* Reset to default, Discard, Save: right-aligned in their column, so Revert and Save never move. */
+  /* Reset to default, Discard, Save: right-aligned in their column, so Discard and Save never move. */
   .row-actions {
     white-space: nowrap;
     display: flex;

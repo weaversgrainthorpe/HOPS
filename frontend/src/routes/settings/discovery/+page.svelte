@@ -222,5 +222,7 @@
     align-items: center;
   }
   .action:hover { background: var(--bg-tertiary); }
-  .action.danger:hover { background: rgba(239,68,68,0.15); color: #ef4444; }
+  /* Delete is drawn one way everywhere: red fill, white bin (the btn-danger colours). */
+  .action.danger { background: var(--danger-solid); border-color: var(--danger-solid); color: #fff; }
+  .action.danger:hover { background: var(--danger-solid-hover); border-color: var(--danger-solid-hover); }
 </style>
