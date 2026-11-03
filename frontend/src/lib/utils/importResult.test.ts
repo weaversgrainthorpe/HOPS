@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { importProblems } from './importResult';
+import { importProblems, initialChoices, choicesReady, summaryLines, type ImportPreviewRow } from './importResult';
 
 describe('importProblems', () => {
   it('is empty for a clean import', () => {
@@ -34,5 +34,34 @@ describe('importProblems', () => {
 
   it('tolerates null/absent optional fields', () => {
     expect(importProblems({ success: true, message: 'ok', skipped: null })).toEqual([]);
+  });
+});
+
+describe('import choices', () => {
+  const rows: ImportPreviewRow[] = [
+    { index: 0, name: 'Home', path: '/home', tabs: 2, clash: { id: 'd1', name: 'Home', path: '/home' } },
+    { index: 1, name: 'Garage', path: '/garage', tabs: 1, clash: null }
+  ];
+
+  it('starts with Add for a new dashboard and no choice for a clash', () => {
+    expect(initialChoices(rows)).toEqual([null, 'add']);
+  });
+
+  it('is ready only when every clash has a choice', () => {
+    expect(choicesReady(rows, [null, 'add'])).toBe(false);
+    expect(choicesReady(rows, ['keep', 'add'])).toBe(true);
+    expect(choicesReady([], [])).toBe(false);
+  });
+
+  it('turns the summary into lines the admin reads', () => {
+    expect(
+      summaryLines({
+        added: ['Garage'],
+        replaced: ['Home'],
+        renamed: [{ from: 'Office', to: 'Office (2)' }],
+        skipped: ['Shed', 'Loft']
+      })
+    ).toEqual(['Added: Garage', 'Replaced: Home', 'Kept both: Office, the new one is "Office (2)"', 'Skipped: Shed, Loft']);
+    expect(summaryLines({ added: [], replaced: [], renamed: [], skipped: [] })).toEqual([]);
   });
 });
