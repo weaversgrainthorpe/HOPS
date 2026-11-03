@@ -2392,7 +2392,7 @@ var defaultCategories = []BackgroundCategory{
 	{ID: "servers", Name: "Servers", Icon: "mdi:server"},
 	{ID: "docker", Name: "Docker", Icon: "mdi:docker"},
 	{ID: "homelab", Name: "Homelab", Icon: "mdi:raspberry-pi"},
-	{ID: "smarthome", Name: "Smart Home", Icon: "mdi:home-automation"},
+	{ID: "smarthome", Name: "Smart home", Icon: "mdi:home-automation"},
 	{ID: "apps", Name: "Applications", Icon: "mdi:application"},
 	{ID: "multimedia", Name: "Multimedia", Icon: "mdi:multimedia"},
 	{ID: "weather", Name: "Weather", Icon: "mdi:weather-partly-cloudy"},

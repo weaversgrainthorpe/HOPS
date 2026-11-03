@@ -61,7 +61,7 @@ var categoryCatalogue = []CategoryInfo{
 	{CategoryNotifications, "Notifications", "mdi:bell"},
 	{CategoryOther, "Other", "mdi:application"},
 	{CategoryPhotos, "Photos", "mdi:image-multiple"},
-	{CategoryAutomation, "Smart Home", "mdi:home-automation"},
+	{CategoryAutomation, "Smart home", "mdi:home-automation"},
 	{CategoryStorage, "Storage", "mdi:nas"},
 	{CategorySurveillance, "Surveillance", "mdi:cctv"},
 	{CategoryVirtualization, "Virtualization", "mdi:server"},
