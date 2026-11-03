@@ -14,7 +14,8 @@ import (
 // An item's iconUrl is shown as <img src>. HOPS itself writes an uploaded
 // icon (/icons/<file>), a packaged icon (/api/icons/dashboard/<file>), and
 // keeps http(s) image addresses (the editor, the add page, the converters);
-// a data:image and a preset (/presets/<file>) are accepted too. Anything else
+// a data:image, a preset (/presets/<file>) and an uploaded background
+// (/backgrounds/<file>) are accepted too. Anything else
 // (a path outside those, a ".." step, another scheme) is refused on import and
 // save, so an imported file can't point a viewer's browser elsewhere.
 
@@ -49,6 +50,10 @@ func iconURLProblem(u string) string {
 			return `it has a ".." step in its path`
 		}
 		if name, ok := strings.CutPrefix(s, "/icons/"); ok && database.ValidImageName(name) {
+			return ""
+		}
+		// An uploaded background is HOPS's own image too (backups and imports carry both).
+		if name, ok := strings.CutPrefix(s, "/backgrounds/"); ok && database.ValidImageName(name) {
 			return ""
 		}
 		if iconAssetPath.MatchString(s) && !strings.Contains(s, "..") {
