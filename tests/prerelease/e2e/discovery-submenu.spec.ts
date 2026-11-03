@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { getCsrfToken, startScan } from '../helpers';
+import { getCsrfToken, startScan, expectFilterToggleLook } from '../helpers';
 
 // Discovery's sub-menu under "Discovery" in the Settings sidebar (same look as Global settings'
 // group list; phones: a chip row on the page), full-width Settings prose, and the detector
@@ -173,4 +173,15 @@ test('the detectors intro states the live bundled-detector count', async ({ page
   const n = Number((await bundled.textContent())!.match(/\((\d+)\)/)![1]);
   expect(n).toBeGreaterThan(80);
   await expect(page.locator('p.lede')).toContainText(`detectors for ${n} common homelab services`);
+});
+
+// The All / Bundled / User filters look like the Discovery re-scan filters: chosen filled, the others outlined.
+test('the detectors filters are outline buttons with the chosen one filled', async ({ page }) => {
+  await page.goto('/settings/discovery/detectors');
+  const filters = page.getByRole('group', { name: 'Show' });
+  await expect(filters.getByRole('button', { name: /^All \(/ })).toHaveAttribute('aria-pressed', 'true');
+  await expectFilterToggleLook(page, filters);
+  await filters.getByRole('button', { name: /^Bundled/ }).click();
+  await expect(filters.getByRole('button', { name: /^Bundled/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(filters.getByRole('button', { name: /^All \(/ })).toHaveAttribute('aria-pressed', 'false');
 });

@@ -29,7 +29,7 @@
   let warnings = $state<string[]>([]);
   // Cursor for delta polling. After each successful poll, set to the
   // max createdAt seen so far; the next poll only fetches rows
-  // strictly newer than this. Cleared when navigating to a different
+  // at or after this (the server is inclusive: one-second timestamps; rows we already have are skipped by id). Cleared when navigating to a different
   // scan (in the scanId effect below).
   let lastResultTs = $state('');
   let loading = $state(true);
@@ -647,10 +647,10 @@
               <strong>{diff.counts.new} new, {diff.counts.gone} gone</strong>{#if diff.counts.changed > 0}, {diff.counts.changed} changed{/if}
               since the {fmtDay(diff.baseline.createdAt)} scan{#if diff.baseline.label} ({diff.baseline.label}){/if}
             </div>
-            <div class="diff-filter" role="group" aria-label="Show">
-              <button class:active={diffFilter === 'new'} onclick={() => (diffFilter = 'new')}>New or changed ({diff.counts.new + diff.counts.changed})</button>
-              <button class:active={diffFilter === 'all'} onclick={() => (diffFilter = 'all')}>All ({results.length})</button>
-              <button class:active={diffFilter === 'gone'} onclick={() => (diffFilter = 'gone')}>Gone ({diff.counts.gone})</button>
+            <div class="diff-filter filter-toggles" role="group" aria-label="Show">
+              <button type="button" aria-pressed={diffFilter === 'new'} onclick={() => (diffFilter = 'new')}>New or changed ({diff.counts.new + diff.counts.changed})</button>
+              <button type="button" aria-pressed={diffFilter === 'all'} onclick={() => (diffFilter = 'all')}>All ({results.length})</button>
+              <button type="button" aria-pressed={diffFilter === 'gone'} onclick={() => (diffFilter = 'gone')}>Gone ({diff.counts.gone})</button>
             </div>
             {#if hiddenTicked > 0}
               <p class="muted" data-testid="hidden-ticked">{hiddenTickedMessage(hiddenTicked)} <button class="link-btn" onclick={() => (diffFilter = 'all')}>Show all</button></p>
@@ -1059,12 +1059,6 @@
   .diff-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 0 0 12px; }
   .diff-summary { color: var(--text-primary); }
   .link-btn { background: none; border: 0; padding: 0; color: var(--accent-solid); text-decoration: underline; cursor: pointer; font: inherit; }
-  .diff-filter { display: inline-flex; gap: 4px; }
-  .diff-filter button {
-    padding: 4px 10px; border-radius: 6px; cursor: pointer; font: inherit;
-    border: 1px solid var(--border-color, rgba(128,128,128,0.4)); background: transparent; color: var(--text-primary);
-  }
-  .diff-filter button.active { background: var(--accent-solid); color: var(--on-accent); border-color: transparent; }
   .diff-error { margin-bottom: 12px; }
   table.results tr.promoted { background: rgba(168,85,247,0.04); }
   table.results tr.promoted td { color: var(--text-secondary); }

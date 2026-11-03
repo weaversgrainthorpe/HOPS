@@ -202,9 +202,11 @@ func (s *Store) ListResults(scanID string) ([]*Result, error) {
 }
 
 // ListResultsSince returns scan_results filtered to rows whose
-// created_at is strictly greater than `since` (RFC3339). Pass an
-// empty string to fetch all results (the call site that maps to
-// `ListResults`).
+// created_at is at or after `since` (RFC3339). Pass an empty string to
+// fetch all results (the call site that maps to `ListResults`).
+// Inclusive on purpose: created_at has one-second resolution, so a row
+// written later in the cursor's own second must still be returned. The
+// client merges by id, so the rows it already has are simply skipped.
 //
 // Used by the GetScan API to support cursor-based delta polling:
 // the curate UI polls every 1s during a running scan, and without a
@@ -227,7 +229,7 @@ func (s *Store) ListResultsSince(scanID, since string) ([]*Result, error) {
 			SELECT id, scan_id, host, hostname, port, detector_id, confidence, category,
 			       suggested_name, suggested_icon, suggested_url, suggested_desc,
 			       raw_fingerprint, curate_state, curate_overrides, created_at
-			FROM scan_results WHERE scan_id = ? AND created_at > ?
+			FROM scan_results WHERE scan_id = ? AND created_at >= ?
 		`, scanID, since)
 	}
 	if err != nil {

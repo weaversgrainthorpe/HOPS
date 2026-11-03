@@ -284,14 +284,14 @@
   </p>
   <DetectorHonestyNote />
 
-  <div class="filter-bar">
-    <button class:active={filter === 'all'} onclick={() => (filter = 'all')}>
+  <div class="filter-bar filter-toggles" role="group" aria-label="Show">
+    <button type="button" aria-pressed={filter === 'all'} onclick={() => (filter = 'all')}>
       All ({counts.all})
     </button>
-    <button class:active={filter === 'bundled'} onclick={() => (filter = 'bundled')}>
+    <button type="button" aria-pressed={filter === 'bundled'} onclick={() => (filter = 'bundled')}>
       Bundled ({counts.bundled})
     </button>
-    <button class:active={filter === 'user'} onclick={() => (filter = 'user')}>
+    <button type="button" aria-pressed={filter === 'user'} onclick={() => (filter = 'user')}>
       User ({counts.user})
     </button>
   </div>
@@ -416,14 +416,7 @@
   .muted { color: var(--text-secondary); }
   .muted.small { font-size: 0.82rem; }
 
-  .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
-  .filter-bar button {
-    background: var(--bg-secondary); color: var(--text-primary);
-    border: 1px solid var(--border); border-radius: var(--radius-md);
-    padding: 0.35rem 0.9rem; font-size: 0.9rem; cursor: pointer;
-  }
-  .filter-bar button:hover { background: var(--bg-tertiary); }
-  .filter-bar button.active { background: var(--bg-tertiary); border-color: var(--text-primary); }
+  .filter-bar { margin-bottom: 1rem; }
 
   .error { background: var(--bg-tertiary); border: 1px solid var(--color-error, #b00); border-radius: var(--radius-md); padding: 0.8rem 1rem; }
 
