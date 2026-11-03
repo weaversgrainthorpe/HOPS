@@ -28,6 +28,7 @@
   import { backgroundSummary } from '../background/backgroundSummary';
   import { folderColourFromBackground, isLegacyFolderColour } from '../background/legacyFolderColour';
   import Modal from '../shared/Modal.svelte';
+  import ActionButton from '../shared/ActionButton.svelte';
   import StatusCheckSetting from './StatusCheckSetting.svelte';
   import { gateSetting, type GateSetting, type StatusContext } from '$lib/editor/statusChecks';
   import { FOLDER_SHAPES, TAB_POSITIONS, hasTab, isFolderShape, sizeOf } from '$lib/layout/geometry';
@@ -406,21 +407,19 @@
     <div class="modal-actions">
       <div class="actions-left">
         {#if !isNew && onDelete}
-          <button type="button" class="btn-danger" onclick={onDelete}><Icon icon="mdi:trash-can" width="20" /> Delete</button>
+          <ActionButton action="delete" onclick={onDelete} />
         {/if}
         {#if !isNew && onDuplicate}
-          <button type="button" class="btn-secondary" onclick={onDuplicate} disabled={dirty}
-            aria-describedby={dirty ? 'folder-dup-hint' : undefined}><Icon icon="mdi:content-copy" width="20" /> Duplicate</button>
+          <ActionButton action="duplicate" onclick={onDuplicate} disabled={dirty}
+            aria-describedby={dirty ? 'folder-dup-hint' : undefined} />
         {/if}
       </div>
       {#if !isNew && onDuplicate && dirty}
         <p class="dup-hint" id="folder-dup-hint" role="status">Save your changes before duplicating.</p>
       {/if}
       <div class="actions-right">
-        <button type="button" class="btn-secondary" onclick={onCancel}>Cancel</button>
-        <button type="submit" form="folder-edit-form" class="btn-primary">
-          <Icon icon="mdi:content-save" width="20" /> {isNew ? 'Create' : 'Save'}
-        </button>
+        <ActionButton action="cancel" onclick={onCancel} />
+        <ActionButton action={isNew ? 'create' : 'save'} type="submit" form="folder-edit-form" />
       </div>
     </div>
   {/snippet}
@@ -692,11 +691,6 @@
     margin: 0;
     font-size: 0.875rem;
     color: var(--text-secondary);
-  }
-  .modal-actions button {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
   }
   /* Placeholders readable (>= 4.5:1 on every preset); the browser default grey is 3.2–4.2:1. */
   input::placeholder {

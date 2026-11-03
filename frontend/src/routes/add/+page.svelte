@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ActionButton from '$lib/components/shared/ActionButton.svelte';
   // "Add to HOPS" (/add): where the bookmarklet lands. The query parameters only PREFILL this form
   // (as plain text, checked: addToHops.parseAddParams); nothing is created until a signed-in user
   // clicks Add. The tile is placed by the tile dialog's own rules (withNewTile). Where it goes:
@@ -355,13 +356,13 @@
         {#if added.note}<p class="muted">{added.note}</p>{/if}
         <p class="muted small">It is part of that tab's unsaved changes: save there to keep it.</p>
         <div class="actions">
-          <button type="button" class="btn-primary" onclick={closeWindow}>Close</button>
+          <ActionButton action="close" onclick={closeWindow} />
         </div>
       {:else}
         <p class="ok" role="status">Added “{cleanName(name)}” to {added.dashboardName}.{added.how === 'saved-notified' ? ' The tab editing it was updated.' : ''}</p>
         <div class="actions">
           <a class="btn-primary" href={added.href}>Open the dashboard</a>
-          <button type="button" class="btn-secondary" onclick={closeWindow}>Close</button>
+          <ActionButton action="close" onclick={closeWindow} />
         </div>
       {/if}
       {#if closeNote}<p class="muted" role="status">{closeNote}</p>{/if}
@@ -421,7 +422,7 @@
         {/if}
 
         <div class="actions">
-          <button type="button" class="btn-secondary" onclick={leave}>Cancel</button>
+          <ActionButton action="cancel" onclick={leave} />
           <button type="submit" class="btn-primary" disabled={busy}>{busy ? 'Adding…' : 'Add'}</button>
         </div>
       </form>

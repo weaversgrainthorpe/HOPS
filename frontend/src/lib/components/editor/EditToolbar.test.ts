@@ -155,6 +155,9 @@ describe('EditToolbar', () => {
     const bar = screen.getByRole('toolbar', { name: 'Editing' });
     const handle = within(bar).getByRole('button', { name: 'Edit Dashboard' });
     expect(handle).toHaveTextContent('Dashboard');
+    // The same button as its neighbours (Add tile…), not an edit handle.
+    expect(handle).toHaveClass('btn-secondary', 'btn-sm');
+    expect(handle).not.toHaveAttribute('data-edit-handle');
     await fireEvent.click(handle);
     expect(onEditDashboard).toHaveBeenCalledTimes(1);
   });

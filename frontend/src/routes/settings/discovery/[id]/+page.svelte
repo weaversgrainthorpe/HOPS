@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ActionButton from '$lib/components/shared/ActionButton.svelte';
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
@@ -582,6 +583,8 @@
     </div>
     {#if scan}
       <div class="section-actions">
+        <!-- Delete first: the destructive action sits at the left, as in every dialog. -->
+        <ActionButton action="delete" onclick={handleDelete} />
         {#if scan.state === 'running' || scan.state === 'pending'}
           <Button variant="secondary" icon="mdi:stop" onclick={handleCancel}>Cancel scan</Button>
         {:else}
@@ -592,7 +595,6 @@
             Edit & re-scan
           </Button>
         {/if}
-        <Button variant="danger" icon="mdi:trash-can" onclick={handleDelete}>Delete</Button>
       </div>
     {/if}
   </header>

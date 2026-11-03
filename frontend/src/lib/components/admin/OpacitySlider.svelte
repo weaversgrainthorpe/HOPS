@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Icon from '@iconify/svelte';
+  import { ACTIONS } from '../shared/actions';
   interface Props {
     opacity?: number;
     onSelect: (opacity: number | undefined) => void;
@@ -39,8 +41,8 @@
 <div class="opacity-slider">
   <div class="opacity-header">
     <label for={id}>{label}: {Math.round(opacityPercent)}%</label>
-    <button type="button" class="reset-btn" onclick={handleReset} title="Reset to default">
-      Reset
+    <button type="button" class="reset-btn" onclick={handleReset}>
+      <Icon icon={ACTIONS.reset.icon} width="14" />{ACTIONS.reset.label}
     </button>
   </div>
   <input
@@ -77,6 +79,9 @@
   }
 
   .reset-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
     background: none;
     border: none;
     /* Readable link text (>= 4.5:1) on every preset; the plain accent is 3.4–4:1. */

@@ -58,7 +58,7 @@ describe('Tab order page', () => {
     expect(rows()).toEqual(SIX);
     expect(nums()).toEqual(['1', '2', '3', '4', '5', '6']);
     expect(screen.getByText('No changes')).toBeTruthy();
-    expect(btn('Save order').disabled).toBe(true);
+    expect(btn('Save').disabled).toBe(true);
   });
 
   it('↓ moves one place and marks unsaved', async () => {
@@ -66,7 +66,7 @@ describe('Tab order page', () => {
     await fireEvent.click(btn('Move t1 down'));
     expect(rows()).toEqual(['t2', 't1', 't3', 't4', 't5', 't6']);
     expect(screen.getByText('Unsaved changes')).toBeTruthy();
-    expect(btn('Save order').disabled).toBe(false);
+    expect(btn('Save').disabled).toBe(false);
   });
 
   it('to the top and to the bottom buttons work, and the ends are disabled', async () => {
@@ -110,11 +110,11 @@ describe('Tab order page', () => {
     expect(btn('Undo').disabled).toBe(true);
   });
 
-  it('Discard changes returns to the saved order', async () => {
+  it('Discard returns to the saved order', async () => {
     render(TabOrder, { dashboardId: 'd1' });
     await fireEvent.click(btn('Move t1 to the bottom'));
     await fireEvent.click(btn('Move t2 to the bottom'));
-    await fireEvent.click(btn('Discard changes'));
+    await fireEvent.click(btn('Discard'));
     expect(rows()).toEqual(SIX);
   });
 
@@ -145,7 +145,7 @@ describe('Tab order page', () => {
     const ok = vi.spyOn(toast, 'success');
     render(TabOrder, { dashboardId: 'd1' });
     await fireEvent.click(btn('Move t1 down'));
-    await fireEvent.click(btn('Save order'));
+    await fireEvent.click(btn('Save'));
     await waitFor(() => expect(ok).toHaveBeenCalledWith('Tab order saved'));
     expect(save).toHaveBeenCalledTimes(1);
     const [id, d, rev] = save.mock.calls[0];
@@ -159,7 +159,7 @@ describe('Tab order page', () => {
     startSession('d1');
     render(TabOrder, { dashboardId: 'd1' });
     await fireEvent.click(btn('Move t1 down'));
-    await fireEvent.click(btn('Save order'));
+    await fireEvent.click(btn('Save'));
     expect(screen.getByRole('alert').textContent).toBe(
       'Not saved: "Home" is being edited (an edit session or unsaved draft is open). Save or discard that first, then save the tab order.'
     );
@@ -174,7 +174,7 @@ describe('Tab order page', () => {
     });
     render(TabOrder, { dashboardId: 'd1' });
     await fireEvent.click(btn('Move t6 to the top'));
-    await fireEvent.click(btn('Save order'));
+    await fireEvent.click(btn('Save'));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('changed somewhere else'));
     expect(rows()).toEqual(['t6', 't1', 't2', 't4', 't5', 't7']);
     const msg = screen.getByRole('alert').textContent!;
@@ -182,9 +182,9 @@ describe('Tab order page', () => {
     expect(msg).toContain('tabs no longer there: t3');
     expect(msg.endsWith('Check it and Save again.')).toBe(true);
     expect(save).toHaveBeenCalledTimes(1);
-    expect(btn('Save order').disabled).toBe(false);
+    expect(btn('Save').disabled).toBe(false);
     // Discard returns to the FRESH saved order.
-    await fireEvent.click(btn('Discard changes'));
+    await fireEvent.click(btn('Discard'));
     expect(rows()).toEqual(['t1', 't2', 't4', 't5', 't6', 't7']);
   });
 
@@ -193,7 +193,7 @@ describe('Tab order page', () => {
     load.mockResolvedValue(undefined);
     render(TabOrder, { dashboardId: 'd1' });
     await fireEvent.click(btn('Move t6 to the top'));
-    await fireEvent.click(btn('Save order'));
+    await fireEvent.click(btn('Save'));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('could not be read'));
     expect(rows()[0]).toBe('t6');
   });
@@ -202,10 +202,10 @@ describe('Tab order page', () => {
     save.mockRejectedValue(new Error('disk full'));
     render(TabOrder, { dashboardId: 'd1' });
     await fireEvent.click(btn('Move t6 to the top'));
-    await fireEvent.click(btn('Save order'));
+    await fireEvent.click(btn('Save'));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Not saved: disk full'));
     expect(rows()[0]).toBe('t6');
-    expect(btn('Save order').disabled).toBe(false);
+    expect(btn('Save').disabled).toBe(false);
   });
 
   it('a downward drag shows the line under the row it will land after, an upward one above', async () => {
@@ -256,7 +256,7 @@ describe('Tab order page', () => {
     render(TabOrder, { dashboardId: 'd1' });
     await fireEvent.click(btn('Move t6 to the top'));
     setLayout([dash(['t1', 't2', 't4', 't5', 't6', 't7'], 9)]);
-    await fireEvent.click(btn('Save order'));
+    await fireEvent.click(btn('Save'));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('changed somewhere else'));
     expect(save).not.toHaveBeenCalled();
     expect(rows()).toEqual(['t6', 't1', 't2', 't4', 't5', 't7']);
@@ -264,7 +264,7 @@ describe('Tab order page', () => {
     expect(msg).toContain('new tabs added at the end: t7');
     expect(msg).toContain('tabs no longer there: t3');
     save.mockResolvedValue({ revision: 10, layout: { layoutVersion: 2, dashboards: [dash(['t6', 't1', 't2', 't4', 't5', 't7'], 10)] } });
-    await fireEvent.click(btn('Save order'));
+    await fireEvent.click(btn('Save'));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     const [, d, rev] = save.mock.calls[0];
     expect(rev).toBe(9);
@@ -297,7 +297,7 @@ describe('Tab order page', () => {
     save.mockRejectedValue(new Error('The tab order is not valid.'));
     render(TabOrder, { dashboardId: 'd1' });
     await fireEvent.click(btn('Move t6 to the top'));
-    await fireEvent.click(btn('Save order'));
+    await fireEvent.click(btn('Save'));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('Not saved: The tab order is not valid. Your order is kept.'));
   });
 
@@ -318,12 +318,12 @@ describe('Tab order page', () => {
     });
     render(TabOrder, { dashboardId: 'd1' });
     await fireEvent.click(btn('Move t6 to the top'));
-    await fireEvent.click(btn('Save order'));
+    await fireEvent.click(btn('Save'));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('changed somewhere else'));
     expect(screen.getByRole('alert').textContent).toBe(
       'Not saved: this dashboard was changed somewhere else. Its tabs are already in your order, so there is nothing to save — new tabs added at the end: t7.'
     );
-    expect(btn('Save order').disabled).toBe(true);
+    expect(btn('Save').disabled).toBe(true);
   });
 
   describe('leaving with unsaved changes', () => {
@@ -348,7 +348,7 @@ describe('Tab order page', () => {
       expect(get(pageUnsaved)).toBe(false);
       await fireEvent.click(btn('Move t1 down'));
       await waitFor(() => expect(get(pageUnsaved)).toBe(true));
-      await fireEvent.click(btn('Discard changes'));
+      await fireEvent.click(btn('Discard'));
       await waitFor(() => expect(get(pageUnsaved)).toBe(false));
       await fireEvent.click(btn('Move t1 down'));
       unmount();
@@ -521,7 +521,7 @@ describe('Tab order page', () => {
     it('says when changes are discarded', async () => {
       render(TabOrder, { dashboardId: 'd1' });
       await fireEvent.click(btn('Move t1 down'));
-      await fireEvent.click(btn('Discard changes'));
+      await fireEvent.click(btn('Discard'));
       expect(said()).toBe('Changes discarded. The saved order is back.');
     });
   });
@@ -531,7 +531,7 @@ describe('Tab order page', () => {
       render(TabOrder, { dashboardId: 'd1' });
       await fireEvent.click(btn('Move t1 down'));
       config.update((c) => ({ ...c!, layoutVersion: 1 }));
-      await fireEvent.click(btn('Save order'));
+      await fireEvent.click(btn('Save'));
       expect(screen.getByRole('alert').textContent).toBe(OLD_LAYOUT_FORM);
       expect(save).not.toHaveBeenCalled();
       expect(rows()[0]).toBe('t2');
@@ -541,7 +541,7 @@ describe('Tab order page', () => {
       save.mockRejectedValue(new api.MigrationFailedError('bad config', 'corrupt'));
       render(TabOrder, { dashboardId: 'd1' });
       await fireEvent.click(btn('Move t1 down'));
-      await fireEvent.click(btn('Save order'));
+      await fireEvent.click(btn('Save'));
       await waitFor(() => expect(get(migrationFailure)).toBe('bad config'));
       expect(get(migrationFailureKind)).toBe('corrupt');
       expect(screen.getByRole('alert').textContent).toContain('Your order is kept');

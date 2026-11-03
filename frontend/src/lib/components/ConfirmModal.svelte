@@ -5,6 +5,10 @@
   import { dialogContentKeydown, dialogWindowEscape } from '$lib/utils/dialogKeys';
   import { COLORS } from '$lib/constants/colors';
   import Icon from '@iconify/svelte';
+  import { ACTIONS, actionFor } from './shared/actions';
+
+  /** A button that names one of the shared actions (Save, Discard, Delete…) shows that action's icon. */
+  const iconFor = (label: string) => { const a = actionFor(label); return a ? ACTIONS[a].icon : null; };
 
   interface ConfirmState {
     isOpen: boolean;
@@ -22,6 +26,9 @@
   });
 
   const cancel = () => closeConfirmModal(false);
+  const cancelText = $derived(state.options?.cancelText || 'Cancel');
+  const altText = $derived(state.options?.alternateText ?? '');
+  const confirmText = $derived(state.options?.confirmText || 'Confirm');
 
   // Escape: the content element handles it (dialogKeys); window is the fallback for focus outside.
   function handleKeydown(e: KeyboardEvent) {
@@ -81,8 +88,9 @@
       <p>{state.options.message}</p>
 
       <div class="modal-actions">
-        <button class="btn-secondary" onclick={() => closeConfirmModal(false)}>
-          {state.options.cancelText || 'Cancel'}
+        <button class="btn-secondary" onclick={() => closeConfirmModal(false)} data-icon={iconFor(cancelText)}>
+          {#if iconFor(cancelText)}<Icon icon={iconFor(cancelText)!} width="18" />{/if}
+          {cancelText}
         </button>
         {#if state.options.alternateText}
           <button
@@ -92,8 +100,10 @@
             class:btn-primary={state.options.alternateStyle === 'primary'}
             class:btn-secondary={!state.options.alternateStyle}
             onclick={() => closeConfirmModal('alternate')}
+            data-icon={iconFor(altText)}
           >
-            {state.options.alternateText}
+            {#if iconFor(altText)}<Icon icon={iconFor(altText)!} width="18" />{/if}
+            {altText}
           </button>
         {/if}
         <button
@@ -102,8 +112,10 @@
           class:btn-warning={state.options.confirmStyle === 'warning'}
           class:btn-primary={!state.options.confirmStyle || state.options.confirmStyle === 'primary'}
           onclick={() => closeConfirmModal(true)}
+          data-icon={iconFor(confirmText)}
         >
-          {state.options.confirmText || 'Confirm'}
+          {#if iconFor(confirmText)}<Icon icon={iconFor(confirmText)!} width="18" />{/if}
+          {confirmText}
         </button>
       </div>
     </div>
@@ -180,12 +192,4 @@
     min-width: 100px;
   }
 
-  .btn-warning {
-    background: var(--warning-solid);
-    color: white;
-  }
-
-  .btn-warning:hover {
-    background: var(--warning-solid-hover);
-  }
 </style>

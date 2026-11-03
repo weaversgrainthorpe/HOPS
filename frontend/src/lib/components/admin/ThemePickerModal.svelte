@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ActionButton from '$lib/components/shared/ActionButton.svelte';
   import Icon from '@iconify/svelte';
   import { theme, setTheme, applyThemePreset } from '$lib/stores/theme';
   import { browser } from '$app/environment';
@@ -257,7 +258,7 @@
   >
     <div class="modal-header">
       <h2 id="theme-settings-title">Theme Settings</h2>
-      <button class="close-btn" onclick={onClose}>
+      <button class="close-btn" onclick={onClose} aria-label="Close">
         <Icon icon="mdi:close" width="24" />
       </button>
     </div>
@@ -364,9 +365,7 @@
     </div>
 
     <div class="modal-footer">
-      <button class="btn-secondary" onclick={onClose}>
-        Cancel
-      </button>
+      <ActionButton action="cancel" onclick={onClose} />
       <button class="btn-primary" onclick={handleApply}>
         <Icon icon="mdi:check" width="20" />
         Apply Theme

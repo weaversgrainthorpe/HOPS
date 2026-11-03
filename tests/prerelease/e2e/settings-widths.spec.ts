@@ -76,8 +76,8 @@ test.describe('settings widths', () => {
 	}
 
 	// Each Global settings row has the same shape: the label and description on the left, using the
-	// room; the control in a column of its own; then Reset/Revert/Save right beside it. The control
-	// column and the Revert/Save column sit at the same x on every row.
+	// room; the control in a column of its own; then Reset to default/Discard/Save right beside it. The control
+	// column and the Discard/Save column sit at the same x on every row.
 	// 1265 is 1280 less a classic 15px scrollbar: still two columns, not stacked.
 	for (const width of [1265, 1280, 1920]) {
 		test(`Global settings at ${width}: label | control | buttons, in the same columns on every row`, async ({ page }) => {

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ActionButton from '$lib/components/shared/ActionButton.svelte';
   /**
    * The tab and folder background picker, nested over their edit dialogs: the
    * BackgroundSection form in its own dialog with Save / Cancel. (The dashboard's background is
@@ -91,8 +92,8 @@
       {#if saveError}
         <p class="field-error save-error" role="alert">{saveError}</p>
       {/if}
-      <button class="btn-secondary" onclick={onCancel}>Cancel</button>
-      <button class="btn-primary" onclick={handleSave}>Save Background</button>
+      <ActionButton action="cancel" onclick={onCancel} />
+      <ActionButton action="save" onclick={handleSave} />
     </div>
   </div>
 </div>

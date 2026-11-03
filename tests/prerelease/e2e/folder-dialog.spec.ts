@@ -374,7 +374,7 @@ test.describe('the folder background is pictures only', () => {
     await expect(picker.getByRole('button', { name: /^Color$/ })).toHaveCount(0);
     await expect(picker.getByRole('button', { name: /^None$/ })).toHaveCount(0);
     // Its own picture with nothing chosen: refused visibly.
-    await picker.getByRole('button', { name: /^Save Background/ }).click();
+    await picker.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(picker.getByRole('alert')).toContainText(/Choose an image/);
     await expect(picker).toBeVisible();
   });

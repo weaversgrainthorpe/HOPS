@@ -9,10 +9,10 @@
   import { toast } from '$lib/stores/toast';
   import { get } from 'svelte/store';
   import { drag } from '$lib/editor/drag/dragController';
-  import EditHandle from './EditHandle.svelte';
   import { playSavedTick } from '$lib/editor/drag/flourishes';
   import BackgroundFailedBadge from '../background/BackgroundFailedBadge.svelte';
   import type { Background } from '$lib/types';
+  import { ACTIONS } from '../shared/actions';
 
   interface Props {
     /** The active tab: adds and pastes without a target go to its root (a folder's menu adds into it). */
@@ -165,20 +165,22 @@
 <div class="edit-toolbar" role="toolbar" aria-label="Editing" bind:this={barEl}>
   <div class="controls">
     <div class="group">
-      <button type="button" class="tb" onclick={() => openDialog({ kind: 'tile', to: currentContainer(tabId) })}>
-        <Icon icon="mdi:plus-box-outline" width="18" /> Add tile
+      <button type="button" class="tb btn-secondary btn-sm" onclick={() => openDialog({ kind: 'tile', to: currentContainer(tabId) })}>
+        <Icon icon="mdi:plus-box-outline" width="16" /> Add tile
       </button>
-      <button type="button" class="tb" onclick={() => openDialog({ kind: 'folder', to: currentContainer(tabId) })}>
-        <Icon icon="mdi:folder-plus-outline" width="18" /> Add folder
+      <button type="button" class="tb btn-secondary btn-sm" onclick={() => openDialog({ kind: 'folder', to: currentContainer(tabId) })}>
+        <Icon icon="mdi:folder-plus-outline" width="16" /> Add folder
       </button>
-      <button type="button" class="tb" onclick={onAddTab}>
-        <Icon icon="mdi:tab-plus" width="18" /> Add tab
+      <button type="button" class="tb btn-secondary btn-sm" onclick={onAddTab}>
+        <Icon icon="mdi:tab-plus" width="16" /> Add tab
       </button>
     </div>
     {#if onEditDashboard}
       <div class="group">
-        <!-- The dashboard's own edit handle: one labelled pencil, always shown while editing. -->
-        <EditHandle name="Dashboard" label="Dashboard" placement="inline" onEdit={onEditDashboard} />
+        <!-- The dashboard's own edit button: a pencil and "Dashboard", the same button as its neighbours. -->
+        <button type="button" class="tb btn-secondary btn-sm" onclick={onEditDashboard} aria-label="Edit Dashboard" title="Edit Dashboard">
+          <Icon icon="mdi:pencil" width="16" /> Dashboard
+        </button>
       </div>
     {/if}
     <!-- Save is last, as in every dialog: the main action sits at the right-hand end. -->
@@ -191,28 +193,28 @@
           </span>
         {/if}
       </span>
-      <button type="button" class="tb" onclick={undo} disabled={!canUndo}
+      <button type="button" class="tb btn-secondary btn-sm" onclick={undo} disabled={!canUndo}
         title={!canUndo && $session?.undoDropped ? `Nothing more to undo: Undo keeps your last ${UNDO_CAP} changes` : 'Undo (Ctrl+Z)'}>
-        <Icon icon="mdi:undo" width="18" /> Undo
+        <Icon icon={ACTIONS.undo.icon} width="16" /> {ACTIONS.undo.label}
       </button>
-      <button type="button" class="tb" onclick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z or Ctrl+Y)">
-        <Icon icon="mdi:redo" width="18" /> Redo
+      <button type="button" class="tb btn-secondary btn-sm" onclick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z or Ctrl+Y)">
+        <Icon icon={ACTIONS.redo.icon} width="16" /> {ACTIONS.redo.label}
       </button>
-      <button type="button" class="tb" onclick={() => discard()} disabled={!$dirty || saving} title="Discard all unsaved changes">
-        <Icon icon="mdi:close-circle-outline" width="18" /> Discard
+      <button type="button" class="tb btn-secondary btn-sm" onclick={() => discard()} disabled={!$dirty || saving} title="Discard all unsaved changes">
+        <Icon icon={ACTIONS.discard.icon} width="16" /> {ACTIONS.discard.label}
       </button>
       <span class="save-slot">
         <!-- While a save is in flight it says so (a big dashboard on a small server takes seconds). Both
              labels share one cell, so the button keeps its width and nothing beside it moves. -->
-        <button type="button" class="tb primary" class:saving onclick={doSave} disabled={!$dirty || saving} aria-busy={saving} title="Save (Ctrl+S)">
+        <button type="button" class="tb btn-primary btn-sm" class:saving onclick={doSave} disabled={!$dirty || saving} aria-busy={saving} title="Save (Ctrl+S)">
           {#if saving}
-            <Icon icon="mdi:loading" width="18" class="spin" />
+            <Icon icon="mdi:loading" width="16" class="spin" />
           {:else}
-            <Icon icon="mdi:content-save" width="18" />
+            <Icon icon={ACTIONS.save.icon} width="16" />
           {/if}
           <span class="label-stack">
-            <span class:shown={!saving} aria-hidden={saving}>Save</span>
-            <span class:shown={saving} aria-hidden={!saving}>Saving…</span>
+            <span class:shown={!saving} aria-hidden={saving}>{ACTIONS.save.label}</span>
+            <span class:shown={saving} aria-hidden={!saving}>{ACTIONS.save.busyLabel}</span>
           </span>
         </button>
         <!-- Drawn only while its flourish plays (invisible otherwise); the toast says "Changes saved" either way. -->
@@ -281,18 +283,10 @@
     align-items: center;
     gap: 0.4rem;
   }
+  /* The buttons are the shared page buttons (btn-secondary / btn-primary, small: app.css), so the
+     toolbar's Undo, Discard and Save look exactly like Tab order's. Only layout lives here. */
   .tb {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.4rem 0.75rem;
-    border: 1px solid var(--border);
-    border-radius: 0.375rem;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-size: 0.875rem;
     white-space: nowrap;
-    cursor: pointer;
   }
   .save-slot {
     position: relative;
@@ -311,22 +305,15 @@
     pointer-events: none;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
   }
-  .tb:hover:not(:disabled) {
-    border-color: var(--accent);
-  }
   .tb:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
-  .tb:disabled {
-    opacity: 0.45;
-    cursor: default;
-  }
-  .tb.primary.saving {
-    opacity: 1;
+  /* Saving: still the blue Save (disabled only so it can't be pressed twice), no disabled edge. */
+  .tb.btn-primary.saving {
     background: var(--accent-solid);
-    border-color: var(--accent-solid);
     color: var(--on-accent);
+    outline: none;
     cursor: progress;
   }
   .label-stack {
@@ -338,11 +325,6 @@
   }
   .label-stack > span.shown {
     visibility: visible;
-  }
-  .tb.primary:not(:disabled) {
-    background: var(--accent-solid);
-    border-color: var(--accent-solid);
-    color: var(--on-accent);
   }
   .narrow-hint {
     display: inline-flex;
@@ -412,15 +394,16 @@
     .group > :global(*) {
       flex: none;
     }
+    /* Comfortable touch targets on phones. */
+    .tb {
+      min-height: 2.5rem;
+    }
     .save-slot {
       position: sticky;
       right: 0;
       z-index: 1;
       padding-left: 0.5rem;
       background: var(--bg-secondary);
-    }
-    .tb {
-      padding: 0.4rem 0.6rem;
     }
   }
 </style>

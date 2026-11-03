@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ActionButton from '$lib/components/shared/ActionButton.svelte';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
@@ -428,7 +429,7 @@
     {/if}
 
     <div class="actions">
-      <Button variant="secondary" onclick={() => goto('/settings/discovery')}>Cancel</Button>
+      <ActionButton action="cancel" onclick={() => goto('/settings/discovery')} />
       <Button type="submit" variant="primary" icon="mdi:radar" disabled={submitting || targets.length === 0 || effectiveCount === 0 || includeCount === 0}>
         {submitting ? 'Starting…' : `Start scan (${effectiveCount.toLocaleString()} host${effectiveCount === 1 ? '' : 's'})`}
       </Button>

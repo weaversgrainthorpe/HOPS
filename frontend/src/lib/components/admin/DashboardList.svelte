@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ActionButton from '$lib/components/shared/ActionButton.svelte';
   import {
     dashboards, loadConfig, createDashboard, renameDashboard, deleteDashboard, reorderDashboards, dashboardHref
   } from '$lib/stores/config';
@@ -239,13 +240,8 @@
           </div>
         </div>
         <div class="edit-actions">
-          <button onclick={cancelNew} class="btn-secondary btn-sm">
-            Cancel
-          </button>
-          <button onclick={saveNew} class="btn-primary btn-sm" disabled={!newName.trim() || busy}>
-            <Icon icon="mdi:check" width="18" />
-            Save
-          </button>
+          <ActionButton action="cancel" small onclick={cancelNew} />
+          <ActionButton action="save" small onclick={saveNew} disabled={!newName.trim() || busy} />
         </div>
       </div>
     </div>
@@ -278,13 +274,8 @@
                 </div>
               </div>
               <div class="edit-actions">
-                <button onclick={cancelEdit} class="btn-secondary btn-sm">
-                  Cancel
-                </button>
-                <button onclick={() => saveEdit(dashboard)} class="btn-primary btn-sm" disabled={busy}>
-                  <Icon icon="mdi:check" width="18" />
-                  Save
-                </button>
+                <ActionButton action="cancel" small onclick={cancelEdit} />
+                <ActionButton action="save" small onclick={() => saveEdit(dashboard)} disabled={busy} />
               </div>
             </div>
           {:else}
@@ -497,16 +488,7 @@
   }
 
   /* Base .btn-primary, .btn-secondary, .btn-danger and .btn-sm styles are in app.css */
-  /* DashboardList uses an outline-style danger button (softer for list rows) */
-  .btn-danger {
-    background: var(--bg-tertiary);
-    color: var(--color-error-text);
-  }
-
-  .btn-danger:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--color-error) 10%, var(--bg-tertiary));
-    color: var(--color-error-dark);
-  }
+  /* The row's Delete is the one Delete look (red fill, bin): no local override. */
 
   .empty-state {
     display: flex;

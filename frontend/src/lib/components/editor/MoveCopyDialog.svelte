@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ActionButton from '$lib/components/shared/ActionButton.svelte';
   // Move/Copy to… with a tree picker: every dashboard > tab > folder (any depth).
   // The current dashboard is read from the session draft (so unsaved folders
   // appear); the others come from the stored layout. Same dashboard: edits the
@@ -131,7 +132,7 @@
   </div>
   {#snippet footer()}
     <div class="actions">
-      <button type="button" class="btn-secondary" onclick={onClose}>Cancel</button>
+      <ActionButton action="cancel" onclick={onClose} />
       <button type="button" class="btn-secondary" disabled={!dest || busy || !!dest.noCopy} onclick={() => go('copy')}>
         <Icon icon="mdi:content-copy" width="18" />Copy
       </button>

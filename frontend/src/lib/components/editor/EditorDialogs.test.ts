@@ -376,7 +376,7 @@ describe('FolderEditModal background', () => {
     await fireEvent.input(screen.getByLabelText(/^Image URL/), { target: { value: '/presets/network-grid.jpg' } });
     expect(screen.queryByText(/Overlay Darkness/i)).toBeNull();
     await fireEvent.input(document.getElementById('bg-opacity')!, { target: { value: '0.5' } }); // the picker's own slider
-    await fireEvent.click(screen.getByRole('button', { name: /^Save Background/ }));
+    await fireEvent.click(within(screen.getByRole('dialog', { name: /background$/i })).getByRole('button', { name: 'Save' }));
     await tick();
     expect(screen.queryByRole('heading', { name: /Folder background/i })).toBeNull();
   }
@@ -437,7 +437,7 @@ describe('FolderEditModal background', () => {
     await fireEvent.click(screen.getByRole('button', { name: /Background/ }));
     await fireEvent.click(screen.getByRole('radio', { name: "No picture of its own — show what's behind" }));
     await fireEvent.click(screen.getByRole('button', { name: /^Remove it/ }));
-    await fireEvent.click(screen.getByRole('button', { name: /^Save Background/ }));
+    await fireEvent.click(within(screen.getByRole('dialog', { name: /background$/i })).getByRole('button', { name: 'Save' }));
     await fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
     expect(nodeIn(draft(), 'f1')).not.toHaveProperty('background');
     expect(get(session)!.undo).toHaveLength(1);

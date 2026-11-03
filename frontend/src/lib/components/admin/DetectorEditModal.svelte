@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ActionButton from '$lib/components/shared/ActionButton.svelte';
   import Icon from '@iconify/svelte';
   import Modal from '../shared/Modal.svelte';
   import IconPickerModal from './IconPickerModal.svelte';
@@ -68,11 +69,6 @@
     : mode === 'edit-user' ? `Edit detector — ${detector?.name}`
     : mode === 'edit-override' ? `Edit override — ${detector?.name}`
     : `Customize — ${detector?.name}`
-  );
-  const saveLabel = $derived(
-    mode === 'new' ? 'Create detector'
-    : mode === 'customize' ? 'Save customization'
-    : 'Save changes'
   );
 
   function splitLines(s: string): string[] {
@@ -320,10 +316,8 @@
 
   {#snippet footer()}
     <div class="footer">
-      <button type="button" class="btn-cancel" onclick={onCancel} disabled={saving}>Cancel</button>
-      <button type="button" class="btn-save" onclick={handleSave} disabled={saving}>
-        {saving ? 'Saving…' : saveLabel}
-      </button>
+      <ActionButton action="cancel" onclick={onCancel} disabled={saving} />
+      <ActionButton action={mode === 'new' ? 'create' : 'save'} onclick={handleSave} busy={saving} />
     </div>
   {/snippet}
 </Modal>
@@ -385,13 +379,4 @@
     font-size: 0.9rem;
   }
   .footer { display: flex; justify-content: flex-end; gap: 0.5rem; padding-top: 0.5rem; }
-  .btn-cancel, .btn-save {
-    border: 1px solid var(--border); border-radius: 0.4rem;
-    padding: 0.5rem 1rem; font-size: 0.92rem; cursor: pointer;
-  }
-  .btn-cancel { background: transparent; color: var(--text-primary); }
-  .btn-cancel:hover { background: var(--bg-tertiary); }
-  .btn-save { background: var(--accent-solid); color: var(--on-accent); border-color: var(--accent-solid); }
-  .btn-save:hover:not(:disabled) { filter: brightness(1.1); }
-  .btn-save:disabled, .btn-cancel:disabled { opacity: 0.6; cursor: not-allowed; }
 </style>

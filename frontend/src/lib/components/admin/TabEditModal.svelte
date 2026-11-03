@@ -6,6 +6,7 @@
   import BackgroundConfigModal from './BackgroundConfigModal.svelte';
   import IconEditModal from './IconEditModal.svelte';
   import Modal from '../shared/Modal.svelte';
+  import ActionButton from '../shared/ActionButton.svelte';
   import type { Background } from '$lib/types';
   import { editMode } from '$lib/stores/editMode';
   import { backgroundSummary } from '../background/backgroundSummary';
@@ -196,26 +197,15 @@
     <div class="modal-actions">
       <div class="actions-left">
         {#if tabName && onDelete}
-          <button type="button" class="btn-danger" onclick={onDelete}>
-            <Icon icon="mdi:trash-can" width="20" />
-            Delete
-          </button>
+          <ActionButton action="delete" onclick={onDelete} />
         {/if}
         {#if tabName && onDuplicate}
-          <button type="button" class="btn-duplicate" onclick={onDuplicate}>
-            <Icon icon="mdi:content-copy" width="20" />
-            Duplicate
-          </button>
+          <ActionButton action="duplicate" onclick={onDuplicate} />
         {/if}
       </div>
       <div class="actions-right">
-        <button type="button" class="btn-secondary" onclick={onCancel}>
-          Cancel
-        </button>
-        <button type="submit" form="tab-edit-form" class="btn-primary">
-          <Icon icon="mdi:content-save" width="20" />
-          {tabName ? 'Save' : 'Create'}
-        </button>
+        <ActionButton action="cancel" onclick={onCancel} />
+        <ActionButton action={tabName ? 'save' : 'create'} type="submit" form="tab-edit-form" />
       </div>
     </div>
   {/snippet}
@@ -380,15 +370,6 @@
   }
 
   /* .btn-primary, .btn-secondary, .btn-danger styles are defined globally in app.css */
-
-  .btn-duplicate {
-    background: var(--success-solid);
-    color: white;
-  }
-
-  .btn-duplicate:hover {
-    background: var(--success-solid-hover);
-  }
 
   .btn-background {
     background: var(--bg-tertiary);

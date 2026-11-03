@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/svelte';
 import BackgroundConfigModal from './BackgroundConfigModal.svelte';
 import type { Background } from '$lib/types';
 
@@ -26,7 +26,7 @@ function open(level: Level, background?: Background) {
   render(BackgroundConfigModal, { runtime: MOVING, level, background, onSave, onCancel });
   return { onSave, onCancel };
 }
-const save = () => fireEvent.click(screen.getByRole('button', { name: /^Save Background/ }));
+const save = () => fireEvent.click(within(screen.getByRole('dialog', { name: /background$/i })).getByRole('button', { name: 'Save' }));
 // Plain wording per level: the dashboard has a switch "Show background picture"
 // (on = not inherit); tab and folder have a two-choice radio group.
 const sameOption = () => screen.getByRole('radio', { name: /^Same as / }) as HTMLInputElement;

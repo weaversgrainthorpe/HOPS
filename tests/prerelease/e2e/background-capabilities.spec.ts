@@ -251,7 +251,7 @@ test.describe('background dialog driven by the capability table', () => {
     await enterEdit(page);
     const { dlg, picker } = await openFolderPicker(page, f.id('f'));
     await picker.getByRole('button', { name: 'Contain', exact: true }).click(); // a real change elsewhere
-    await picker.getByRole('button', { name: /^Save Background/ }).click();
+    await picker.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(picker).toHaveCount(0);
     await dlg.getByRole('button', { name: /^Save/ }).click();
     const save = page.getByRole('toolbar', { name: 'Editing' }).getByRole('button', { name: /Save/ });

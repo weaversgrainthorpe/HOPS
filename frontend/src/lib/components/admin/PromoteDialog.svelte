@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ActionButton from '$lib/components/shared/ActionButton.svelte';
   // Discovery "Promote to tiles": where the new tiles land. Pick a
   // tab (one folder per category is created there, an existing top-level
   // folder with that category's name is reused) or any existing folder at
@@ -122,7 +123,7 @@
   </div>
   {#snippet footer()}
     <div class="actions">
-      <button type="button" class="btn-secondary" onclick={onCancel}>Cancel</button>
+      <ActionButton action="cancel" onclick={onCancel} />
       <button type="button" class="btn-primary" disabled={!target || busy} onclick={submit}>
         <Icon icon="mdi:check-bold" width="18" />{busy ? 'Promoting…' : 'Promote'}
       </button>

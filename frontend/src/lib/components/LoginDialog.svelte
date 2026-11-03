@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ActionButton from '$lib/components/shared/ActionButton.svelte';
   import { onMount, tick } from 'svelte';
   import Icon from '@iconify/svelte';
   import Modal from '$lib/components/shared/Modal.svelte';
@@ -114,7 +115,7 @@
 
   {#snippet footer()}
     <div class="modal-actions">
-      <button type="button" class="btn-secondary" onclick={cancel} disabled={$isLoggingIn}>Cancel</button>
+      <ActionButton action="cancel" onclick={cancel} disabled={$isLoggingIn} />
       <button type="submit" form={formId} class="btn-primary" disabled={$isLoggingIn}>
         {#if $isLoggingIn}
           <Icon icon="mdi:loading" width="18" class="spin" />
