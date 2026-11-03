@@ -112,12 +112,14 @@ describe('resize handles', () => {
     expect(container.querySelector('[data-node-id="a"] [data-resize]')).toBeNull();
   });
 
-  it('a collapsed folder has no handles, and its tooltip says how to resize it', async () => {
+  it('a collapsed folder has no handles, and says how to resize it (to screen readers; the hover popup too)', async () => {
     const { container } = canvas();
     await tick();
     const c1 = container.querySelector('[data-node-id="c1"]') as HTMLElement;
     expect(c1.querySelector('[data-resize]')).toBeNull();
-    expect(c1.getAttribute('title')).toMatch(/minimised.*Open/);
+    const tileFace = c1.querySelector('.folder-collapsed-tile') as HTMLElement;
+    const hint = tileFace.getAttribute('aria-describedby')!.split(' ').map((id) => document.getElementById(id)?.textContent).join(' ');
+    expect(hint).toMatch(/minimised.*Open/);
   });
 
   it('a corner drag of +4 cells (240 px of 60 px cells) on a grid folder → w+4, h+4, pushing the neighbour as previewed; one undo step', async () => {

@@ -7,6 +7,9 @@ import { SMALL_TWO_LINES_MIN_PX } from '$lib/layout/folderShapePaths';
 import Entry from './Entry.svelte';
 import { editMode } from '$lib/stores/editMode';
 import type { Entry as EntryType } from '$lib/types';
+import HoverCard from './shared/HoverCard.svelte';
+import { resetHoverCard } from '$lib/utils/hoverCard';
+import { awayMode } from '$lib/stores/awayMode';
 
 const entry: EntryType = {
   id: 'e1', name: 'Plain', url: 'http://x.test', icon: '', openMode: 'newtab', size: 'medium', order: 0
@@ -316,5 +319,81 @@ describe('Entry text colour', () => {
     expect(textOf(container)).toBe('');
     expect((container.querySelector('.entry-bg') as HTMLElement).style.backgroundColor).toBe('');
     expect(container.querySelector('[data-testid="tile-colour-unreadable"]')?.textContent).toMatch(/Colour can't be read/);
+  });
+});
+
+describe('the hover popup (no native title): the name, then the description, then any notes', () => {
+  const card = () => document.body.querySelector('[data-testid="hover-card"]') as HTMLElement | null;
+  const lines = () => Array.from(card()?.querySelectorAll('.hc-line') ?? []).map((l) => l.textContent);
+  const show = async (btn: HTMLElement) => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }));
+    btn.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    await tick();
+  };
+  beforeEach(() => {
+    resetHoverCard();
+    awayMode.set(false);
+    render(HoverCard);
+  });
+  afterEach(() => awayMode.set(false));
+
+  it('name only', async () => {
+    const { container } = render(Entry, { entry });
+    const btn = container.querySelector('button.entry') as HTMLElement;
+    expect(btn.hasAttribute('title')).toBe(false);
+    await show(btn);
+    expect(card()?.querySelector('.hc-name')?.textContent).toBe('Plain');
+    expect(card()?.querySelector('.hc-desc')).toBeNull();
+    expect(lines()).toEqual([]);
+  });
+
+  it('name and description (the name first, larger; the description its accessible description)', async () => {
+    const { container } = render(Entry, { entry: { ...entry, description: 'The plain one' } });
+    const btn = container.querySelector('button.entry') as HTMLElement;
+    await show(btn);
+    expect(card()?.querySelector('.hc-name')?.textContent).toBe('Plain');
+    expect(card()?.querySelector('.hc-desc')?.textContent).toBe('The plain one');
+    expect(document.getElementById(btn.getAttribute('aria-describedby')!)?.textContent).toBe('The plain one');
+  });
+
+  it('away: the away address and the home-check note, as before', async () => {
+    awayMode.set(true);
+    const { container } = render(Entry, {
+      entry: { ...entry, awayUrl: 'https://away.example', statusCheck: { enabled: true } } as EntryType
+    });
+    await show(container.querySelector('button.entry') as HTMLElement);
+    expect(lines()).toEqual(['Opens away address: https://away.example', 'Status checked at home address']);
+  });
+
+  it('an address problem is a note in the popup', async () => {
+    const { container } = render(Entry, { entry: { ...entry, url: '' } });
+    await show(container.querySelector('button.entry') as HTMLElement);
+    expect(lines()).toEqual(['No address: this tile will not open']);
+  });
+
+  const describedText = (n: Element) =>
+    (n.getAttribute('aria-describedby') ?? '').split(' ').filter(Boolean).map((id) => document.getElementById(id)?.textContent ?? `(missing #${id})`);
+
+  it('screen readers keep the notes (away address, an address problem), with or without a description', async () => {
+    awayMode.set(true);
+    const away = render(Entry, { entry: { ...entry, awayUrl: 'https://away.example' } as EntryType });
+    expect(describedText(away.container.querySelector('button.entry')!)).toEqual(['Opens away address: https://away.example']);
+    away.unmount();
+    awayMode.set(false);
+    const blank = render(Entry, { entry: { ...entry, url: '', description: 'Desc' } });
+    expect(describedText(blank.container.querySelector('button.entry')!)).toEqual(['Desc', 'No address: this tile will not open']);
+    blank.unmount();
+    // In the editor the address problem is already a visible note on the tile: not said twice.
+    const ed = render(Entry, { entry: { ...entry, url: '' }, editorSelected: false });
+    expect(describedText(ed.container.querySelector('button.entry')!)).toEqual([]);
+  });
+
+  it('the Recently used chip has the same popup and no native title', async () => {
+    const { container } = render(Entry, { entry: { ...entry, description: 'D' }, chip: true });
+    const chip = container.querySelector('.recent-chip') as HTMLElement;
+    expect(chip.hasAttribute('title')).toBe(false);
+    expect(document.getElementById(chip.getAttribute('aria-describedby')!)?.textContent).toBe('D');
+    await show(chip);
+    expect(card()?.querySelector('.hc-desc')?.textContent).toBe('D');
   });
 });

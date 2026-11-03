@@ -16,6 +16,7 @@
   import { getContext } from 'svelte';
   import { RECENT_CONTEXT, type RecentContext } from '$lib/utils/recentTiles';
   import { textColourOn } from '$lib/utils/colorContrast';
+  import { hoverCard, tileHoverContent } from '$lib/utils/hoverCard';
 
   interface Props {
     entry: Entry;
@@ -105,12 +106,14 @@
     }
   }
 
-  // The hover title. Away, a tile opening its away address says so, and that its status dot is
-  // still the server's check of the home address (the server is at home; no Away status is faked).
-  const tileTitle = $derived(
-    usingAway
-      ? `${entry.description || entry.name}\nOpens away address: ${openUrl}${tileMayBeChecked(entry) ? '\nStatus checked at home address' : ''}`
-      : entry.description || entry.name
+  // The hover popup (one for tiles and folders): the name, the description, then the notes. Away, a
+  // tile opening its away address says so, and that its status dot is still the server's check of the
+  // home address (the server is at home; no Away status is faked).
+  const hover = $derived(
+    tileHoverContent(entry, {
+      away: usingAway ? { url: openUrl, checkedAtHome: tileMayBeChecked(entry) } : undefined,
+      urlProblem: urlProblem ? urlProblemText : undefined
+    })
   );
 
   // Opacity fades the tile's BACKGROUND only (a separate layer, as in
@@ -123,8 +126,18 @@
   const iconOpacity = $derived(String(clamp01(entry.iconOpacity, 1)));
 
   // The description is the tile's accessible description, shown or not: a Small tile with no room
-  // for it still has it for screen readers (and in its hover title).
+  // for it still has it for screen readers (and in its hover popup).
   const descId = $props.id();
+
+  // The popup's notes for screen readers too (the popup is hidden from them): the away address and an
+  // address problem. In the editor the address problem is already a visible note on the tile.
+  const srNotes = $derived(
+    (hover.lines ?? []).filter((l) => !(inEditor && urlProblem && l === urlProblemText)).join('. ')
+  );
+  const notesId = $derived(`${descId}-notes`);
+  const describedBy = $derived(
+    [!isNote && entry.description ? descId : '', srNotes ? notesId : ''].filter(Boolean).join(' ') || undefined
+  );
 
   // The text on a coloured tile: THE one rule (textColourOn; folders use the same Auto choice). No
   // colour, or one that can't be read, is the theme's surface and text; an unreadable one says so in
@@ -142,9 +155,17 @@
     class="recent-chip"
     class:url-broken={!!urlProblem}
     onclick={handleClick}
-    title={urlProblem ? `${tileTitle}\n${urlProblemText}` : tileTitle}
+    use:hoverCard={hover}
     aria-label={`Open ${entry.name}${usingAway ? ' (away address)' : ''}`}
+    aria-describedby={describedBy}
   >
+    {#if entry.description}
+      <!-- Its description for screen readers, as the tile's (the hover popup is hidden from them). -->
+      <span id={descId} class="sr-only">{entry.description}</span>
+    {/if}
+    {#if srNotes}
+      <span id={notesId} class="sr-only">{srNotes}</span>
+    {/if}
     <span class="chip-icon" aria-hidden="true">
       {#if entry.iconUrl}
         <img src={entry.iconUrl} alt="" />
@@ -173,11 +194,14 @@
     class:entry-note={isNote}
     class:url-broken={!!urlProblem}
     onclick={handleClick}
-    title={urlProblem ? `${tileTitle}\n${urlProblemText}` : tileTitle}
+    use:hoverCard={hover}
     aria-label={inEditor || isNote ? entry.name : `Open ${entry.name}${usingAway ? ' (away address)' : ''}`}
     aria-pressed={inEditor ? editorSelected : undefined}
-    aria-describedby={!isNote && entry.description ? descId : undefined}
+    aria-describedby={describedBy}
   >
+    {#if srNotes}
+      <span id={notesId} class="sr-only">{srNotes}</span>
+    {/if}
     <span class="entry-bg" aria-hidden="true" style:background-color={coloured ? entry.color : undefined} style:opacity={bgOpacity}></span>
     {#if inEditor && text.invalid}
       <span class="url-problem colour-problem" data-testid="tile-colour-unreadable" role="note">Colour can't be read — theme colour shown</span>

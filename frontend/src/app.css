@@ -98,6 +98,8 @@
   --z-modal-critical: 1200;
   --z-toast: 1300;
   --z-easter: 1400;
+  /* The tile and folder hover popup: above everything (it never takes a click: pointer-events none). */
+  --z-tooltip: 1500;
 
   /* Border radius - design tokens */
   --radius-sm: 0.25rem;

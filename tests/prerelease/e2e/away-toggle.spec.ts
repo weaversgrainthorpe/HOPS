@@ -134,8 +134,10 @@ test('Away opens the away address (click, iframe, keyboard), Home the home one; 
   await tileNamed(page, 'Framed').locator('button.entry').click();
   await expect(page.locator('.iframe-container iframe')).toHaveAttribute('src', AWAY);
   await page.keyboard.press('Escape');
-  // Hover text says the status is still checked at home.
-  await expect(tileNamed(page, 'NAS').locator('button.entry')).toHaveAttribute('title', /Opens away address/);
+  // The hover popup says it opens the away address (no native title any more).
+  await tileNamed(page, 'NAS').locator('button.entry').hover();
+  await expect(page.getByTestId('hover-card')).toContainText(`Opens away address: ${AWAY}`);
+  await page.mouse.move(0, 0);
 
   await page.reload();
   await expect(awayToggle(page)).toHaveText(/Away/);

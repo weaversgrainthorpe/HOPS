@@ -18,6 +18,9 @@ import { begin, session, resetEditSessionForTests } from '$lib/stores/editSessio
 import { selectedNodes, clearSelection } from '$lib/stores/nodeSelection';
 import { toast } from '$lib/stores/toast';
 import { editorDialog, editorMenu } from '$lib/editor/editorUi';
+import HoverCard from '../shared/HoverCard.svelte';
+import { resetHoverCard, HOVER_DELAY_MS } from '$lib/utils/hoverCard';
+import { COLLAPSED_HINT } from '$lib/editor/resize';
 
 let width = 1440; // 60 px cells: a Medium item is 120 px
 class FakeRO {
@@ -810,5 +813,124 @@ describe('folder text colour: one rule with tiles', () => {
       expect(openText(container, 'f')).toBe(want);
       unmount();
     }
+  });
+});
+
+describe('the hover popup (one for tiles and folders): the name, then the description', () => {
+  // Rendered once in the root layout; here beside the tab.
+  const card = () => document.body.querySelector('[data-testid="hover-card"]') as HTMLElement | null;
+  const keyboardFocus = async (target: HTMLElement) => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }));
+    target.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    await tick();
+  };
+  beforeEach(() => {
+    resetHoverCard();
+    render(HoverCard);
+  });
+
+  it('a minimised folder: its name and description, no native title; the description is its accessible description', async () => {
+    const { container } = await renderTab([folder('f', kids(2), { display: 'collapsed', name: 'Media', description: 'Films and music' })]);
+    const slot = el(container, 'f');
+    const t = slot.querySelector('.folder-collapsed-tile') as HTMLElement;
+    expect(slot.hasAttribute('title')).toBe(false);
+    expect(t.hasAttribute('title')).toBe(false);
+    expect(document.getElementById(t.getAttribute('aria-describedby')!)?.textContent).toBe('Films and music');
+    await keyboardFocus(t);
+    expect(card()?.querySelector('.hc-name')?.textContent).toBe('Media');
+    expect(card()?.querySelector('.hc-desc')?.textContent).toBe('Films and music');
+    expect(card()?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('hovered: shows after the delay; a minimised folder with no description has its name only', async () => {
+    vi.useFakeTimers();
+    try {
+      const { container } = await renderTab([folder('f', kids(2), { display: 'collapsed', name: 'Media' })]);
+      const t = el(container, 'f').querySelector('.folder-collapsed-tile') as HTMLElement;
+      t.dispatchEvent(new Event('pointerenter'));
+      await tick();
+      expect(card()).toBeNull();
+      vi.advanceTimersByTime(HOVER_DELAY_MS);
+      await tick();
+      expect(card()?.textContent?.trim()).toBe('Media');
+      t.dispatchEvent(new Event('pointerleave'));
+      await tick();
+      expect(card()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('edit mode: the minimised hint is in the popup (folded in), never a native title; still described for screen readers', async () => {
+    const { container } = await renderEditing([folder('f', kids(2), { display: 'collapsed', name: 'Media', description: 'Films' })]);
+    const slot = el(container, 'f');
+    const t = slot.querySelector('.folder-collapsed-tile') as HTMLElement;
+    expect(slot.hasAttribute('title')).toBe(false);
+    const described = t.getAttribute('aria-describedby')!.split(' ').map((id) => document.getElementById(id)?.textContent);
+    expect(described).toEqual(['Films', COLLAPSED_HINT]);
+    await keyboardFocus(t);
+    expect(card()?.querySelector('.hc-desc')?.textContent).toBe('Films');
+    expect(Array.from(card()!.querySelectorAll('.hc-line')).map((l) => l.textContent)).toEqual([COLLAPSED_HINT]);
+  });
+
+  it("an open folder's title shows it; drilled in, the go-up title says Back to (in the popup, not a native title)", async () => {
+    const { container } = await renderTab([folder('f', [sub('s', kids(2), { description: 'Inner' })], { name: 'Outer', description: 'The box' })]);
+    const h3 = el(container, 'f').querySelector('.folder-header h3') as HTMLElement;
+    h3.dispatchEvent(new Event('pointerenter'));
+    await new Promise((r) => setTimeout(r, HOVER_DELAY_MS + 20));
+    await tick();
+    expect(card()?.querySelector('.hc-name')?.textContent).toBe('Outer');
+    expect(card()?.querySelector('.hc-desc')?.textContent).toBe('The box');
+    h3.dispatchEvent(new Event('pointerleave'));
+    setFolderDrill('d1', 'f', ['s']);
+    await tick();
+    const up = el(container, 'f').querySelector('.folder-header h3 .title-button') as HTMLElement;
+    expect(up.hasAttribute('title')).toBe(false);
+    await keyboardFocus(up);
+    expect(Array.from(card()!.querySelectorAll('.hc-line')).map((l) => l.textContent)).toEqual(['Back to Outer']);
+    const inner = container.querySelector('[data-nested-folder="s"] .nested-name') as HTMLElement;
+    await keyboardFocus(inner);
+    expect(card()?.querySelector('.hc-name')?.textContent).toBe('s');
+    expect(card()?.querySelector('.hc-desc')?.textContent).toBe('Inner');
+  });
+
+  const describedText = (n: Element) =>
+    (n.getAttribute('aria-describedby') ?? '').split(' ').filter(Boolean).map((id) => document.getElementById(id)?.textContent ?? `(missing #${id})`);
+
+  it('an open folder is described by its description (an element that exists while it is open)', async () => {
+    const { container } = await renderTab([folder('f', kids(2), { name: 'Outer', description: 'The box' })]);
+    const group = el(container, 'f');
+    expect(group.getAttribute('role')).toBe('group');
+    expect(describedText(group)).toEqual(['The box']);
+  });
+
+  it('an inset (nested) box is a group named for its folder and described by its description', async () => {
+    const { container } = await renderTab([folder('f', [sub('s', kids(2), { name: 'Inner', description: 'Inside' })], { name: 'Outer' })]);
+    setFolderDrill('d1', 'f', ['s']);
+    await tick();
+    const box = container.querySelector('[data-nested-folder="s"]') as HTMLElement;
+    expect(box.getAttribute('role')).toBe('group');
+    expect(box.getAttribute('aria-label')).toBe('Inner folder');
+    expect(describedText(box)).toEqual(['Inside']);
+  });
+
+  it('an untitled inset box is announced "Untitled folder" (not "Untitled folder folder")', async () => {
+    const { container } = await renderTab([folder('f', [sub('s', kids(2), { name: '' })], { name: 'Outer' })]);
+    setFolderDrill('d1', 'f', ['s']);
+    await tick();
+    const box = container.querySelector('[data-nested-folder="s"]') as HTMLElement;
+    expect(box.getAttribute('aria-label')).toBe('Untitled folder');
+  });
+
+  it('a Rounded untitled folder drilled in: "Back to Untitled folder", as its first line says', async () => {
+    const { container } = await renderTab([folder('f', [sub('s', kids(2))], { name: '' })]);
+    setFolderDrill('d1', 'f', ['s']);
+    await tick();
+    const h3 = el(container, 'f').querySelector('.folder-header h3');
+    expect(h3).not.toBeNull();
+    const up = h3!.querySelector('.title-button') as HTMLElement;
+    await keyboardFocus(up);
+    expect(card()?.querySelector('.hc-name')?.textContent).toBe('Untitled folder');
+    expect(Array.from(card()!.querySelectorAll('.hc-line')).map((l) => l.textContent)).toEqual(['Back to Untitled folder']);
   });
 });

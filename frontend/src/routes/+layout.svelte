@@ -25,6 +25,7 @@
 	import ParkedDraftBanner from '$lib/components/ParkedDraftBanner.svelte';
 	import MigrationFailed from '$lib/components/MigrationFailed.svelte';
 	import Toast from '$lib/components/Toast.svelte';
+	import HoverCard from '$lib/components/shared/HoverCard.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import ForcedPasswordModal from '$lib/components/admin/ForcedPasswordModal.svelte';
 	import { navigateTiles } from '$lib/utils/tileNav';
@@ -179,6 +180,7 @@
 {/if}
 
 <Toast />
+<HoverCard />
 <ConfirmModal />
 
 <style>
