@@ -305,6 +305,28 @@ a:focus-visible {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Filter toggles (Discovery re-scan: New or changed / All / Gone; Detectors: All / Bundled / User).
+   The chosen one is filled with the accent; the others are outline buttons, so they read as clickable.
+   Each button carries aria-pressed. The edge uses --field-border (>= 3:1 on every preset). */
+.filter-toggles { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.filter-toggles button {
+  padding: 4px 12px;
+  border-radius: var(--radius-md, 6px);
+  border: 1px solid var(--field-border);
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+.filter-toggles button:hover { background: var(--bg-tertiary); }
+.filter-toggles button:focus-visible { outline: 2px solid var(--accent-solid); outline-offset: 2px; }
+.filter-toggles button[aria-pressed='true'] {
+  background: var(--accent-solid);
+  border-color: var(--accent-solid);
+  color: var(--on-accent);
+}
+.filter-toggles button[aria-pressed='true']:hover { background: var(--accent-solid-hover); border-color: var(--accent-solid-hover); }
+
 /* Shared data-table shell — replaces a half-dozen bespoke per-page table
    classes (table.scans, table.summary, table.detectors, table.diag,
    table.results) that all had identical chrome: bg-secondary surface,

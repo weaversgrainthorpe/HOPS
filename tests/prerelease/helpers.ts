@@ -224,3 +224,43 @@ export async function startScan(page: Page, opts: { leaveRunning?: boolean } = {
 	}
 	return id;
 }
+
+/**
+ * Filter toggle groups (Discovery re-scan, Detectors) share one look in both themes: the chosen
+ * button is filled (aria-pressed=true); the others are outline buttons (visible edge, pointer
+ * cursor, a hover state) with aria-pressed=false.
+ */
+export async function expectFilterToggleLook(page: Page, group: Locator): Promise<void> {
+	const buttons = group.getByRole('button');
+	const n = await buttons.count();
+	expect(n).toBeGreaterThan(1);
+	const style = (b: Locator) => b.evaluate((el) => {
+		const cs = getComputedStyle(el);
+		return { bg: cs.backgroundColor, edge: cs.borderTopColor, width: cs.borderTopWidth, line: cs.borderTopStyle, cursor: cs.cursor };
+	});
+	const transparent = (c: string) => c === 'transparent' || /rgba\(.*,\s*0\)$/.test(c);
+	for (const theme of ['dark', 'light']) {
+		await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), theme);
+		let pressed = 0;
+		for (let i = 0; i < n; i++) {
+			const b = buttons.nth(i);
+			const p = await b.getAttribute('aria-pressed');
+			expect(p === 'true' || p === 'false', `aria-pressed on button ${i}`).toBe(true);
+			const s = await style(b);
+			expect(s.cursor, `${theme}: cursor on button ${i}`).toBe('pointer');
+			if (p === 'true') {
+				pressed++;
+				expect(transparent(s.bg), `${theme}: the chosen button is filled`).toBe(false);
+			} else {
+				expect(s.line, `${theme}: outline on button ${i}`).toBe('solid');
+				expect(s.width, `${theme}: outline on button ${i}`).toBe('1px');
+				expect(transparent(s.edge), `${theme}: visible edge on button ${i}`).toBe(false);
+				expect(transparent(s.bg), `${theme}: unchosen button ${i} is not filled`).toBe(true);
+				await b.hover();
+				await expect.poll(async () => transparent((await style(b)).bg), `${theme}: hover state on button ${i}`).toBe(false);
+				await page.mouse.move(0, 0);
+			}
+		}
+		expect(pressed, `${theme}: exactly one chosen`).toBe(1);
+	}
+}
