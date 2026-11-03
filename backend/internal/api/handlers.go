@@ -1684,6 +1684,9 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	var imported []configdoc.Obj
 	var sizeChanges []importedSizes   // tiles whose unknown size became Medium
 	var grownFolders []importedGrowth // folders stored below their minimum, enlarged (never silent)
+	// Per imported dashboard, the fields HOPS doesn't recognise: imported as
+	// they are (nothing is dropped), but named in the preview and the result.
+	var unknown [][]configdoc.UnknownField
 	var skipped []string
 	for i, raw := range rawDashboards {
 		d, ok := raw.(configdoc.Obj)
@@ -1729,6 +1732,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 				return
 			}
 			imported = append(imported, d)
+			unknown = append(unknown, configdoc.UnknownFields(d))
 			continue
 		}
 		v3, sizes, err := configdoc.ConvertDashboardV2Full(d)
@@ -1758,6 +1762,8 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		imported = append(imported, v3)
+		// The converters keep keys they don't know: those are named too.
+		unknown = append(unknown, configdoc.UnknownFields(v3))
 		if len(sizes) > 0 {
 			sizeChanges = append(sizeChanges, importedSizes{dash: v3, changes: sizes})
 		}
@@ -1798,10 +1804,14 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		if notCarried == nil {
 			notCarried = []string{}
 		}
+		rows := importRows(cur, imported)
+		for i := range rows {
+			rows[i].UnknownFields = unknownFieldsText(unknown[i], false)
+		}
 		writeJSON(w, map[string]interface{}{
 			"preview":    true,
 			"format":     importFormat,
-			"dashboards": importRows(cur, imported),
+			"dashboards": rows,
 			"notCarried": notCarried,
 		})
 		return
@@ -2086,6 +2096,20 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		if len(notCarried) > 0 {
 			message += fmt.Sprintf(". %d thing(s) couldn't be carried over (listed separately)", len(notCarried))
 		}
+		// Named after the merge, so a Keep both copy is named as stored; a
+		// skipped dashboard was not imported, so its fields are not listed.
+		unknownLines := []string{}
+		for i, d := range imported {
+			if choices != nil && choices[i] == importSkip {
+				continue
+			}
+			if text := unknownFieldsText(unknown[i], true); text != "" {
+				unknownLines = append(unknownLines, fmt.Sprintf("Dashboard %q: %s", dashboardLabel(d), text))
+			}
+		}
+		if len(unknownLines) > 0 {
+			message += fmt.Sprintf(". %d dashboard(s) have fields HOPS doesn't recognise (listed separately)", len(unknownLines))
+		}
 		if iconMatchCount > 0 {
 			message += fmt.Sprintf(", matched %d icon(s)", iconMatchCount)
 		}
@@ -2113,6 +2137,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			"assetsRestored":  assetsRestored,
 			"renamed":         allRenames,
 			"notCarried":      notCarried,
+			"unknownFields":   unknownLines,
 			"summary":         summary,
 		}
 		if iconErr != nil {
