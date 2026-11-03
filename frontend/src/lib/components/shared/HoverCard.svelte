@@ -2,16 +2,16 @@
   // The one hover popup for tiles and folders (see $lib/utils/hoverCard): mounted once, in the root
   // layout. Line 1 the name (larger, semibold), line 2 the description (smaller, muted), then any
   // notes. Hidden from screen readers: the item's own label and aria-describedby already say it.
-  import { hoverCardState, hideHoverCard, placeCard } from '$lib/utils/hoverCard';
+  import { hoverCardState, hideHoverCard, placeCard, setHoverCardSuppressed } from '$lib/utils/hoverCard';
   import { drag } from '$lib/editor/drag/dragController';
 
   let el = $state<HTMLElement | undefined>();
   let pos = $state<{ left: number; top: number; side: 'below' | 'above' } | null>(null);
   const card = $derived($hoverCardState);
 
-  // A drag starting anywhere puts it away.
+  // An editor drag: no popup for the whole drag (it would sit over the drop targets).
   $effect(() => {
-    if ($drag) hideHoverCard();
+    setHoverCardSuppressed(!!$drag);
   });
 
   // Measured once drawn (hidden until placed, so it never flashes in the wrong spot).
@@ -32,7 +32,7 @@
   });
 </script>
 
-{#if card}
+{#if card && !$drag}
   <div
     class="hover-card"
     bind:this={el}
@@ -60,6 +60,9 @@
     position: fixed;
     z-index: var(--z-tooltip);
     max-width: min(22rem, calc(100vw - 16px));
+    /* Never taller than the screen: a long description is clamped (below). */
+    max-height: calc(100vh - 16px);
+    overflow: hidden;
     padding: 0.5rem 0.75rem;
     border: 1px solid var(--border);
     border-radius: 0.5rem;
@@ -81,6 +84,12 @@
     line-height: 1.35;
     color: var(--text-secondary);
     white-space: pre-line;
+    /* A long description (a note's body) is cut at eight lines, with an ellipsis. */
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 8;
+    line-clamp: 8;
+    overflow: hidden;
   }
   .hc-line {
     margin-top: 0.25rem;

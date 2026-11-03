@@ -7,6 +7,7 @@ import {
   tileHoverContent,
   folderHoverContent,
   resetHoverCard,
+  setHoverCardSuppressed,
   HOVER_DELAY_MS
 } from './hoverCard';
 
@@ -133,6 +134,45 @@ describe('hoverCard action', () => {
     action.update({ name: 'NAS 2' });
     expect(get(hoverCardState)?.content.name).toBe('NAS 2');
     action.update(null);
+    expect(get(hoverCardState)).toBeNull();
+  });
+  it('unmounted while waiting: the pending timer is cancelled, nothing shows', () => {
+    enter();
+    action.destroy();
+    vi.advanceTimersByTime(HOVER_DELAY_MS * 2);
+    expect(get(hoverCardState)).toBeNull();
+    action = hoverCard(el, { name: 'NAS' }); // for afterEach
+  });
+  it('while an editor drag is on: never shows (hover or focus), and a shown one goes', () => {
+    enter();
+    vi.advanceTimersByTime(HOVER_DELAY_MS);
+    expect(get(hoverCardState)).not.toBeNull();
+    setHoverCardSuppressed(true);
+    expect(get(hoverCardState)).toBeNull();
+    el.dispatchEvent(new Event('pointerleave'));
+    vi.advanceTimersByTime(1000);
+    enter();
+    vi.advanceTimersByTime(HOVER_DELAY_MS * 2);
+    expect(get(hoverCardState)).toBeNull();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }));
+    el.dispatchEvent(new FocusEvent('focusin'));
+    expect(get(hoverCardState)).toBeNull();
+    setHoverCardSuppressed(false);
+    el.dispatchEvent(new FocusEvent('focusin'));
+    expect(get(hoverCardState)).not.toBeNull();
+  });
+  it('keyboard focus that scrolls its item into view keeps the popup (re-placed); a hover popup goes on scroll', () => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }));
+    el.focus();
+    el.dispatchEvent(new FocusEvent('focusin'));
+    const before = get(hoverCardState);
+    expect(before).not.toBeNull();
+    document.dispatchEvent(new Event('scroll'));
+    const after = get(hoverCardState);
+    expect(after?.anchor).toBe(el);
+    expect(after).not.toBe(before); // a new state: the popup measures and places itself again
+    el.blur();
+    el.dispatchEvent(new FocusEvent('focusout'));
     expect(get(hoverCardState)).toBeNull();
   });
 });

@@ -5,7 +5,9 @@
 //
 // Shows: after a short hover (HOVER_DELAY_MS, like the native one; at once when moving straight from
 // one popup to the next) and on keyboard focus. Hides: pointer leave, a press (a click or the start of
-// a drag), blur, Escape, scroll, resize. Never on a touch tap. Never takes a click (pointer-events: none).
+// a drag), blur, Escape, scroll, resize. Never on a touch tap, never during an editor drag (suppressed for
+// the whole drag). Never takes a click (pointer-events: none). A keyboard focus that scrolls its item into
+// view keeps its popup (placed again), so Tab onto a tile below the fold still shows it.
 import { get, writable, type Readable } from 'svelte/store';
 
 export interface HoverCardContent {
@@ -20,6 +22,8 @@ export interface HoverCardContent {
 export interface HoverCardState {
   anchor: HTMLElement;
   content: HoverCardContent;
+  /** Shown for a keyboard focus (kept, and placed again, when that focus scrolls the page). */
+  byKeyboard: boolean;
 }
 
 export const HOVER_DELAY_MS = 500;
@@ -33,6 +37,14 @@ let lastHidden = 0;
 /** The last input was a key (so a focus is a keyboard focus), not a pointer. */
 let keyboardInput = false;
 let globalsReady = false;
+/** An editor drag is on: no popup at all until it ends. */
+let suppressed = false;
+
+/** The editor's drag (HoverCard.svelte follows it): while on, nothing shows and a shown popup goes. */
+export function setHoverCardSuppressed(on: boolean): void {
+  suppressed = on;
+  if (on) hideHoverCard();
+}
 
 export function hideHoverCard(): void {
   if (get(state)) lastHidden = Date.now();
@@ -52,13 +64,23 @@ function ensureGlobals() {
   );
   document.addEventListener('pointerdown', () => (keyboardInput = false), true);
   // Any scroll (the page or a scrolling box) moves the anchor: the popup goes rather than float loose.
-  document.addEventListener('scroll', () => hideHoverCard(), true);
+  // A keyboard focus that scrolled its item into view is the exception: that popup is placed again.
+  document.addEventListener(
+    'scroll',
+    () => {
+      const s = get(state);
+      if (s?.byKeyboard && s.anchor.isConnected && s.anchor.contains(document.activeElement)) state.set({ ...s });
+      else hideHoverCard();
+    },
+    true
+  );
   window.addEventListener('resize', () => hideHoverCard());
 }
 
 /** Test hook: forget the keyboard/pointer history and any popup. */
 export function resetHoverCard(): void {
   keyboardInput = false;
+  suppressed = false;
   lastHidden = 0;
   state.set(null);
 }
@@ -81,9 +103,9 @@ export function hoverCard(node: HTMLElement, content: HoverCardContent | null) {
     if (timer !== undefined) clearTimeout(timer);
     timer = undefined;
   };
-  const show = () => {
+  const show = (byKeyboard = false) => {
     cancel();
-    if (current && node.isConnected) state.set({ anchor: node, content: current });
+    if (current && !suppressed && node.isConnected) state.set({ anchor: node, content: current, byKeyboard });
   };
   const hide = () => {
     cancel();
@@ -93,12 +115,13 @@ export function hoverCard(node: HTMLElement, content: HoverCardContent | null) {
   const onEnter = (e: PointerEvent) => {
     if (e.pointerType === 'touch' || !current) return;
     cancel();
+    if (suppressed) return;
     if (Date.now() - lastHidden < WARM_MS) show();
-    else timer = setTimeout(show, HOVER_DELAY_MS);
+    else timer = setTimeout(() => show(), HOVER_DELAY_MS);
   };
   const onLeave = () => hide();
   const onFocusIn = () => {
-    if (keyboardInput) show();
+    if (keyboardInput) show(true);
   };
   const onFocusOut = (e: FocusEvent) => {
     if (e.relatedTarget instanceof Node && node.contains(e.relatedTarget)) return;
@@ -117,7 +140,8 @@ export function hoverCard(node: HTMLElement, content: HoverCardContent | null) {
     update(next: HoverCardContent | null) {
       current = next ? clean(next) : null;
       if (!active()) return;
-      if (current) state.set({ anchor: node, content: current });
+      const s = get(state);
+      if (current) state.set({ anchor: node, content: current, byKeyboard: s?.byKeyboard ?? false });
       else hide();
     },
     destroy() {
