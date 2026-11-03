@@ -68,7 +68,7 @@
   <div class="form-group checkbox-group">
     <label>
       <input type="checkbox" bind:checked={showCenter} />
-      Show center title
+      Show centre title
     </label>
   </div>
   {#if showCenter}

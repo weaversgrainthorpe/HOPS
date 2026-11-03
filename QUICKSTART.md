@@ -345,7 +345,7 @@ can be undone.
 
 ### Add a tab
 
-Click **Add tab**, give it a **Tab Name** (and an icon or colour if you
+Click **Add tab**, give it a **Name** (and an icon or colour if you
 like), and click **Create**. A coloured tab has a **Text colour** like tiles
 and folders: *Auto* picks black or white, whichever is easier to read. Drag tabs to reorder them. To change a tab
 later, click the pencil next to its name (or right-click it): the **Edit
@@ -570,7 +570,7 @@ only where they help you find things.
 **Tab background.** Open the tab's dialog and click **Configure tab
 background**. Choose **Same as the dashboard** or **Its own background**
 (the same choices as above), then **Save**. The tab dialog also has its own
-**Background Color**, **Opacity** and **Text colour**.
+**Colour**, **Background opacity** and **Text colour**.
 
 **Folder background.** In **Edit folder**, the folder's colour and opacity
 are under **Colour**. For a picture, click **Background…** and choose **Its
@@ -585,7 +585,7 @@ show the first picture, still.
 
 **Dashboard › Header** controls the top bar's left and centre: **Show left
 section** with **Custom text (optional)** (empty shows the HOPS logo and
-links to your dashboards), and **Show center title** with **Custom title
+links to your dashboards), and **Show centre title** with **Custom title
 (optional)** (empty shows the dashboard's name). The buttons on the
 right are always there.
 
