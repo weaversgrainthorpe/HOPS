@@ -1,5 +1,6 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import { hopsCommand } from '../hops-bin';
+import { expectFilterToggleLook } from '../helpers';
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -16,6 +17,19 @@ const PORT = String(Number(process.env.HOPS_TEST_PORT || '18080') + 11);
 const BASE = `http://localhost:${PORT}`;
 let child: ChildProcess | null = null;
 let dataDir = '';
+
+/** Run SQL against the spawned HOPS's database (a scan "progressing" while the page is open). */
+function sql(stmts: string) {
+	execFileSync('python3', ['-c', `
+import sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+c.executescript(sys.argv[2])
+c.commit()
+`, path.join(dataDir, 'hops.db'), stmts]);
+}
+function rowSQL(sid: string, n: number, host: string, port: number, det: string, name: string, at: string) {
+	return `INSERT INTO scan_results(id, scan_id, host, port, detector_id, confidence, suggested_name, suggested_url, curate_state, created_at) VALUES('${sid}-${n}','${sid}','${host}',${port},'${det}','high','${name}','http://${host}:${port}','pending','${at}');`;
+}
 
 const SEED = `
 import sqlite3, sys
@@ -38,6 +52,11 @@ res('rescan', 4, '192.0.2.10', 3001, 'x/wiki', 'Wiki')
 res('rescan', 5, '192.0.2.11', 3002, 'x/dns', 'DNS')
 scan('lonely', '198.51.100.0/24', '2026-10-15T10:00:00Z', 'complete')
 res('lonely', 1, '198.51.100.1', 80, 'x/web', 'Web')
+# A range for the "scan finishes while the page is open" paths: the baseline, then a running scan.
+scan('lbase', '203.0.113.0/24', '2026-10-12T10:00:00Z', 'complete')
+res('lbase', 1, '203.0.113.1', 443, 'x/deco', 'Deco')
+res('lbase', 2, '203.0.113.2', 443, 'x/deco', 'Deco')
+res('lbase', 3, '203.0.113.3', 13378, 'x/abs', 'Audiobookshelf')
 c.commit()
 `;
 
@@ -97,7 +116,14 @@ c.commit()
 		await expect(page.getByText('192.0.2.1', { exact: true })).toHaveCount(0);
 		await expect(page.getByRole('button', { name: /^All/ })).toContainText('(5)');
 
+		// The filters look like buttons: the chosen one filled, the others outlined (item 13).
+		const filters = page.getByRole('group', { name: 'Show' });
+		await expect(filters.getByRole('button', { name: /^New or changed/ })).toHaveAttribute('aria-pressed', 'true');
+		await expectFilterToggleLook(page, filters);
+
 		await page.getByRole('button', { name: /^All/ }).click();
+		await expect(filters.getByRole('button', { name: /^All/ })).toHaveAttribute('aria-pressed', 'true');
+		await expect(filters.getByRole('button', { name: /^New or changed/ })).toHaveAttribute('aria-pressed', 'false');
 		await expect(rows).toHaveCount(5);
 		await expect(page.getByTestId('diff-state').filter({ hasText: 'unchanged' })).toHaveCount(1);
 
@@ -151,5 +177,80 @@ c.commit()
 		await expect(page.getByTestId('diff-error')).toContainText('Could not compare with the previous scan');
 		await expect(page.getByTestId('nothing-new')).toHaveCount(0);
 		await expect(page.locator('table.results tbody tr')).toHaveCount(5);
+	});
+
+	// Item 14: unchanged rows must not be ticked by default on any way into the page, not just
+	// when opening a scan that has already finished.
+	test('a scan that finishes while the page is open: unchanged rows are not left ticked', async () => {
+		sql(`INSERT INTO scans(id, created_at, cidr, intensity, state) VALUES('live','2026-10-20T10:00:00Z','203.0.113.0/24','light','running');
+			${rowSQL('live', 1, '203.0.113.1', 443, 'x/deco', 'Deco', '2026-10-20T10:00:01Z')}`);
+		await page.goto('/settings/discovery/live');
+		await expect(page.getByText(/Scanning 203\.0\.113\.0\/24/)).toBeVisible();
+		await expect(page.locator('table.results tbody tr')).toHaveCount(1);
+		sql(`${rowSQL('live', 2, '203.0.113.2', 443, 'x/deco', 'Deco', '2026-10-20T10:00:02Z')}
+			${rowSQL('live', 3, '203.0.113.3', 13378, 'x/abs', 'Audiobookshelf', '2026-10-20T10:00:03Z')}
+			${rowSQL('live', 4, '203.0.113.9', 3000, 'x/gitea', 'Gitea', '2026-10-20T10:00:04Z')}`);
+		await expect(page.locator('table.results tbody tr')).toHaveCount(4);
+		sql(`UPDATE scans SET state='complete', finished_at='2026-10-20T10:05:00Z' WHERE id='live';`);
+		await expect(page.getByTestId('diff-summary')).toContainText('1 new, 0 gone');
+		await expect(page.locator('table.results tbody tr')).toHaveCount(1);
+		await expect(page.getByText('1 selected', { exact: true })).toBeVisible();
+		await expect(page.getByTestId('hidden-ticked')).toHaveCount(0);
+		await page.getByRole('button', { name: /^All/ }).click();
+		await expect(page.locator('table.results tbody tr.selected')).toHaveCount(1);
+	});
+
+	test('going back to the list and returning: unchanged rows are still not ticked', async () => {
+		await page.goto('/settings/discovery/live');
+		await expect(page.getByTestId('diff-summary')).toContainText('1 new, 0 gone');
+		await page.locator('a.back-link').click();
+		await expect(page).toHaveURL(/\/settings\/discovery$/);
+		await page.locator('table.scans tbody tr').filter({ hasText: '203.0.113.0/24' }).first().getByRole('button', { name: 'Open scan draft' }).click();
+		await expect(page).toHaveURL(/\/settings\/discovery\/live$/);
+		await expect(page.getByTestId('diff-summary')).toContainText('1 new, 0 gone');
+		await expect(page.getByText('1 selected', { exact: true })).toBeVisible();
+		await expect(page.getByTestId('hidden-ticked')).toHaveCount(0);
+		await page.goBack();
+		await page.goForward();
+		await expect(page.getByTestId('diff-summary')).toContainText('1 new, 0 gone');
+		await expect(page.getByText('1 selected', { exact: true })).toBeVisible();
+		await expect(page.getByTestId('hidden-ticked')).toHaveCount(0);
+	});
+
+	test('Re-scan from an earlier scan: the new scan runs and finishes on the same page, unchanged rows not ticked', async () => {
+		sql(`INSERT INTO scans(id, created_at, cidr, intensity, state) VALUES('live2','2026-10-25T10:00:00Z','203.0.113.0/24','light','running');`);
+		// Re-scan really starts a scan; here it hands back the seeded one, which then "runs".
+		await page.route('**/api/discovery/scans', async (r) => {
+			if (r.request().method() !== 'POST') return r.fallback();
+			await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'live2', createdAt: '2026-10-25T10:00:00Z', cidr: '203.0.113.0/24', intensity: 'light', state: 'running', progressDone: 0, progressTotal: 256 }) });
+		});
+		await page.goto('/settings/discovery/live');
+		await expect(page.getByTestId('diff-summary')).toContainText('1 new, 0 gone');
+		await page.getByRole('button', { name: 'Re-scan', exact: true }).click();
+		await expect(page).toHaveURL(/\/settings\/discovery\/live2$/);
+		await expect(page.getByText(/Scanning 203\.0\.113\.0\/24/)).toBeVisible();
+		sql(`${rowSQL('live2', 1, '203.0.113.1', 443, 'x/deco', 'Deco', '2026-10-25T10:00:01Z')}
+			${rowSQL('live2', 2, '203.0.113.9', 3000, 'x/gitea', 'Gitea', '2026-10-25T10:00:02Z')}`);
+		await expect(page.locator('table.results tbody tr')).toHaveCount(2);
+		sql(`${rowSQL('live2', 3, '203.0.113.20', 8080, 'x/new', 'Brand new', '2026-10-25T10:00:03Z')}
+			UPDATE scans SET state='complete', finished_at='2026-10-25T10:05:00Z' WHERE id='live2';`);
+		await expect(page.getByTestId('diff-summary')).toContainText('1 new, 2 gone');
+		await expect(page.getByText('1 selected', { exact: true })).toBeVisible();
+		await expect(page.getByTestId('hidden-ticked')).toHaveCount(0);
+		await page.unroute('**/api/discovery/scans');
+	});
+
+	test('rows written in the same second as the last one seen still appear while the scan runs', async () => {
+		const at = '2026-10-28T10:00:01Z';
+		sql(`INSERT INTO scans(id, created_at, cidr, intensity, state) VALUES('live3','2026-10-28T10:00:00Z','203.0.113.0/24','light','running');
+			${rowSQL('live3', 1, '203.0.113.1', 443, 'x/deco', 'Deco', at)}`);
+		await page.goto('/settings/discovery/live3');
+		await expect(page.locator('table.results tbody tr')).toHaveCount(1);
+		// Two more rows in that same second, after the page has seen the first.
+		sql(`${rowSQL('live3', 2, '203.0.113.30', 8080, 'x/a', 'Alpha', at)}
+			${rowSQL('live3', 3, '203.0.113.31', 8081, 'x/b', 'Beta', at)}`);
+		await expect(page.locator('table.results tbody tr')).toHaveCount(3);
+		sql(`UPDATE scans SET state='complete' WHERE id='live3';`);
+		await expect(page.getByRole('button', { name: /^All/ })).toHaveText('All (3)');
 	});
 });

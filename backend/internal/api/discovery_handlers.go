@@ -283,8 +283,9 @@ func (r *Router) handleGetScan(w http.ResponseWriter, req *http.Request, scanID 
 	// a running scan. Without the cursor, each poll re-fetches every
 	// row (including base64 favicon data URLs) — 100s of KB/s for
 	// large scans. With `?resultsSince=<rfc3339>` the server returns
-	// only rows whose created_at is strictly newer. The client merges
-	// them into its existing list by ID.
+	// only rows whose created_at is at or after it (inclusive: the
+	// timestamp has one-second resolution). The client merges them into
+	// its existing list by ID.
 	since := req.URL.Query().Get("resultsSince")
 	results, err := r.discoveryStore.ListResultsSince(scanID, since)
 	if err != nil {

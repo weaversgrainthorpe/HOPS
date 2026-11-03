@@ -29,7 +29,7 @@
   let warnings = $state<string[]>([]);
   // Cursor for delta polling. After each successful poll, set to the
   // max createdAt seen so far; the next poll only fetches rows
-  // strictly newer than this. Cleared when navigating to a different
+  // at or after this (the server is inclusive: one-second timestamps; rows we already have are skipped by id). Cleared when navigating to a different
   // scan (in the scanId effect below).
   let lastResultTs = $state('');
   let loading = $state(true);
