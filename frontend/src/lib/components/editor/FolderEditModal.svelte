@@ -138,6 +138,18 @@
   const contentSizeError = $derived(checkContentSize ? checkContentSize(contentSize) : null);
   let nameEl = $state<HTMLInputElement | null>(null);
 
+  /** Everything the dialog can change, as one string (compared with the form as opened). */
+  function formSnapshot(): string {
+    return JSON.stringify([
+      name, description, icon, iconUrl, iconBgColor, color, opacity, textColor, display, showTitle, minimisedIcon,
+      contentSize, size, shape, tabPosition, stagedBackground, statusSetting
+    ]);
+  }
+  // svelte-ignore state_referenced_locally
+  const baseline = formSnapshot();
+  /** Unsaved changes: Duplicate copies the SAVED folder, so it waits and says why. */
+  const dirty = $derived(formSnapshot() !== baseline);
+
   // A merge creates "New folder" and opens this dialog with the name selected for editing.
   $effect(() => {
     if (nameEl) {
@@ -295,14 +307,18 @@
 
     <section class="dialog-section" aria-labelledby="folder-colour-heading">
       <h3 id="folder-colour-heading" class="part-title">Colour</h3>
-      <ColorPicker label="Colour" selectedColor={color} onSelect={(c) => { color = c; colourNote = ''; }} />
+      <ColorPicker label="Colour" hideLabel selectedColor={color} onSelect={(c) => { color = c; colourNote = ''; }} />
       {#if outlined}
         <p class="hint outline-note" data-outline-note>An outlined folder is see-through, so its colour draws the outline only and it has no opacity.</p>
       {:else}
         <OpacitySlider id="folder-bg-opacity" label="Background opacity" {opacity} onSelect={(o) => (opacity = o)} />
       {/if}
       <!-- An outline has no fill to measure against, so no contrast is shown for it; Auto is the theme's text. -->
-      <TextColourSetting name="folder-text-color" bind:value={textColor} contrast={!outlined && colours.contrastWarning ? colours.contrast : null} />
+      <!-- An outline uses Light and Dark even with no colour; a filled folder with none shows the theme's text. -->
+      <div class="text-colour-row">
+        <TextColourSetting name="folder-text-color" bind:value={textColor} contrast={!outlined && colours.contrastWarning ? colours.contrast : null}
+          noColourNote={!outlined && colours.themed ? 'Text colour applies when the folder has a colour.' : null} />
+      </div>
     </section>
 
     <section class="dialog-section" aria-labelledby="folder-display-heading">
@@ -393,9 +409,13 @@
           <button type="button" class="btn-danger" onclick={onDelete}><Icon icon="mdi:trash-can" width="20" /> Delete</button>
         {/if}
         {#if !isNew && onDuplicate}
-          <button type="button" class="btn-secondary" onclick={onDuplicate}><Icon icon="mdi:content-copy" width="20" /> Duplicate</button>
+          <button type="button" class="btn-secondary" onclick={onDuplicate} disabled={dirty}
+            aria-describedby={dirty ? 'folder-dup-hint' : undefined}><Icon icon="mdi:content-copy" width="20" /> Duplicate</button>
         {/if}
       </div>
+      {#if !isNew && onDuplicate && dirty}
+        <p class="dup-hint" id="folder-dup-hint" role="status">Save your changes before duplicating.</p>
+      {/if}
       <div class="actions-right">
         <button type="button" class="btn-secondary" onclick={onCancel}>Cancel</button>
         <button type="submit" form="folder-edit-form" class="btn-primary">
@@ -482,6 +502,9 @@
     margin: 0.25rem 0 0;
     font-size: 0.875rem;
     opacity: 0.85;
+  }
+  .text-colour-row {
+    margin: 0 0 1.25rem;
   }
   /* The outline note stands apart from the Text colour choice under it. */
   .outline-note {
@@ -657,6 +680,18 @@
   .actions-right {
     display: flex;
     gap: 0.75rem;
+  }
+  /* Duplicate copies the saved folder, so with unsaved changes it waits and says why (a line of its
+     own, under the buttons). */
+  .modal-actions {
+    flex-wrap: wrap;
+  }
+  .dup-hint {
+    order: 1;
+    flex-basis: 100%;
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
   }
   .modal-actions button {
     display: inline-flex;

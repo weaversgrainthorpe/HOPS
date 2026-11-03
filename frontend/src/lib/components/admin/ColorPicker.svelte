@@ -6,6 +6,11 @@
     label?: string;
     /** Title for the "no colour" swatch. Defaults to "None (use theme default)". */
     noneTitle?: string;
+    /**
+     * The label is not shown (a heading above already says it) but stays the swatch group's
+     * accessible name.
+     */
+    hideLabel?: boolean;
   }
 
   let {
@@ -13,7 +18,9 @@
     onSelect,
     label = 'Background Color',
     noneTitle = 'None (use theme default)',
+    hideLabel = false,
   }: Props = $props();
+  const labelId = $props.id();
 
   // Preset palette. Order roughly follows the colour wheel, then ends with
   // greys + white so a user looking for a neutral lands at the right edge.
@@ -88,8 +95,8 @@
   }
 </script>
 
-<div class="color-picker">
-  <div class="color-label">{label}</div>
+<div class="color-picker" role="group" aria-labelledby={labelId}>
+  <div id={labelId} class="color-label" class:sr-only={hideLabel}>{label}</div>
   <div class="color-grid">
     <button
       type="button"

@@ -571,3 +571,34 @@ describe('one editing flow: handle, double-click and menu for every item', () =>
     expect(err).toHaveBeenCalledWith(expect.stringMatching(/no longer exists/));
   });
 });
+
+// Item 16 (fix round 1): a coloured tab's name follows the ONE text rule tiles and folders use.
+describe('coloured tabs use the one text colour rule', () => {
+  const coloured: LayoutDashboard = {
+    id: 'ct', name: 'Colours', path: '/colours', revision: 1,
+    tabs: [
+      { id: 'a', name: 'Amber', color: '#f59e0b', root: { columns: 24, children: [] } },
+      { id: 'n', name: 'Navy', color: '#0f172a', root: { columns: 24, children: [] } },
+      { id: 'l', name: 'Forced', color: '#3b82f6', textColor: 'light', root: { columns: 24, children: [] } },
+      { id: 'p', name: 'Plain', root: { columns: 24, children: [] } }
+    ]
+  };
+  const tabEl = (c: HTMLElement, id: string) => c.querySelector(`[data-tab-button="${id}"]`) as HTMLElement;
+  it('#f59e0b gives black, a dark colour white, a stored Light is honoured; no colour keeps the theme', async () => {
+    config.set(cfg([coloured]));
+    const { container } = render(Dashboard, { dashboard: coloured });
+    await tick();
+    expect(tabEl(container, 'a').style.getPropertyValue('--tab-text')).toBe('#000000');
+    expect(tabEl(container, 'n').style.getPropertyValue('--tab-text')).toBe('#ffffff');
+    expect(tabEl(container, 'l').style.getPropertyValue('--tab-text')).toBe('#ffffff');
+    expect(tabEl(container, 'p').style.getPropertyValue('--tab-text')).toBe('');
+    expect(tabEl(container, 'p').classList.contains('custom-color')).toBe(false);
+  });
+  it('the CSS draws the name in --tab-text, with no brightness filter changing the colour as drawn', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const css = readFileSync(resolve(__dirname, 'Dashboard.svelte'), 'utf8');
+    expect(css).toMatch(/\.tab\.custom-color,\s*\.tab\.custom-color:hover,\s*\.tab\.custom-color\.active\s*\{\s*color:\s*var\(--tab-text\)/);
+    expect(css).not.toMatch(/\.tab\.custom-color[^{]*\{[^}]*filter:\s*brightness/);
+  });
+});

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Entry } from '$lib/types';
+  import { untrack } from 'svelte';
   import Icon from '@iconify/svelte';
   import ColoredIcon from '../ColoredIcon.svelte';
   import ColorPicker from './ColorPicker.svelte';
@@ -81,7 +82,17 @@
     sshAwayHost = af?.host ?? '';
     sshAwayPort = af?.port ?? SSH_DEFAULT_PORT;
     awayUrlText = entry.awayUrl ?? '';
+    // The form as opened: Duplicate copies the SAVED tile, so it waits while this differs.
+    baseline = untrack(formSnapshot);
   });
+
+  /** Everything the dialog can change, as one string (compared with the form as opened). */
+  function formSnapshot(): string {
+    return JSON.stringify([editedEntry, textColor, statusSetting, sizeValue, kind, sshHost, sshPort, sshUser, sshAwayHost, sshAwayPort, awayUrlText]);
+  }
+  let baseline = $state<string | null>(null);
+  /** Unsaved changes in the dialog (Duplicate would copy the saved tile without them). */
+  const dirty = $derived(baseline !== null && formSnapshot() !== baseline);
 
   // The Tile type dropdown: Link, SSH (a link tile whose ssh:// URL is built from
   // Host/Port/User) or Note. A link tile whose URL starts with ssh:// opens as SSH.
@@ -414,6 +425,7 @@
       <div class="stack">
         <ColorPicker
           label="Colour"
+          hideLabel
           selectedColor={editedEntry.color}
           onSelect={(color) => editedEntry.color = color}
         />
@@ -425,7 +437,8 @@
           opacity={editedEntry.opacity}
           onSelect={(opacity) => editedEntry.opacity = opacity}
         />
-        <TextColourSetting name="entry-text-color" bind:value={textColor} contrast={textOn.contrastWarning ? textOn.contrast : null} />
+        <TextColourSetting name="entry-text-color" bind:value={textColor} contrast={textOn.contrastWarning ? textOn.contrast : null}
+          noColourNote={textOn.themed ? 'Text colour applies when the tile has a colour.' : null} />
         <OpacitySlider
           id="entry-text-opacity"
           label="Text opacity"
@@ -513,12 +526,16 @@
           </button>
         {/if}
         {#if entry.id && onDuplicate}
-          <button type="button" class="btn-secondary" onclick={onDuplicate}>
+          <button type="button" class="btn-secondary" onclick={onDuplicate} disabled={dirty}
+            aria-describedby={dirty ? 'entry-dup-hint' : undefined}>
             <Icon icon="mdi:content-copy" width="20" />
             Duplicate
           </button>
         {/if}
       </div>
+      {#if entry.id && onDuplicate && dirty}
+        <p class="dup-hint" id="entry-dup-hint" role="status">Save your changes before duplicating.</p>
+      {/if}
       <div class="action-right">
         <button type="button" class="btn-secondary" onclick={onCancel}>
           Cancel
@@ -682,6 +699,19 @@
   .action-right {
     display: flex;
     gap: 0.75rem;
+  }
+
+  /* Duplicate copies the saved tile, so with unsaved changes it waits and says why (a line of its own,
+     under the buttons). */
+  .modal-actions {
+    flex-wrap: wrap;
+  }
+  .dup-hint {
+    order: 1;
+    flex-basis: 100%;
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
   }
 
   .action-right {

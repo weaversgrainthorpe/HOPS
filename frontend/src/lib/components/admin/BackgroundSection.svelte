@@ -712,7 +712,7 @@
 {#if caps.opacity && backgroundType !== 'none'}
   <div class="form-group">
     <div class="slider-header">
-      <label for="bg-opacity">Background opacity: {Math.round(Number(surfaceOpacity) * 100)}%</label>
+      <label for="bg-opacity">{caps.opacityLabel}: {Math.round(Number(surfaceOpacity) * 100)}%</label>
       <button class="reset-link" onclick={() => surfaceOpacity = 1}>Reset</button>
     </div>
     <input id="bg-opacity" type="range" min="0" max="1" step="0.05" bind:value={surfaceOpacity} aria-describedby="bg-opacity-hint" />

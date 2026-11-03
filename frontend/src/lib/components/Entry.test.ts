@@ -295,6 +295,21 @@ describe('Entry text colour', () => {
     expect(container.querySelector('button.entry')?.classList.contains('custom-color')).toBe(false);
   });
 
+  it('#rrggbbaa and #rgba (e.g. a Heimdall import) draw exactly as stored; the text uses the rgb part', async () => {
+    for (const [c, want] of [['#3b82f680', '#000000'], ['#0f172acc', '#ffffff'], ['#00f8', '#ffffff']] as const) {
+      const { container, unmount } = render(Entry, { entry: { ...entry, color: c }, editorSelected: false });
+      await tick();
+      // The same colour CSS draws for the stored value (no fallback to the theme).
+      const ref = document.createElement('div');
+      ref.style.backgroundColor = c;
+      expect(ref.style.backgroundColor).not.toBe('');
+      expect((container.querySelector('.entry-bg') as HTMLElement).style.backgroundColor).toBe(ref.style.backgroundColor);
+      expect(textOf(container)).toBe(want);
+      expect(container.querySelector('[data-testid="tile-colour-unreadable"]')).toBeNull();
+      unmount();
+    }
+  });
+
   it('a colour that cannot be read draws the theme and says so in the editor', async () => {
     const { container } = render(Entry, { entry: { ...entry, color: 'bluish' }, editorSelected: false });
     await tick();

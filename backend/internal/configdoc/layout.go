@@ -25,8 +25,8 @@ import (
 //   - a folder's `shape`, when present, is one of FolderShapes and its
 //     `tabPosition`, when present, one of FolderTabPositions; its
 //     `minimisedIcon`, when present, one of FolderMinimisedIcons;
-//   - a tile's or a folder's `textColor`, when present, is one of
-//     TextColors, and its `description`, when present, is text;
+//   - a tab's, tile's or folder's `textColor`, when present, is one of
+//     TextColors, and a tile's or folder's `description`, when present, is text;
 //   - a tab-level folder's open box is at least FolderMinCellsOf, which
 //     counts a tab-height allowance for every shape.
 //
@@ -160,7 +160,7 @@ var FolderTabPositions = []string{"left", "centre", "right"}
 // icon). Absent means "contents". Twin of the frontend's FolderNode field.
 var FolderMinimisedIcons = []string{"contents", "own"}
 
-// TextColors is a tile's or a folder's text colour: "auto" (the more readable
+// TextColors is a tab's, tile's or folder's text colour: "auto" (the more readable
 // of white and black on its colour), "light" or "dark". Absent means "auto".
 // Twin of the frontend's TextColorMode.
 var TextColors = []string{"auto", "light", "dark"}

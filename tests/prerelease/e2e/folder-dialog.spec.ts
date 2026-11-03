@@ -24,7 +24,7 @@ const folder = (id: string, name: string, box: { x: number; y: number; w: number
   placement: box, content: { children }, ...extra
 });
 
-async function importDash(page: Page, context: BrowserContext, children: (id: (s: string) => string) => Child[]) {
+async function importDash(page: Page, context: BrowserContext, children: (id: (s: string) => string) => Child[], tabExtra: Child = {}) {
   const p = `m6a${Date.now().toString(36)}${(seq++).toString(36)}`;
   const id = (s: string) => `${p}-${s}`;
   const dash = {
@@ -33,7 +33,7 @@ async function importDash(page: Page, context: BrowserContext, children: (id: (s
       statusChecksEnabled: null, statusCheckIntervalMinutes: null, statusCheckTimeoutSeconds: null,
       editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null
     },
-    tabs: [{ id: id('tab'), name: 'Main', order: 0, root: { columns: 24, children: children(id) } }]
+    tabs: [{ id: id('tab'), name: 'Main', order: 0, root: { columns: 24, children: children(id) }, ...tabExtra }]
   };
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
@@ -496,5 +496,36 @@ test.describe('one text colour rule, outlined folders and matching dialogs', () 
     await again.getByRole('button', { name: /^Duplicate/ }).click();
     await expect(again).toHaveCount(0);
     await expect(page.locator('.tab-canvas').getByText('Blue tile', { exact: true })).toHaveCount(2);
+  });
+});
+
+// Fix round 1: a coloured tab's name follows the same rule, open, hovered and on a phone; the Tab
+// dialog has the same Text colour control and warning.
+test.describe('coloured tabs use the one text colour rule', () => {
+  test('an amber tab shows black text open, hovered and on a phone; its dialog warns about Light', async ({ page, context }) => {
+    const f = await importDash(page, context, blue, { color: '#f59e0b' });
+    await page.goto(f.path);
+    const tab = page.locator(`[data-tab-button="${f.id('tab')}"]`);
+    await expect(tab).toHaveClass(/active/);
+    await expect(tab).toHaveCSS('color', 'rgb(0, 0, 0)');
+    await expect(tab).toHaveCSS('filter', 'none');
+    await tab.hover();
+    await expect(tab).toHaveCSS('color', 'rgb(0, 0, 0)');
+    await expect(tab).toHaveCSS('filter', 'none');
+    await page.setViewportSize({ width: 390, height: 800 });
+    await expect(tab).toHaveCSS('color', 'rgb(0, 0, 0)');
+    await page.setViewportSize({ width: 1280, height: 720 });
+
+    await enterEdit(page);
+    await tab.dblclick();
+    const dlg = page.getByRole('dialog', { name: 'Edit Tab' });
+    await expect(dlg).toBeVisible();
+    const text = dlg.getByRole('group', { name: 'Text colour' });
+    await expect(text.getByRole('radio', { name: 'Auto' })).toBeChecked();
+    await text.getByRole('radio', { name: 'Light' }).check();
+    await expect(dlg.locator('[data-contrast-warning]')).toBeVisible();
+    await dlg.getByRole('button', { name: /^Save/ }).click();
+    await expect(dlg).toHaveCount(0);
+    await expect(tab).toHaveCSS('color', 'rgb(255, 255, 255)');
   });
 });

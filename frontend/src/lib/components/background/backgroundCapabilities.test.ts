@@ -103,3 +103,11 @@ describe('backgroundCapabilities', () => {
     expect(Object.isFrozen(a)).toBe(true);
   });
 });
+
+describe('the opacity slider is named for what it fades', () => {
+  it('a folder picture: "Picture opacity" (the folder dialog has its own Background opacity); dashboard and tab keep "Background opacity"', () => {
+    for (const c of BACKGROUND_CASES) {
+      expect(backgroundCapabilities(c.level, c.runtime).opacityLabel).toBe(c.level === 'folder' ? 'Picture opacity' : 'Background opacity');
+    }
+  });
+});

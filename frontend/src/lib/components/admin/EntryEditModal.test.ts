@@ -260,3 +260,41 @@ describe('EntryEditModal sections, words and Text colour', () => {
     expect(screen.queryByRole('button', { name: /Duplicate/ })).toBeNull();
   });
 });
+
+describe('EntryEditModal fix round 1', () => {
+  beforeEach(() => editMode.set(true));
+  afterEach(() => editMode.set(false));
+
+  it('the swatches are a group named "Colour"; the label is not shown twice under the Colour heading', async () => {
+    open();
+    await tick();
+    const g = screen.getByRole('group', { name: 'Colour' });
+    expect(g.querySelector('.color-label')?.classList.contains('sr-only')).toBe(true);
+  });
+
+  it('with no colour, Text colour says it applies when the tile has a colour; a colour removes the line', async () => {
+    open();
+    await tick();
+    expect(screen.getByText('Text colour applies when the tile has a colour.')).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Blue' }));
+    expect(screen.queryByText('Text colour applies when the tile has a colour.')).toBeNull();
+  });
+
+  it('Duplicate waits while the dialog has unsaved changes, and says why', async () => {
+    const onDuplicate = vi.fn();
+    render(EntryEditModal, { entry, onSave: vi.fn(), onCancel: vi.fn(), onDuplicate });
+    await tick();
+    const dup = screen.getByRole('button', { name: /Duplicate/ }) as HTMLButtonElement;
+    expect(dup.disabled).toBe(false);
+    expect(screen.queryByText('Save your changes before duplicating.')).toBeNull();
+    await fireEvent.input(screen.getByLabelText('Name *'), { target: { value: 'Changed' } });
+    expect(dup.disabled).toBe(true);
+    expect(screen.getByText('Save your changes before duplicating.')).toBeTruthy();
+    expect(dup.getAttribute('aria-describedby')).toBe('entry-dup-hint');
+    // Changed back: nothing unsaved, so it can duplicate again.
+    await fireEvent.input(screen.getByLabelText('Name *'), { target: { value: 'Plain' } });
+    expect(dup.disabled).toBe(false);
+    await fireEvent.click(screen.getByRole('radio', { name: 'Dark' }));
+    expect(dup.disabled).toBe(true);
+  });
+});

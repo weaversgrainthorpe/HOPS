@@ -58,6 +58,11 @@ export interface BackgroundCapabilities {
   fit: boolean;
   /** This level's show-through opacity. */
   opacity: boolean;
+  /**
+   * Its slider's name. A folder's is "Picture opacity": a folder background is pictures only, and the
+   * folder dialog's own "Background opacity" fades the folder colour.
+   */
+  opacityLabel: string;
   /** "Lower lets what is behind this … show through." */
   opacityNoun: string;
   /** Overlay darkness and blur. */
@@ -145,6 +150,7 @@ export function backgroundCapabilities(
     inherit: INHERIT[level],
     fit: true,
     opacity: true,
+    opacityLabel: isFolder ? 'Picture opacity' : 'Background opacity',
     opacityNoun: level,
     overlay: !isFolder && !seeThroughTab,
     overlayNote: seeThroughTab ? 'seeThroughTab' : null,

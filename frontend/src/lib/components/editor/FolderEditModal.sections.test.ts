@@ -189,3 +189,32 @@ describe('names and description (item 19: the same words as the tile dialog)', (
     expect(onSave2.mock.calls[0][0]).toHaveProperty('description', undefined);
   });
 });
+
+describe('fix round 1', () => {
+  it('the swatches are a group named "Colour", its label hidden under the Colour heading', () => {
+    render(FolderEditModal, { folder: f(), onSave: vi.fn(), onCancel: vi.fn() });
+    expect(screen.getByRole('group', { name: 'Colour' }).querySelector('.sr-only')?.textContent).toBe('Colour');
+  });
+  it('a filled folder with no colour says Text colour applies when it has one; an outlined one does not', () => {
+    const { unmount } = render(FolderEditModal, { folder: f({ shape: 'folder-flat' }), onSave: vi.fn(), onCancel: vi.fn() });
+    expect(screen.getByText('Text colour applies when the folder has a colour.')).toBeTruthy();
+    unmount();
+    const r = render(FolderEditModal, { folder: f({ shape: 'folder-outline' }), onSave: vi.fn(), onCancel: vi.fn() });
+    expect(screen.queryByText(/applies when the folder has a colour/)).toBeNull();
+    r.unmount();
+    render(FolderEditModal, { folder: f({ shape: 'folder-flat', color: '#0f172a' }), onSave: vi.fn(), onCancel: vi.fn() });
+    expect(screen.queryByText(/applies when the folder has a colour/)).toBeNull();
+  });
+  it('Duplicate waits while the dialog has unsaved changes, and says why', async () => {
+    render(FolderEditModal, { folder: f(), onSave: vi.fn(), onCancel: vi.fn(), onDuplicate: vi.fn() });
+    const dup = screen.getByRole('button', { name: /Duplicate/ }) as HTMLButtonElement;
+    expect(dup.disabled).toBe(false);
+    await fireEvent.input(screen.getByLabelText('Description'), { target: { value: 'New words' } });
+    expect(dup.disabled).toBe(true);
+    expect(screen.getByText('Save your changes before duplicating.')).toBeTruthy();
+    await fireEvent.input(screen.getByLabelText('Description'), { target: { value: '' } });
+    expect(dup.disabled).toBe(false);
+    await fireEvent.click(screen.getByRole('radio', { name: 'Light' }));
+    expect(dup.disabled).toBe(true);
+  });
+});

@@ -12,6 +12,8 @@
   import { reducedMotion } from '$lib/stores/backgroundAnimation';
   import StatusCheckSetting from '../editor/StatusCheckSetting.svelte';
   import { gateSetting, type GateSetting, type StatusContext } from '$lib/editor/statusChecks';
+  import TextColourSetting from '../editor/TextColourSetting.svelte';
+  import { textColourOn, type TextColorMode } from '$lib/utils/colorContrast';
 
   // Close modal when edit mode is turned off
   $effect(() => {
@@ -27,13 +29,17 @@
     tabIconBgColor?: string;
     tabColor?: string;
     tabOpacity?: number;
+    /** Auto (missing), Light or Dark: the one text rule, as tiles and folders. */
+    tabTextColor?: string;
     tabBackground?: Background;
     onSave: (
       name: string, icon?: string, iconUrl?: string, iconBgColor?: string, color?: string, opacity?: number,
       /** A background picked in this dialog: undefined = unchanged, null = removed. */
       background?: Background | null,
       /** Status-check gate: undefined = unchanged, false = Disabled, null = Enabled (key removed). */
-      statusChecksEnabled?: boolean | null
+      statusChecksEnabled?: boolean | null,
+      /** Undefined = Auto (the key removed). */
+      textColor?: 'light' | 'dark'
     ) => void;
     onCancel: () => void;
     onDelete?: () => void;
@@ -44,7 +50,7 @@
     statusContext?: StatusContext;
   }
 
-  let { tabName, tabIcon, tabIconUrl, tabIconBgColor, tabColor, tabOpacity, tabBackground, onSave, onCancel, onDelete, onDuplicate, tabStatusChecks, statusContext }: Props = $props();
+  let { tabName, tabIcon, tabIconUrl, tabIconBgColor, tabColor, tabOpacity, tabTextColor, tabBackground, onSave, onCancel, onDelete, onDuplicate, tabStatusChecks, statusContext }: Props = $props();
   // Form state initialized from props (intentionally captures initial values)
   // svelte-ignore state_referenced_locally
   let name = $state(tabName);
@@ -58,6 +64,9 @@
   let color = $state(tabColor);
   // svelte-ignore state_referenced_locally
   let opacity = $state(tabOpacity);
+  // svelte-ignore state_referenced_locally
+  let textColor = $state<TextColorMode>(tabTextColor === 'light' || tabTextColor === 'dark' ? tabTextColor : 'auto');
+  const textOn = $derived(textColourOn(color, textColor));
   // svelte-ignore state_referenced_locally
   const initialStatus = gateSetting(tabStatusChecks);
   let statusSetting = $state<GateSetting>(initialStatus);
@@ -89,7 +98,7 @@
       statusSetting !== initialStatus && statusSetting !== 'invalid'
         ? statusSetting === 'disabled' ? false : null
         : undefined;
-    onSave(name.trim(), icon || undefined, iconUrl || undefined, iconBgColor, color, opacity, bg, sc);
+    onSave(name.trim(), icon || undefined, iconUrl || undefined, iconBgColor, color, opacity, bg, sc, textColor === 'auto' ? undefined : textColor);
   }
 
   function handleBackgroundSave(background: Background | undefined) {
@@ -159,6 +168,11 @@
       opacity={opacity}
       onSelect={(o) => opacity = o}
     />
+
+    <div class="text-colour-row">
+      <TextColourSetting name="tab-text-color" bind:value={textColor} contrast={textOn.contrastWarning ? textOn.contrast : null}
+        noColourNote={textOn.themed ? 'Text colour applies when the tab has a colour.' : null} />
+    </div>
 
 
     <StatusCheckSetting level="tab" bind:value={statusSetting} context={statusContext} />
@@ -293,6 +307,10 @@
     color: var(--accent-text);
     font-size: 0.875rem;
     font-weight: 500;
+  }
+
+  .text-colour-row {
+    margin: 1rem 0 1.5rem;
   }
 
   .form-group {

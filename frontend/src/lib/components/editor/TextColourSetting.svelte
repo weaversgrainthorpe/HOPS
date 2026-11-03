@@ -3,7 +3,9 @@
    * The Text colour choice (Auto / Light / Dark), the same control on the tile and the folder dialog.
    * Auto is the one rule (the more readable of white and black). `contrast` is the contrast of an
    * explicit choice that is hard to read on the colour, or null: the warning is shown only then (never
-   * for Auto, and never where there is no fill to measure against).
+   * for Auto, and never where there is no fill to measure against). `noColourNote` is said when the
+   * choice has no effect yet (an item with no colour of its own shows the theme's text), so picking
+   * Light or Dark is never silently ignored. The component has no outer margin: each dialog spaces it.
    */
   import { MIN_TEXT_CONTRAST, type TextColorMode } from '$lib/utils/colorContrast';
 
@@ -12,8 +14,10 @@
     /** The radio group's name (unique per dialog). */
     name: string;
     contrast?: number | null;
+    /** Shown under the choice when it has no effect yet, e.g. "Text colour applies when the tile has a colour." */
+    noColourNote?: string | null;
   }
-  let { value = $bindable(), name, contrast = null }: Props = $props();
+  let { value = $bindable(), name, contrast = null, noColourNote = null }: Props = $props();
   const CHOICES: [TextColorMode, string][] = [['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']];
 </script>
 
@@ -27,6 +31,9 @@
       </label>
     {/each}
   </div>
+  {#if noColourNote}
+    <p class="hint" data-no-colour-note>{noColourNote}</p>
+  {/if}
   {#if contrast !== null && Number.isFinite(contrast) && value !== 'auto'}
     <p class="problem" role="status" data-contrast-warning>
       {value === 'light' ? 'Light' : 'Dark'} text is hard to read on this colour (contrast {contrast.toFixed(1)}:1,
@@ -40,7 +47,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    margin: 0 0 1.25rem;
+    margin: 0;
     border: none;
     padding: 0;
     min-width: 0;
@@ -64,6 +71,11 @@
     font-weight: 400;
     font-size: 0.875rem;
     color: var(--text-primary);
+  }
+  .hint {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
   }
   /* On every preset, light and dark, the error text token reaches 4.5:1. */
   .problem {

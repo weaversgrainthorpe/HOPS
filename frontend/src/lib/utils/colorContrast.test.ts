@@ -63,14 +63,21 @@ describe('textColourOn (a tile)', () => {
   });
 
   it('a colour that cannot be read: the theme text, and says so', () => {
-    for (const bad of ['not-a-color', '3b82f6', 'rgb(1,2,3)', '#12345']) {
+    for (const bad of ['not-a-color', '3b82f6', 'rgb(1,2,3)', '#12345', '#1234567']) {
       expect(textColourOn(bad, 'auto')).toMatchObject({ text: 'inherit', themed: true, invalid: true });
     }
   });
 });
 
 describe('parseHex', () => {
-  it('reads #rgb and #rrggbb only (what CSS draws)', () => {
+  it('reads the rgb part of #rgba and #rrggbbaa (alpha ignored): the auto text uses the rgb part', () => {
+    expect(parseHex('#3b82f680')).toEqual([59, 130, 246]);
+    expect(parseHex('#fff8')).toEqual([255, 255, 255]);
+    expect(textColourOn('#3b82f680', 'auto')).toMatchObject({ text: '#000000', themed: false, invalid: false });
+    expect(textColourOn('#0f172acc', 'auto').text).toBe('#ffffff');
+  });
+
+  it('reads #rgb and #rrggbb (what CSS draws)', () => {
     expect(parseHex('#fff')).toEqual([255, 255, 255]);
     expect(parseHex('#3B82F6')).toEqual([59, 130, 246]);
     expect(parseHex('3b82f6')).toBeNull();

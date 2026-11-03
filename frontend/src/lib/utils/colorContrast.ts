@@ -1,10 +1,10 @@
 /**
- * The ONE text-colour rule for every tile and folder (item 16). A coloured item's text is white or
+ * The ONE text-colour rule for every tab, tile and folder (item 16). A coloured item's text is white or
  * black; "Auto" picks whichever of the two contrasts more with the item's colour (the most readable),
  * and an explicit Light or Dark choice wins but is warned about when it falls below
  * MIN_TEXT_CONTRAST. Every Auto text decision in the app goes through `autoTextFor` (tiles via
  * `textColourOn`, folders of every look via deriveFolderColours), so the same colour always gives the
- * same text colour.
+ * same text colour. Coloured dashboard tabs use `textColourOn` too.
  */
 
 /** A tile's or a folder's text colour choice. Missing = 'auto'. */
@@ -18,12 +18,16 @@ export const TEXT_BLACK = '#000000';
 
 export type Rgb = [number, number, number];
 
-/** A #rgb / #rrggbb colour (as CSS draws it), or null when it can't be read. */
+/**
+ * The rgb part of a #rgb / #rgba / #rrggbb / #rrggbbaa colour (as CSS draws it), or null when it can't be
+ * read. An alpha part is ignored: the item draws its colour exactly as stored, and the text is chosen on
+ * its rgb (a Heimdall import can bring #rrggbbaa).
+ */
 export function parseHex(v: unknown): Rgb | null {
   if (typeof v !== 'string') return null;
-  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(v.trim());
+  const m = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(v.trim());
   if (!m) return null;
-  const h = m[1].length === 3 ? [...m[1]].map((c) => c + c).join('') : m[1];
+  const h = m[1].length <= 4 ? [...m[1].slice(0, 3)].map((c) => c + c).join('') : m[1].slice(0, 6);
   const n = parseInt(h, 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }

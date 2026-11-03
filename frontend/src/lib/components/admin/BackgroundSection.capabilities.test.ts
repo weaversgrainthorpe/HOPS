@@ -54,7 +54,7 @@ describe('BackgroundSection renders exactly the capability table', () => {
         expect(has(() => screen.queryByText(/Transition Preview/)), 'preview').toBe(caps.transitionPicker);
         expect(has(() => screen.queryByText(/^Overlay Darkness/)), 'overlay').toBe(caps.overlay);
         expect(has(() => screen.queryByText(/^Overlay Blur/)), 'blur').toBe(caps.overlay);
-        expect(has(() => screen.queryByLabelText(/^Background opacity/)), 'opacity').toBe(caps.opacity);
+        expect(has(() => screen.queryByLabelText(/^(Background|Picture) opacity/)), 'opacity').toBe(caps.opacity);
         expect(has(() => screen.queryByText(SEE_THROUGH_NOTE)), 'see-through note').toBe(caps.overlayNote === 'seeThroughTab');
 
         const folderNote = screen.queryByText(/on this dashboard\. Turn on 'Animated folder backgrounds' in Dashboard settings to play them\./);
@@ -87,7 +87,7 @@ describe('BackgroundSection renders exactly the capability table', () => {
     expect(screen.queryByLabelText(/^Rotation Interval/)).toBeNull();
     expect(screen.queryByLabelText(/^Transition Duration/)).toBeNull();
     expect(screen.queryByText(/^Overlay Darkness/)).toBeNull();
-    expect(screen.getByLabelText(/^Background opacity/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^(Background|Picture) opacity/)).toBeInTheDocument();
   });
 
   it('by hand: tab, see-through — the note in place of darkness and blur; motion controls stay', () => {
@@ -100,7 +100,7 @@ describe('BackgroundSection renders exactly the capability table', () => {
 
   it('by hand: moving the tab opacity slider switches the overlay controls and the note live', async () => {
     const { component } = render(BackgroundSection, { level: 'tab', runtime: { reducedMotion: false }, background: slideshow(1) });
-    const slider = screen.getByLabelText(/^Background opacity/);
+    const slider = screen.getByLabelText(/^(Background|Picture) opacity/);
     expect(screen.getByText(/^Overlay Darkness/)).toBeInTheDocument();
     expect(screen.queryByText(SEE_THROUGH_NOTE)).toBeNull();
     await fireEvent.input(slider, { target: { value: '0.5' } });

@@ -212,7 +212,7 @@ test.describe('backgrounds in a real browser', () => {
     await expect(picker.getByText(/Overlay Darkness/i)).toHaveCount(0);
     await expect(picker.getByText(/Overlay Blur/i)).toHaveCount(0);
     await picker.locator(`.image-card img[src="${PRESET}"]`).first().click();
-    await picker.getByLabel(/^Background opacity/).fill('0.5');
+    await picker.getByLabel(/^Picture opacity/).fill('0.5');
     await picker.getByRole('button', { name: /^Save Background/ }).click();
     await expect(picker).toBeHidden();
     await expect(dlg.locator('.background-status')).toContainText(/Image, 50% opacity/);

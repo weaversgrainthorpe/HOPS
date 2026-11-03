@@ -193,7 +193,7 @@ describe('BackgroundConfigModal at every level', () => {
     it('a slideshow keeps a stored value, and changing one field writes only that field', async () => {
       const bg: Background = { type: 'slideshow', images: ['/presets/network-grid.jpg'], value: '/backgrounds/old.jpg' };
       const { onSave } = open('folder', structuredClone(bg));
-      await fireEvent.input(screen.getByLabelText(/^Background opacity/), { target: { value: '0.5' } });
+      await fireEvent.input(screen.getByLabelText(/^(Background|Picture) opacity/), { target: { value: '0.5' } });
       await save();
       expect(onSave.mock.calls[0][0]).toEqual({ ...bg, opacity: 0.5 });
     });
@@ -244,7 +244,7 @@ describe('BackgroundConfigModal at every level', () => {
 
   it('one opacity slider writes background.opacity (0–1)', async () => {
     const { onSave } = open('folder', { type: 'image', value: '/presets/network-grid.jpg' });
-    const slider = screen.getByLabelText(/^Background opacity/) as HTMLInputElement;
+    const slider = screen.getByLabelText(/^(Background|Picture) opacity/) as HTMLInputElement;
     expect(slider.type).toBe('range');
     expect(slider.min).toBe('0');
     expect(slider.max).toBe('1');
@@ -262,7 +262,7 @@ describe('BackgroundConfigModal at every level', () => {
 
   it('a colour background gets the opacity slider too (dashboard and tab levels)', () => {
     open('tab', { type: 'color', value: '#112233' });
-    expect(screen.getByLabelText(/^Background opacity/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^(Background|Picture) opacity/)).toBeInTheDocument();
   });
 
   it('an invalid custom URL shows an inline error and is not added', async () => {

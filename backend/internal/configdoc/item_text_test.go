@@ -103,3 +103,24 @@ func TestTextColourAndDescription_RoundTrip(t *testing.T) {
 		t.Errorf("folder description = %v, want Media things", kids[1].(Obj)["description"])
 	}
 }
+
+// A tab's textColor follows the same rule (tabs use the one text rule too).
+func TestVerify_TabTextColour(t *testing.T) {
+	for _, ok := range []any{nil, "auto", "light", "dark"} {
+		d := currentDash()
+		if ok != nil {
+			d["tabs"].([]any)[0].(Obj)["textColor"] = ok
+		}
+		if err := VerifyDashboard(d); err != nil {
+			t.Errorf("tab textColor %v refused: %v", ok, err)
+		}
+	}
+	for _, bad := range []any{"white", "", 1.0} {
+		d := currentDash()
+		d["tabs"].([]any)[0].(Obj)["textColor"] = bad
+		err := VerifyImportedDashboard(d)
+		if err == nil || !strings.Contains(err.Error(), "textColor") {
+			t.Errorf("tab textColor %v: %v, want a refusal naming textColor", bad, err)
+		}
+	}
+}
