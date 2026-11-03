@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+This release is mostly about consistency and polish: pages, dialogs and
+buttons now look and read the same everywhere, and text stays readable on
+any colour you pick. It also makes moving dashboards between HOPS installs
+a one-file job, with a say over what gets imported. And many things that
+used to fail quietly now tell you what went wrong.
+
 ### What you'll notice
 Most of this release is about making HOPS easier to read and quicker to
 learn. A few things look different after upgrading, and each one is there
@@ -36,202 +42,233 @@ for a reason:
   Reinstall HOPS on your phone to get the new icon.
 
 ### Added
-- **"When minimised, show" for folders.** In a folder's dialog, choose
-  **Icons inside** (as before) or **Its own icon**. With its own icon, a
-  minimised folder shows the icon you gave it instead of a preview of what is
-  inside. If the folder has no icon yet, it keeps showing the icons inside, and
-  the dialog says so.
-- **An eye on every password field** shows or hides what you typed, in every
-  browser. It goes back to dots when you submit.
-- **About shows whether this browser has the offline copy,** and why not. If
-  the copy can't be saved, HOPS now says so on screen instead of only in the
-  browser's console. See HTTPS in DEPLOY.md: browsers only allow the copy on
-  `https://` addresses and `localhost`.
-
-- **Show the edit and Settings buttons when signed out.** A new setting under
-  Settings › Global settings › General, on by default. Off, people who aren't
-  signed in don't see the pencil or the gear, and the bar stays that way until
-  you sign in. To sign in when they're hidden, go to `/settings` on your HOPS
-  address. Bookmark it. That address always asks for the password, on or off.
-  An installed HOPS app always keeps the gear, since it has no address bar.
-  If HOPS can't read the setting, the buttons show. This only tidies the bar:
-  who can sign in and what they can do stay the same.
-- **Text colour for tiles and tabs** (Auto, Light, Dark), as folders have,
-  with the same warning when the text would be hard to read.
-- **Folders can have a description,** as tiles can.
-- **Duplicate in the tile dialog,** as in the folder dialog. In both, it
-  waits until you've saved your changes.
-- **Export all** on Settings › Dashboards saves every dashboard in one file.
-  It isn't a backup: a backup is the whole app (settings, icons and so on).
-  Import reads it back, as well as a single-dashboard export.
-- **Import asks before it changes anything.** It lists the file's dashboards
-  first. One with the same name as one you have offers **Replace**, **Keep
-  both** (the new one becomes "Name (2)") or **Skip**, and any other can be
-  added or skipped, so you can take only part of a file. Replace keeps your
-  dashboard's address, so links and bookmarks still work. Afterwards a summary
-  says what was added, replaced, renamed and skipped.
+- **Move all your dashboards to another HOPS in one go.** **Export all**
+  saves every dashboard in one file, ready to import on another install. Find
+  it on Settings › Dashboards, or in the top bar's export dialog, which now
+  saves the same file. It holds dashboards only: for settings, icons and the
+  theme, use a backup (Settings › Backups). Import reads this file as well as
+  a single-dashboard export.
+- **Choose what an import does before anything changes.** Import first lists
+  the dashboards in the file. For one with the same name as one you have,
+  pick **Replace** (yours is swapped for the file's), **Keep both** (the new
+  one becomes "Name (2)") or **Skip**. Any other can be added or skipped, so
+  you can take just part of a file. Replace keeps your dashboard's address, so
+  links and bookmarks still work. Afterwards a summary says what was added,
+  replaced, renamed and skipped.
+- **Keep the top bar tidy for people who aren't signed in.** A new setting,
+  **Show the edit and Settings buttons when signed out** (Settings › Global
+  settings › General), is on by default. Turn it off and visitors don't see
+  the pencil or the gear until you sign in. To sign in while they're hidden,
+  go to `/settings` on your HOPS address, so bookmark it: it always asks for
+  the password. An installed HOPS app always keeps the gear, since it has no
+  address bar. If HOPS can't read the setting, the buttons show. This only
+  hides buttons: who can sign in and what they can do stay the same.
+- **A minimised folder can show its own icon.** In a folder's dialog,
+  **When minimised, show** lets you choose **Icons inside** (a preview of
+  what's in it, as before) or **Its own icon** (the icon you gave the folder).
+  If the folder has no icon yet, it keeps showing the icons inside, and the
+  dialog says so.
+- **Choose the text colour on tiles and tabs,** as you already could on
+  folders. **Text colour** in the tile and tab dialogs offers Auto, Light and
+  Dark, and warns you when the text would be hard to read.
+- **Give a folder a description,** as you can a tile. It shows when you hover
+  over the folder.
+- **Duplicate a tile from its dialog,** as you can a folder. In both dialogs,
+  **Duplicate** waits until you've saved your changes, so the copy is never of
+  a half-edited item.
+- **See what you typed in a password box.** Every password box has an eye
+  that shows or hides what you typed, in every browser. It goes back to dots
+  when you submit.
+- **Find out whether this browser can open HOPS when it's unreachable.**
+  About now shows **Offline copy**: whether this browser holds a copy of HOPS
+  for when the server can't be reached, and if not, why not. If the copy
+  can't be saved, HOPS says so on screen instead of keeping quiet. Browsers
+  only allow the copy on `https://` addresses and `localhost`; see HTTPS in
+  DEPLOY.md.
 
 ### Changed
+- **Buttons you only learn once.** Save, Discard, Undo, Redo, Cancel, Close,
+  Delete, Duplicate and Reset to default each have one icon, one word and one
+  style on every page, in every dialog and banner, and in the edit toolbar.
+  Delete is the same red everywhere, disabled buttons look the same, and a
+  hovered button stays readable in every colour theme. Tab order now says
+  Undo, Discard, Save, and Global settings says Discard instead of Revert.
+- **Save is always in the same place,** so you don't have to look for it:
+  Cancel, then the main action, at the right-hand end. In the edit toolbar,
+  the add buttons and Dashboard moved to the left and Save to the right. On a
+  phone, Save stays in view while the toolbar scrolls. Each setting in
+  Settings, the dashboard list, Add to HOPS and renaming an icon category
+  follow the same layout.
+- **Dialogs read the same everywhere, so there's less to learn.** The tile
+  dialog now has the folder dialog's sections, order and words: Colour,
+  Display, Status check, Move or copy. The tab dialog has a Colour section
+  like theirs (Name, Icon, Background opacity). The same thing has the same
+  name in each: "Subtitle/Description" is now "Description", a folder's
+  "Opacity" is "Background opacity", the slider for a folder's background
+  picture is "Picture opacity", and the colour picker is "Colour" in every
+  dialog. Titles, buttons and labels are in sentence case throughout ("Add
+  tile", "Export dashboards", "Text colour"). The top bar's export dialog is
+  now "Export dashboards" and says what an export holds, and that settings
+  and the theme are in Backups.
+- **Text stays readable whatever colour you choose.** On a coloured tile,
+  folder or tab, Auto now picks whichever of white or black is easier to
+  read. Before, tiles and tabs always used white and folders used another
+  rule, so the same colour could give different text. Some of your tiles and
+  tabs now show black text; set **Text colour** to Light to keep white.
+- **Hover over anything to see what it is.** Hovering a tile or folder, or
+  moving to it with the keyboard, shows one popup: its name in larger text,
+  then its description, then any notes such as the away address. Before,
+  tiles showed the browser's small tooltip (the description, not the name)
+  and folders showed nothing.
+- **A dashboard opens sooner when you have many.** Opening a dashboard loads
+  only that one; the others arrive in the background. HOPS shows that they
+  are still loading, and if they can't be loaded it says so, with **Retry**.
+  With 100 dashboards of 1,000 items each, the first tile appeared about 52%
+  sooner on a mobile connection (1.2 s instead of 2.5 s), with 74% less to
+  download first. With one dashboard, or a handful, it's as quick as before.
+  Editing, exporting and the pencil wait until every dashboard has loaded,
+  and say so.
+- **Tiles make better use of their space.** The name sits at the top and the
+  icon fills the rest, with room kept for one line of description, so tiles
+  in a row line up whether or not they have one. Minimised folders follow the
+  same rule and their icons fill the space. A minimised folder with a tab
+  shows its name in the tab, as it does when open; a Rounded folder, or one
+  too small for a readable tab (Small folders included), shows its name at
+  the top like a tile. A long one-word name shrinks to fit, a joined-up name
+  such as "HomeAssistant" breaks at its capital ("Home / Assistant") rather
+  than mid-word, and small names can take two lines.
+- **A folder inside a folder always opens fully.** Before, a sub-folder that
+  didn't fit in its outer folder said "Not enough room", and someone just
+  viewing couldn't fix that. Now the outer folder is drawn taller, up to about
+  one screen, and whatever is below moves down; past that, the page bar pages
+  through the rest. Only what you see changes: your saved layout stays as it
+  is. An empty sub-folder now says "Empty folder".
+- **Global settings are easier to scan.** Every setting has its description
+  on the left, then the control, then Reset to default, Discard and Save
+  beside it. Boxes are sized to what goes in them: the port box fits five
+  digits.
+- **Reordering works the same for dashboards and tabs.** Settings ›
+  Dashboards and Tab order both have large, clear buttons to move to the top,
+  up, down and to the bottom. Dashboards gained the top and bottom ones.
+- **The tab bar is easier to use by touch and keyboard.** The `«` `‹` `›` `»`
+  arrows are bigger (44 px) and easier to hit on a touch screen. The Tab key
+  stops once on the row of tabs, then Left, Right, Home and End move between
+  them, in edit mode too. While you drag, a tab near the end of the row can be
+  held open.
+- **A coloured tab keeps its colour when you hover over it.** It shows hover
+  with its border instead of brightening, so its text stays readable. In edit
+  mode, a tab colour HOPS can't read is marked, and a line under the tabs says
+  which tab and why.
+- **Closing search is quicker.** Esc closes it wherever you are in it, and the
+  **Esc** hint in the search box is now a button you can click or tap.
+- **Tab order is safer to use.** Settings › Dashboards › Tab order announces
+  each move to screen readers, warns you once about unsaved changes when you
+  leave, and checks the result when you save.
 - **The app icon matches the logo.** The home-screen, browser-tab and iPhone
   icons now use the bunny and three hop cones from the logo in the top bar,
-  instead of an older, simpler drawing. Reinstall HOPS on a phone to see it.
-- **Buttons look and read the same everywhere.** Save, Discard, Undo, Redo,
-  Cancel, Close, Delete, Duplicate and Reset to default each have one icon
-  (the edit toolbar's), one word and one style in every page, dialog and
-  banner, and the edit toolbar uses the same buttons as the pages. Tab order
-  says Undo, Discard, Save; Global settings says Discard instead of Revert.
-  Delete is the same red everywhere, disabled buttons look the same
-  everywhere, and a hovered button stays readable in every colour theme.
-- **Dialogs read the same everywhere.** The tab dialog now has a Colour
-  section like the tile and folder dialogs ("Name", "Icon", "Background
-  opacity"), the colour picker is called Colour (UK spelling) in every
-  dialog, and the top-bar export dialog is "Export dashboards", saying what
-  an export holds and that settings and the theme are in Backups.
-- **One hover popup for tiles and folders.** Hovering a tile or folder, or
-  moving to it with the keyboard, shows its name in larger text, then its
-  description, then any notes such as the away address. Before, tiles showed
-  the browser's small tooltip (the description instead of the name) and
-  folders showed nothing.
-- **One text colour rule everywhere.** On a coloured tile, folder or tab,
-  Auto now picks whichever of white or black is easier to read. Before, tiles
-  and tabs always used white and folders used another rule, so the same colour
-  could give different text. Some tiles and tabs now show black text.
-- **The tile dialog matches the folder dialog:** the same sections, order and
-  words (Colour, Display, Status check, Move or copy). "Subtitle/Description"
-  is now "Description", a folder's "Opacity" is "Background opacity", and the
-  slider for a folder's background picture is "Picture opacity".
-- **A coloured tab shows hover with its border,** not by brightening, so its
-  text stays readable. In edit mode, a tab colour HOPS can't read is marked
-  and a line under the tabs says which tab and why.
-- **The top bar's Export All Dashboards** saves the same dashboards-only file
-  as Export all. Settings and theme are in backups.
-- **Tiles use their space.** The name sits at the top and the icon takes the
-  rest of the tile, with room kept for one line of description, so tiles in a
-  row line up whether or not they have one. Minimised folders follow the same
-  rule and their icons fill the space. A minimised folder with a tab shows its
-  name in the tab, as it does when open. A Rounded folder, or one too small for
-  a readable tab, shows its name at the top like a tile, Small folders
-  included. A long one-word name shrinks
-  to fit, and a joined-up name such as "HomeAssistant" breaks at its capital
-  ("Home / Assistant") rather than mid-word. Small names can take two lines.
-- **Settings › Global settings lines up.** Every setting has its description
-  on the left, then the control, then Reset to default, Discard and Save beside
-  it. Boxes are sized to what goes in them: the port box fits five digits.
-- **One set of reorder buttons:** Settings › Dashboards and Tab order both
-  have to top, up, down and to bottom, large and clear. Dashboards gained to
-  top and to bottom.
-- **Opening a folder inside a folder makes room for all its items.** Before,
-  a sub-folder that didn't fit its outer box said "Not enough room", and a
-  viewer couldn't fix that. Now the outer box is drawn taller, up to about one
-  screen, and whatever is below moves down. Past that, the page bar pages the
-  rest. Only what you see changes: the saved layout stays as it is. An empty
-  sub-folder now says "Empty folder".
-- **Opening a dashboard loads only that dashboard.** The others arrive in the
-  background, and HOPS shows that they are still loading, and says if they
-  can't be loaded, with **Retry**. On the stress-test set of 100 dashboards
-  with 1,000 items each, the first tile now appears about 52% sooner on a
-  mobile connection (1.2 s instead of 2.5 s), with 74% less downloaded before
-  it. A setup with one dashboard, or a handful, loads in the same time as
-  before. Editing, exporting and the pencil wait until every dashboard has
-  loaded, and say so.
-- **Search closes with Esc wherever focus is,** and the **Esc** hint in the
-  search box is now a button you can click or tap.
-- **Tab bar:** the `«` `‹` `›` `»` arrows are bigger (44 px) and easier to hit
-  on a touch screen, and the Tab key stops once on the row of tabs, then Left,
-  Right, Home and End move between them, in edit mode as well. While you drag,
-  a tab near the end of the row can be held open.
-- **Save is in the same place everywhere:** Cancel, then the main action, at
-  the right-hand end. In the edit toolbar, the add buttons and Dashboard moved
-  to the left and Save to the right. On a phone, Save stays in view while the
-  toolbar scrolls. Each setting in Settings, the dashboard list, Add to HOPS and
-  renaming an icon category now match.
-- **Tab order** (Settings) says what it did when you move tabs, for screen
-  readers, warns about unsaved changes once when you leave, and checks the
-  result when you save.
+  instead of an older, simpler drawing. Reinstall HOPS on your phone to get
+  it.
 
 ### Fixed
-- **An import file with one broken dashboard imports nothing,** instead of
-  quietly importing the rest, and HOPS says which dashboard and why. Importing
-  a backup file says it is a backup and points to Settings › Backups.
-- **Importing a dashboard with fields HOPS doesn't recognise says so.** They
-  are still imported, but before and after the import HOPS lists them for each
-  dashboard, instead of keeping them without a word.
-- **Upgrading from HOPS 2 says which of its settings didn't come across.** A
-  light/dark mode, custom CSS, search shortcut or default dashboard you had
-  changed has no HOPS 3 equivalent. A one-time notice now names each one and
-  what to do instead, and importing a HOPS 2 file lists them too. Before,
-  they were dropped without a word.
-- **Import says what is wrong with a file it can't read.** A file that is cut
-  off or damaged, an empty file, and an export from a newer HOPS are each
-  named as such, instead of "Could not detect the file format". Sending more
-  than one file at once is refused, instead of importing only the first.
-- **Tile and folder descriptions are limited to 2,000 characters,** checked
-  when you save or import, naming the item. A longer one you already have is
-  kept while you leave it unchanged.
-- **Opening HOPS when it can't be reached now shows the app.** Before, a page
-  that wasn't already in the browser's cache was a bare white "Offline". Now
-  it shows your dashboards as last seen, with a banner saying so. When HOPS is
-  back the page updates by itself, unless you are editing. The banner also
-  comes up when HOPS can't be reached but your own network is fine: before,
-  old data could show with no warning. Settings no longer asks you to sign in
+
+#### When HOPS can't be reached
+- **HOPS opens even when the server can't be reached.** It used to show a
+  bare white "Offline" page for any page the browser hadn't kept. Now it
+  shows your dashboards as last seen, with a banner saying so, and updates
+  by itself when HOPS is back (unless you are editing). The banner also comes
+  up when HOPS is down but your own network is fine: before, old dashboards
+  could show with no warning. Settings no longer asks you to sign in just
   because the server can't be reached.
-- **A saved copy that can't be updated says why,** with **Retry**, instead of
-  a general notice.
-- **On a very slow connection a dashboard opens from its saved copy.** If HOPS
-  hasn't answered after 45 seconds and this browser has a copy, it shows the
-  copy with the banner, instead of failing at 60 seconds. HOPS's late answer
-  still updates the copy. With no copy, it keeps waiting as before.
-- **A sign-in page from a proxy can no longer be saved as the offline page.**
-  HOPS checks that it really got its own page first.
-- **The status tick in the header changes with the offline banner,** instead of
-  staying green for up to 30 seconds.
-- **Search says "the loaded dashboards"** until they have all arrived, and a
-  failed retry can no longer leave "Loading the other dashboards" on screen.
-- **A folder opened inside another folder lost its icon.** It now shows its
-  icon in its title bar, and the icon fits the bar.
-- **A white line along the tab bar in the light theme** is gone.
-- **A backup holding incomplete dashboards is refused,** when uploaded and when
-  restored, and says why. Your current data stays as it was. Such a file can't
-  come from HOPS, but restored it would have stopped the dashboards loading.
-- **A `?` in the data folder's path stopped HOPS starting.** It starts, and
-  keeps its database there.
-- **A data folder on a network share (`\\server\share\…`) works on Windows,**
-  including backups and reset-password. If the share can't keep HOPS's
-  database in its normal mode, the log warns and Settings shows a notice,
-  instead of saying nothing.
-- **A Windows path ending in a backslash gets a plain error.** In PowerShell
-  and cmd, `--data "C:\HOPS Data\"` passes a stray quote mark, and Windows only
-  said the "syntax is incorrect". HOPS now says to remove the trailing `\`.
+- **A dashboard opens on a very slow connection.** If HOPS hasn't answered
+  after 45 seconds and this browser has a saved copy, you get the copy with
+  the banner, instead of an error at 60 seconds. HOPS's late answer still
+  updates the copy. With no copy, it keeps waiting as before.
+- **When the saved copy can't be updated, you're told why,** with **Retry**,
+  instead of a general notice.
+- **The status tick in the header now agrees with the offline banner,**
+  instead of staying green for up to 30 seconds after HOPS went down.
+- **A sign-in page from a proxy in front of HOPS can no longer be kept as the
+  offline page.** HOPS checks that it really got its own page first.
+- **Search is honest while dashboards are loading.** It says it searched "the
+  loaded dashboards" until they have all arrived, and a failed retry no
+  longer leaves "Loading the other dashboards" stuck on screen.
+- **Add to HOPS shows one notice** when HOPS can't be reached, not a pile of
+  them.
+
+#### Importing, upgrading and backups
+- **An import file with a broken dashboard no longer half-imports.** It used
+  to import the rest without a word; now nothing is imported, and HOPS says
+  which dashboard is broken and why. Importing a backup file says it is a
+  backup and points you to Settings › Backups.
+- **Import tells you what's wrong with a file it can't read.** A cut-off or
+  damaged file, an empty file and an export from a newer HOPS are each named
+  as such, instead of "Could not detect the file format". Choosing more than
+  one file at once is refused, instead of quietly importing only the first.
+- **Import tells you about parts of a dashboard HOPS doesn't recognise.**
+  They are still imported, but HOPS lists them for each dashboard before and
+  after the import, instead of keeping them without a word.
+- **Upgrading from HOPS 2 tells you which settings didn't come across.** A
+  light/dark mode, custom CSS, search shortcut or default dashboard you had
+  changed has no HOPS 3 equivalent, and used to be dropped silently. A
+  one-time notice now names each one and what to do instead, and importing a
+  HOPS 2 file lists them too.
+- **A backup with incomplete dashboards is refused instead of breaking
+  HOPS.** Restored, such a file would have stopped your dashboards loading.
+  HOPS now refuses it when you upload it and when you restore it, says why,
+  and leaves your current data as it was. (HOPS itself never makes such a
+  file.)
+- **Very long descriptions are caught when you save or import.** Tile and
+  folder descriptions are limited to 2,000 characters, and the message names
+  the item. A longer one you already have is kept as long as you leave it
+  unchanged.
+
+#### Discovery
 - **Discovery with an internal domain no longer lists services you don't
-  have.** When a domain answers every name (wildcard DNS) and a proxy replies
-  to unknown names with an empty page, every name HOPS tried looked found.
-  Now an empty page doesn't count, HOPS compares each name's page with a
-  made-up name's page and keeps only the ones that differ, and the scan says
-  that the domain answers every name.
-- **Discovery only adds what you can see.** After a re-scan the list shows
-  what's new, but the "selected" count and **Promote** also took in ticked
-  results the filter hid, so Promote could add tiles you hadn't seen. Now
-  only the rows shown count and are added; ticks on hidden rows are kept, and
-  a line says how many there are, with **Show all**.
-- **A re-scan no longer calls domain names "changed" when they aren't.**
-  Names found through your domain often share one proxy's address, and the
-  comparison with the last scan mixed them up. Each name is now compared
-  with itself. The filter is called **New or changed**, and results already
-  on offer in the last scan are no longer ticked for you.
-- **Discovery's filter buttons look like buttons.** On a re-scan (New or
-  changed / All / Gone) and on Detectors (All / Bundled / User), the chosen
-  one is filled and the others are outlined.
+  have.** If your domain answers for any name you ask about, and your proxy
+  replies to unknown names with an empty page, every name HOPS tried looked
+  like a find. Now an empty page doesn't count, HOPS keeps only names whose
+  page differs from that of a made-up name, and the scan says the domain
+  answers every name.
+- **Promote only adds the results you can see.** After a re-scan, the
+  "selected" count and **Promote** also took in ticked results the filter
+  hid, so Promote could add tiles you hadn't seen. Now only the rows shown
+  count and are added. Ticks on hidden rows are kept, and a line says how
+  many there are, with **Show all**.
+- **A re-scan no longer calls names "changed" when they aren't.** Names found
+  through your domain often share one proxy's address, and the comparison
+  with the last scan mixed them up. Each name is now compared with itself.
+  The filter is now called **New or changed**, and results already offered in
+  the last scan are no longer ticked for you.
 - **Every result shows while a scan runs.** A service found in the same
-  second as the one before it could be missing from the list until you
-  reopened the page.
-- **An outlined folder no longer offers an opacity it can't use.** It is
-  see-through, so its colour draws only the outline: Background opacity is
-  hidden for it, with a line saying why, and an opacity saved under another
-  look no longer fades the outline. Its Text colour is used as chosen.
-- **Notices sit above the edit toolbar,** so an error never covers Save.
-- **Add to HOPS shows one notice** when HOPS can't be reached, not several.
-- **Settings › Dashboards no longer runs off the right-hand edge** with a long
-  dashboard name or address.
+  second as the one before it could be missing until you reopened the page.
+- **Discovery's filter buttons look like buttons.** On a re-scan (New or
+  changed, All, Gone) and on Detectors (All, Bundled, User), the chosen one is
+  filled and the others are outlined.
+
+#### Installing and running HOPS
+- **HOPS starts when its data folder's path has a `?` in it.** It used to
+  fail to start; now it starts and keeps its database there.
+- **On Windows, a data folder on a network share (`\\server\share\…`)
+  works,** including backups and reset-password. If the share can't hold
+  HOPS's database the usual way, the log warns and Settings shows a notice,
+  instead of saying nothing.
+- **On Windows, a data folder path ending in a backslash gets a clear
+  message.** In PowerShell and cmd, `--data "C:\HOPS Data\"` passes a stray
+  quote mark, and Windows only said the "syntax is incorrect". HOPS now tells
+  you to remove the trailing `\`.
+
+#### On screen
+- **A folder opened inside another folder shows its icon again,** in its
+  title bar, sized to fit.
+- **An outlined folder no longer offers an opacity it can't use.** An
+  outlined folder is see-through, so its colour only draws the outline.
+  Background opacity is hidden for it, with a line saying why, and an opacity
+  saved under another look no longer fades the outline. Its Text colour is
+  used as you chose it.
+- **Notices no longer cover Save.** They now sit above the edit toolbar.
+- **Settings › Dashboards no longer runs off the right-hand edge** when a
+  dashboard has a long name or address.
+- **The white line along the tab bar in the light theme** is gone.
 
 ## [3.0.1] - 2026-10-30 — One row of tabs, and big setups that stay quick
 
