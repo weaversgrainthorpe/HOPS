@@ -16,8 +16,8 @@ const sizes = [
 ];
 
 for (const { name, size, src } of sizes) {
-  // High density so the SVG is rasterised at the target size, not upscaled.
-  await sharp(src, { density: (72 * size) / 32 })
+  // High density so the SVG (200-unit viewBox) is rasterised at the target size, not upscaled.
+  await sharp(src, { density: (72 * size) / 200 })
     .resize(size, size)
     .png()
     .toFile(`static/${name}`);

@@ -44,6 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   says what was added, replaced, renamed and skipped.
 
 ### Changed
+- **The app icon matches the logo.** The home-screen, browser-tab and iPhone
+  icons now use the bunny and three hop cones from the logo in the top bar,
+  instead of an older, simpler drawing. Reinstall HOPS on a phone to see it.
 - **Buttons look and read the same everywhere.** Save, Discard, Undo, Redo,
   Cancel, Close, Delete, Duplicate and Reset to default each have one icon
   (the edit toolbar's), one word and one style in every page, dialog and
