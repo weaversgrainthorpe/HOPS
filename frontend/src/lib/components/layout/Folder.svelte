@@ -47,6 +47,7 @@
   import { drag, dragSource } from '$lib/editor/drag/dragController';
   import { crumbDwellKey, pageDwellKey } from '$lib/editor/drag/targets';
   import { COLLAPSED_HINT } from '$lib/editor/resize';
+  import { hoverCard, folderHoverContent } from '$lib/utils/hoverCard';
   import { focusFolderControl } from '$lib/utils/overlayActions';
   import ResizeHandles from '../editor/ResizeHandles.svelte';
   import EditHandle from '../editor/EditHandle.svelte';
@@ -118,6 +119,9 @@
   const showRestore = $derived(!editing && !item && !!views && differsFromSaved(saved, remembered));
   /** The folder's name in its controls' labels, as an inset box's ("Untitled folder" when it shows none). */
   const boxName = $derived(folder.showTitle === false || !folder.name?.trim() ? 'Untitled folder' : folder.name);
+  /** Its description, for screen readers (the hover popup shows it too; the popup itself is hidden from them). */
+  const descId = $props.id();
+  const hasDesc = $derived(!!folder.description?.trim());
 
   /** The clicked control is about to unmount: hand focus to whatever replaces it. */
   async function thenFocus() {
@@ -636,11 +640,12 @@
           data-crumb={innermost ? undefined : sub.id}
           style:left="{subTab.leftPx}px"
           style:width="{subTab.widthPx}px"
+          use:hoverCard={folderHoverContent({ name: shownName, description: sub.description }, innermost ? [] : [`Back to ${shownName}`])}
         >
           {#if untitled}
             <!-- An untitled tab is small and empty; its name is still the controls' and the go-up's. -->
             {#if !innermost}
-              <button type="button" class="title-button tab-fill" aria-label="Back to {shownName}" title="Back to {shownName}" onclick={(e) => goUp(e, k)} ondblclick={own}></button>
+              <button type="button" class="title-button tab-fill" aria-label="Back to {shownName}" onclick={(e) => goUp(e, k)} ondblclick={own}></button>
             {/if}
           {:else if innermost}
             {@render headerIcon(sub, true)}
@@ -648,13 +653,13 @@
           {:else}
             {@render headerIcon(sub, true)}
             <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <button type="button" class="title-button tab-name" title="Back to {shownName}" onclick={(e) => goUp(e, k)} ondblclick={own}>{shownName}</button>
+            <button type="button" class="title-button tab-name" onclick={(e) => goUp(e, k)} ondblclick={own}>{shownName}</button>
           {/if}
         </div>
         <span class="title-space"></span>
       {:else if innermost}
         {@render headerIcon(sub, false, true)}
-        <span class="nested-name" class:muted={untitled} aria-current="page">{shownName}</span>
+        <span class="nested-name" class:muted={untitled} aria-current="page" use:hoverCard={folderHoverContent({ name: shownName, description: sub.description })}>{shownName}</span>
       {:else}
         {@render headerIcon(sub, false, true)}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -662,7 +667,7 @@
           type="button"
           class="title-button nested-name"
           class:muted={untitled}
-          title="Back to {shownName}"
+          use:hoverCard={folderHoverContent({ name: shownName, description: sub.description }, [`Back to ${shownName}`])}
           onclick={(e) => goUp(e, k)}
           ondblclick={own}>{shownName}</button
         >
@@ -699,7 +704,6 @@
     class:dragging
     data-node-id={folder.id}
     {style}
-    title={editing && !item ? COLLAPSED_HINT : undefined}
     oncontextmenu={editing ? menu : undefined}
     use:dragSource={{ id: folder.id, enabled: editing, onMenu: pressed }}
   >
@@ -710,7 +714,8 @@
       tabindex="0"
       aria-label={collapsedLabel}
       aria-pressed={editing ? selected : undefined}
-      aria-describedby={editing && !item ? `resize-hint-${folder.id}` : undefined}
+      aria-describedby={[hasDesc ? descId : '', editing && !item ? `resize-hint-${folder.id}` : ''].filter(Boolean).join(' ') || undefined}
+      use:hoverCard={folderHoverContent(folder, editing && !item ? [COLLAPSED_HINT] : [])}
       style:color={textColor}
       onclick={onTileClick}
       ondblclick={editing
@@ -799,10 +804,13 @@
     {/if}
     {#if editing}
       {#if !item}
-        <!-- The tooltip's hint, also for touch and screen readers (a minimised folder has no handles). -->
+        <!-- The hover popup's hint, also for screen readers (a minimised folder has no handles). -->
         <span id="resize-hint-{folder.id}" class="sr-only">{COLLAPSED_HINT}</span>
       {/if}
       <EditHandle name={folder.name} onEdit={edit} />
+    {/if}
+    {#if hasDesc}
+      <span id={descId} class="sr-only">{folder.description}</span>
     {/if}
     {#if showRestore}
       <span class="tile-restore">
@@ -823,6 +831,7 @@
     data-node-id={folder.id}
     role="group"
     aria-label="{folder.name} folder"
+    aria-describedby={hasDesc ? descId : undefined}
     {style}
     data-render-grown={!editing && screenExtraRows > 0 ? screenExtraRows : undefined}
     onclick={editing ? select : undefined}
@@ -857,26 +866,27 @@
           data-crumb={levels > 0 ? folder.id : undefined}
           style:left="{topTab.leftPx}px"
           style:width="{topTab.widthPx}px"
+          use:hoverCard={showTitle || levels > 0 ? folderHoverContent({ name: boxName, description: folder.description }, levels > 0 ? [`Back to ${boxName}`] : []) : null}
         >
           {#if showTitle}
             {@render headerIcon(folder, true)}
             {#if levels > 0}
               <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <button type="button" class="title-button tab-name" title="Back to {folder.name}" onclick={(e) => goUp(e, 0)} ondblclick={own}>{folder.name}</button>
+              <button type="button" class="title-button tab-name" onclick={(e) => goUp(e, 0)} ondblclick={own}>{folder.name}</button>
             {:else}
               <span class="tab-name">{folder.name}</span>
             {/if}
           {:else if levels > 0}
-            <button type="button" class="title-button tab-fill" aria-label="Back to {boxName}" title="Back to {boxName}" onclick={(e) => goUp(e, 0)} ondblclick={own}></button>
+            <button type="button" class="title-button tab-fill" aria-label="Back to {boxName}" onclick={(e) => goUp(e, 0)} ondblclick={own}></button>
           {/if}
         </div>
         <span class="title-space"></span>
       {:else if showTitle}
         {@render headerIcon(folder, false)}
-        <h3>
+        <h3 use:hoverCard={folderHoverContent(folder, levels > 0 ? [`Back to ${folder.name}`] : [])}>
           {#if levels > 0}
             <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <button type="button" class="title-button" title="Back to {folder.name}" onclick={(e) => goUp(e, 0)} ondblclick={own}
+            <button type="button" class="title-button" onclick={(e) => goUp(e, 0)} ondblclick={own}
               >{folder.name}</button
             >
           {:else}
