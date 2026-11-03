@@ -120,6 +120,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **An import file with one broken dashboard imports nothing,** instead of
   quietly importing the rest, and HOPS says which dashboard and why. Importing
   a backup file says it is a backup and points to Settings › Backups.
+- **Importing a dashboard with fields HOPS doesn't recognise says so.** They
+  are still imported, but before and after the import HOPS lists them for each
+  dashboard, instead of keeping them without a word.
 - **Opening HOPS when it can't be reached now shows the app.** Before, a page
   that wasn't already in the browser's cache was a bare white "Offline". Now
   it shows your dashboards as last seen, with a banner saying so. When HOPS is

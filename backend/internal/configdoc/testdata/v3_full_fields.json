@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 3,
+  "layoutVersion": 2,
+  "dashboards": [
+    {
+      "id": "full", "name": "Every field", "path": "/full", "revision": 3, "order": 0,
+      "settings": {
+        "statusChecksEnabled": false, "statusCheckIntervalMinutes": 5, "statusCheckTimeoutSeconds": 10,
+        "editIdleTimeoutMinutes": null, "animatedFolderBackgrounds": true
+      },
+      "header": {"leftText": "Left", "centerTitle": "Middle", "showLeft": true, "showCenter": false},
+      "theme": {"color": "#223344", "opacity": 0.8},
+      "background": {
+        "type": "slideshow", "inherit": false, "opacity": 0.9, "value": "",
+        "images": ["/api/backgrounds/a.jpg", "/api/backgrounds/b.jpg"], "interval": 30, "fit": "cover",
+        "transition": "crossfade", "transitionDuration": 1.5, "overlayOpacity": 0.5, "overlayBlur": 4
+      },
+      "tabs": [
+        {
+          "id": "full-t1", "name": "Home", "order": 0, "icon": "mdi:home", "iconUrl": "", "iconBgColor": "#ffffff",
+          "color": "#336699", "opacity": 0.7, "textColor": "light", "statusChecksEnabled": false,
+          "background": {"type": "color", "value": "#101010", "opacity": 1},
+          "root": {
+            "columns": 24,
+            "children": [
+              {
+                "kind": "tile", "id": "full-a", "type": "link", "name": "Plex", "url": "https://plex.example.com",
+                "awayUrl": "https://plex.example.net", "icon": "mdi:plex", "iconUrl": "", "iconBgColor": "#000000",
+                "description": "Films", "openMode": "newtab",
+                "statusCheck": {"type": "http", "enabled": true, "interval": 60},
+                "size": "medium", "color": "#aa3300", "opacity": 0.95, "textOpacity": 1, "iconOpacity": 0.8,
+                "textColor": "dark", "order": 0, "showStatus": true,
+                "placement": {"x": 0, "y": 0, "w": 2, "h": 2, "z": 1}
+              },
+              {
+                "kind": "folder", "id": "full-f", "name": "Apps", "description": "Everyday apps", "icon": "mdi:apps",
+                "iconUrl": "", "iconBgColor": "#eeeeee", "color": "#335533", "opacity": 0.9, "textColor": "auto",
+                "display": "expanded", "size": "medium", "contentSize": "medium", "shape": "simple-tab",
+                "tabPosition": "centre", "minimisedIcon": "own", "showTitle": true, "statusChecksEnabled": false,
+                "order": 1,
+                "background": {"inherit": true, "type": "image", "value": "/api/backgrounds/c.jpg", "fit": "contain"},
+                "placement": {"x": 2, "y": 0, "w": 6, "h": 6},
+                "content": {
+                  "children": [
+                    {
+                      "kind": "tile", "id": "full-b", "type": "note", "name": "Read me", "url": "", "icon": "",
+                      "description": "A note", "openMode": "newtab", "size": "small", "order": 0
+                    },
+                    {
+                      "kind": "folder", "id": "full-g", "name": "Inner", "display": "collapsed", "size": "small",
+                      "contentSize": "small", "shape": "folder-paper", "minimisedIcon": "contents",
+                      "content": {
+                        "children": [
+                          {
+                            "kind": "tile", "id": "full-c", "type": "link", "name": "SSH box",
+                            "url": "ssh://admin@box.example.com:22", "icon": "mdi:console", "openMode": "sametab",
+                            "statusCheck": {"enabled": false}, "size": "large", "order": 0
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "full-t2", "name": "Empty", "order": 1, "textColor": "auto",
+          "root": {"columns": 24, "children": []}
+        }
+      ]
+    }
+  ]
+}

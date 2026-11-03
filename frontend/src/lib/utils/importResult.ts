@@ -14,6 +14,8 @@ export interface ImportResult {
   warning?: string;
   /** What another dashboard's file had that HOPS couldn't bring in (one line per kind). */
   notCarried?: string[] | null;
+  /** Per imported dashboard, the fields HOPS doesn't recognise: kept, but not used (one line each). */
+  unknownFields?: string[] | null;
   /** What was added, replaced, kept alongside (renamed) and skipped. */
   summary?: ImportSummary;
 }
@@ -32,6 +34,8 @@ export interface ImportPreviewRow {
   path: string;
   tabs: number;
   clash: ImportClash | null;
+  /** Which of its fields HOPS doesn't recognise (they are imported, but not used); absent when none. */
+  unknownFields?: string;
 }
 
 export interface ImportPreview {
@@ -97,6 +101,7 @@ export function importProblems(r: ImportResult): string[] {
   // Changed from the file, so shown (never a self-closing success).
   for (const line of r.foldersEnlarged ?? []) out.push(line);
   for (const line of r.notCarried ?? []) out.push(line);
+  for (const line of r.unknownFields ?? []) out.push(line);
   if (r.warning) {
     out.push(r.warning);
   }

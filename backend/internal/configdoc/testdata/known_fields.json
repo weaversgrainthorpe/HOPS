@@ -1,0 +1,121 @@
+{
+  "background": [
+    "fit",
+    "images",
+    "inherit",
+    "interval",
+    "opacity",
+    "overlayBlur",
+    "overlayOpacity",
+    "transition",
+    "transitionDuration",
+    "type",
+    "value"
+  ],
+  "container": [
+    "children",
+    "columns"
+  ],
+  "dashboard": [
+    "background",
+    "header",
+    "id",
+    "name",
+    "order",
+    "path",
+    "revision",
+    "settings",
+    "tabs",
+    "theme"
+  ],
+  "folder": [
+    "background",
+    "color",
+    "content",
+    "contentSize",
+    "description",
+    "display",
+    "icon",
+    "iconBgColor",
+    "iconUrl",
+    "id",
+    "kind",
+    "minimisedIcon",
+    "name",
+    "opacity",
+    "order",
+    "placement",
+    "shape",
+    "showTitle",
+    "size",
+    "statusChecksEnabled",
+    "tabPosition",
+    "textColor"
+  ],
+  "header": [
+    "centerTitle",
+    "leftText",
+    "showCenter",
+    "showLeft"
+  ],
+  "placement": [
+    "h",
+    "w",
+    "x",
+    "y",
+    "z"
+  ],
+  "settings": [
+    "animatedFolderBackgrounds",
+    "editIdleTimeoutMinutes",
+    "statusCheckIntervalMinutes",
+    "statusCheckTimeoutSeconds",
+    "statusChecksEnabled"
+  ],
+  "statusCheck": [
+    "enabled",
+    "interval",
+    "type"
+  ],
+  "tab": [
+    "background",
+    "color",
+    "icon",
+    "iconBgColor",
+    "iconUrl",
+    "id",
+    "name",
+    "opacity",
+    "order",
+    "root",
+    "statusChecksEnabled",
+    "textColor"
+  ],
+  "theme": [
+    "color",
+    "opacity"
+  ],
+  "tile": [
+    "awayUrl",
+    "color",
+    "description",
+    "icon",
+    "iconBgColor",
+    "iconOpacity",
+    "iconUrl",
+    "id",
+    "kind",
+    "name",
+    "opacity",
+    "openMode",
+    "order",
+    "placement",
+    "showStatus",
+    "size",
+    "statusCheck",
+    "textColor",
+    "textOpacity",
+    "type",
+    "url"
+  ]
+}

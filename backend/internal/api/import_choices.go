@@ -73,6 +73,9 @@ type importRow struct {
 	Path  string         `json:"path"`
 	Tabs  int            `json:"tabs"`
 	Clash *importClashTo `json:"clash"`
+	// UnknownFields says which of its fields HOPS doesn't recognise (they are
+	// imported, never dropped); empty when there are none.
+	UnknownFields string `json:"unknownFields,omitempty"`
 }
 
 // importClashTo is the stored dashboard with the same name.
@@ -352,6 +355,35 @@ func (s importSummary) line() string {
 	}
 	line := strings.Join(parts, "; ")
 	return strings.ToUpper(line[:1]) + line[1:]
+}
+
+// maxUnknownListed caps how many unrecognised fields one dashboard's line names.
+const maxUnknownListed = 10
+
+// unknownFieldsText says, in words, which fields of one imported dashboard
+// HOPS doesn't recognise: kept, never dropped, but nothing uses them. done
+// picks the tense: after the import, or in the preview before it. "" when
+// there are none.
+func unknownFieldsText(fs []configdoc.UnknownField, done bool) string {
+	if len(fs) == 0 {
+		return ""
+	}
+	what, verb := fmt.Sprintf("%d fields HOPS doesn't recognise", len(fs)), "were kept but are not used"
+	if len(fs) == 1 {
+		what, verb = "1 field HOPS doesn't recognise", "was kept but is not used"
+	}
+	if !done {
+		verb = "will be kept but not used"
+	}
+	var places []string
+	for _, f := range fs[:min(len(fs), maxUnknownListed)] {
+		places = append(places, f.Where)
+	}
+	list := strings.Join(places, "; ")
+	if more := len(fs) - len(places); more > 0 {
+		list += fmt.Sprintf("; and %d more", more)
+	}
+	return fmt.Sprintf("%s %s: %s", what, verb, list)
 }
 
 func quoted(ss []string) []string {
