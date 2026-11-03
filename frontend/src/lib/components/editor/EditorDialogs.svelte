@@ -120,6 +120,9 @@
         onSave={saveTile}
         onCancel={close}
         onDelete={() => remove(id)}
+        onDuplicate={() => {
+          if (duplicate(id)) close();
+        }}
         onMoveCopy={() => openDialog({ kind: 'movecopy', ids: [id] })}
         {statusContext}
       />

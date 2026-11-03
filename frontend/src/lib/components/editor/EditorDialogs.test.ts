@@ -41,7 +41,7 @@ describe('FolderEditModal', () => {
     const onSave = vi.fn();
     const f = { ...(nodeIn(home(), 'f1') as FolderNode), color: '#112233', opacity: 0.5, textColor: 'dark' as const };
     render(FolderEditModal, { folder: f, onSave, onCancel: vi.fn() });
-    const name = screen.getByLabelText(/Folder name/) as HTMLInputElement;
+    const name = screen.getByLabelText(/^Name/) as HTMLInputElement;
     expect(name.value).toBe('F1');
     await fireEvent.input(name, { target: { value: 'Media' } });
     await fireEvent.click(screen.getByRole('radio', { name: 'Collapsed' }));
@@ -62,7 +62,7 @@ describe('FolderEditModal', () => {
   it('a blank name is refused visibly', async () => {
     const onSave = vi.fn();
     render(FolderEditModal, { folder: nodeIn(home(), 'f1') as FolderNode, onSave, onCancel: vi.fn() });
-    await fireEvent.input(screen.getByLabelText(/Folder name/), { target: { value: '  ' } });
+    await fireEvent.input(screen.getByLabelText(/^Name/), { target: { value: '  ' } });
     await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
     expect(onSave).not.toHaveBeenCalled();
     expect(screen.getByRole('alert').textContent).toMatch(/needs a name/i);
@@ -72,7 +72,7 @@ describe('FolderEditModal', () => {
 describe('EditorDialogs (the dialogs edit the draft only)', () => {
   it('a FolderEditModal save updates the draft only — no api call', async () => {
     await show({ kind: 'folder', id: 'f1' });
-    await fireEvent.input(screen.getByLabelText(/Folder name/), { target: { value: 'Renamed' } });
+    await fireEvent.input(screen.getByLabelText(/^Name/), { target: { value: 'Renamed' } });
     await fireEvent.click(screen.getByRole('radio', { name: 'Collapsed' }));
     await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
     const f = nodeIn(draft(), 'f1') as FolderNode;
@@ -173,7 +173,7 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
 
   it('Add folder: Create inserts a folder at the first free cell of the target (draft only)', async () => {
     await show({ kind: 'folder', to: { tabId: 't1' } });
-    await fireEvent.input(screen.getByLabelText(/Folder name/), { target: { value: 'Tools' } });
+    await fireEvent.input(screen.getByLabelText(/^Name/), { target: { value: 'Tools' } });
     await fireEvent.click(screen.getByRole('button', { name: /^Create/ }));
     const root = draft().tabs[0].root.children;
     const f = root[root.length - 1] as FolderNode;
@@ -193,6 +193,19 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
     await fireEvent.click(screen.getByRole('button', { name: /^Delete/ }));
     await answerConfirm(true);
     expect(nodeIn(draft(), 'f1')).toBeUndefined();
+  });
+
+  it('tile dialog Duplicate copies the tile (a new id) and closes, as the folder dialog does', async () => {
+    await show({ kind: 'tile', id: 'a' });
+    const before = draft().tabs[0].root.children.length;
+    await fireEvent.click(screen.getByRole('button', { name: /^Duplicate/ }));
+    await tick();
+    const root = draft().tabs[0].root.children;
+    expect(root).toHaveLength(before + 1);
+    const copies = root.filter((n) => n.kind === 'tile' && n.name === (nodeIn(draft(), 'a') as TileNode).name);
+    expect(copies).toHaveLength(2);
+    expect(new Set(copies.map((n) => n.id)).size).toBe(2);
+    expect(get(editorDialog)).toBeNull();
   });
 
   it('tile dialog: a v3 tile in, a v3 tile out — kind, id and placement kept, fields updated', async () => {
@@ -362,7 +375,7 @@ describe('FolderEditModal background', () => {
     await fireEvent.click(screen.getByRole('radio', { name: 'Its own picture' }));
     await fireEvent.input(screen.getByLabelText(/^Image URL/), { target: { value: '/presets/network-grid.jpg' } });
     expect(screen.queryByText(/Overlay Darkness/i)).toBeNull();
-    await fireEvent.input(screen.getByLabelText(/^Background opacity/), { target: { value: '0.5' } });
+    await fireEvent.input(document.getElementById('bg-opacity')!, { target: { value: '0.5' } }); // the picker's own slider
     await fireEvent.click(screen.getByRole('button', { name: /^Save Background/ }));
     await tick();
     expect(screen.queryByRole('heading', { name: /Folder background/i })).toBeNull();
@@ -387,7 +400,7 @@ describe('FolderEditModal background', () => {
   it('Cancel discards a picked background: draft unchanged, no undo entry', async () => {
     await show({ kind: 'folder', id: 'f1' });
     const before = draft();
-    await fireEvent.input(screen.getByLabelText(/Folder name/), { target: { value: 'Renamed' } });
+    await fireEvent.input(screen.getByLabelText(/^Name/), { target: { value: 'Renamed' } });
     await pickPicture();
     await fireEvent.click(screen.getByRole('button', { name: /^Cancel$/ }));
     expect(get(editorDialog)).toBeNull();
@@ -399,7 +412,7 @@ describe('FolderEditModal background', () => {
 
   it('Save applies the fields and the background as ONE undo step; undo reverts both', async () => {
     await show({ kind: 'folder', id: 'f1' });
-    await fireEvent.input(screen.getByLabelText(/Folder name/), { target: { value: 'Renamed' } });
+    await fireEvent.input(screen.getByLabelText(/^Name/), { target: { value: 'Renamed' } });
     await pickPicture();
     await fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
     const f = nodeIn(draft(), 'f1') as FolderNode;
@@ -432,7 +445,7 @@ describe('FolderEditModal background', () => {
 
   it('a new folder can get a background, set on Create', async () => {
     await show({ kind: 'folder', to: { tabId: 't1' } });
-    await fireEvent.input(screen.getByLabelText(/Folder name/), { target: { value: 'Tools' } });
+    await fireEvent.input(screen.getByLabelText(/^Name/), { target: { value: 'Tools' } });
     await pickPicture();
     await fireEvent.click(screen.getByRole('button', { name: /^Create/ }));
     const root = draft().tabs[0].root.children;

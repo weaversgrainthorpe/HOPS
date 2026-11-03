@@ -206,7 +206,7 @@ test.describe('the folder dialog order and sections', () => {
     const icon = dlg.getByRole('button', { name: /Edit icon/ });
     const look = dlg.getByRole('radiogroup', { name: 'Look' });
     const tabPos = dlg.getByRole('radiogroup', { name: 'Tab position' });
-    const colour = dlg.getByText('Folder colour', { exact: true });
+    const colour = dlg.locator('.color-label', { hasText: 'Colour' });
     const bgBtn = dlg.getByRole('button', { name: /^Background/ });
     // Measured in one scroll position (the dialog body scrolls), top to bottom.
     const ys: number[] = [];
@@ -409,7 +409,7 @@ test.describe('the folder background is pictures only', () => {
     await expect(picker.getByText(/#c82828/)).toBeVisible();
     await picker.getByRole('button', { name: 'Cancel' }).click();
     // Saving the dialog untouched keeps it exactly.
-    await dlg.getByRole('textbox', { name: /Folder name/ }).fill('Old one');
+    await dlg.getByRole('textbox', { name: /^Name/ }).fill('Old one');
     await dlg.getByRole('button', { name: /^Save/ }).click();
     await saveDraft(page);
     let stored = await storedNode(page, f.id('dash'), f.id('c'));
@@ -427,5 +427,71 @@ test.describe('the folder background is pictures only', () => {
     expect(stored.opacity).toBe(0.7);
     expect(stored).not.toHaveProperty('background');
     await expect(node(page, f.id('c')).locator('.folder-surface .background-root')).toHaveCount(0);
+  });
+});
+
+// Items 16, 18 and 19 (3.1 polish F1): one Auto text rule for tiles and folders, an outlined folder
+// keeps Text colour (hides only Background opacity), and the tile dialog matches the folder dialog.
+const blue = (id: (s: string) => string) => [
+  folder(id('f'), 'Blue folder', { x: 0, y: 0, w: 12, h: 8 }, [kid(id('in1'), 'Inner')], { color: '#3b82f6', shape: 'rounded' }),
+  folder(id('o'), 'Outlined', { x: 13, y: 0, w: 8, h: 8 }, [kid(id('in2'), 'Two')], { color: '#3b82f6', shape: 'folder-outline', opacity: 0.3 }),
+  kid(id('t'), 'Blue tile', { color: '#3b82f6', placement: { x: 0, y: 9, w: 2, h: 2 } })
+];
+
+test.describe('one text colour rule, outlined folders and matching dialogs', () => {
+  test('the same blue gives black text on a tile and on a folder', async ({ page, context }) => {
+    const f = await importDash(page, context, blue);
+    await page.goto(f.path);
+    const tileName = node(page, f.id('t')).locator('.title');
+    await expect(tileName).toHaveCSS('color', 'rgb(0, 0, 0)');
+    await expect(page.locator(`[aria-label="Blue folder folder"]`)).toHaveCSS('color', 'rgb(0, 0, 0)');
+  });
+
+  test('an outlined folder keeps Text colour (no contrast number) and hides only Background opacity', async ({ page, context }) => {
+    const f = await importDash(page, context, blue);
+    await page.goto(f.path);
+    await enterEdit(page);
+    const dlg = await openEdit(page, f.id('o'), 'Edit Folder');
+    await expect(dlg.locator('[data-outline-note]')).toHaveText('An outlined folder is see-through, so its colour draws the outline only and it has no opacity.');
+    await expect(dlg.getByRole('slider', { name: /Background opacity/ })).toHaveCount(0);
+    const text = dlg.getByRole('group', { name: 'Text colour' });
+    await expect(text).toBeVisible();
+    await text.getByRole('radio', { name: 'Light' }).check();
+    await expect(dlg.locator('[data-contrast-warning]')).toHaveCount(0);
+    await dlg.getByRole('textbox', { name: 'Description' }).fill('Things with a line round them');
+    await dlg.getByRole('button', { name: /^Save/ }).click();
+    await expect(dlg).toHaveCount(0);
+    await expect(page.locator(`[aria-label="Outlined folder"]`)).toHaveCSS('color', 'rgb(255, 255, 255)');
+    await saveDraft(page);
+    const stored = await storedNode(page, `${f.id('dash')}`, f.id('o'));
+    expect(stored).toMatchObject({ textColor: 'light', description: 'Things with a line round them', opacity: 0.3 });
+    // Any other look shows Background opacity again.
+    const again = await openEdit(page, f.id('f'), 'Edit Folder');
+    await expect(again.getByRole('slider', { name: /^Background opacity/ })).toBeVisible();
+  });
+
+  test('the tile dialog has the folder dialog sections, Text colour with its warning, and Duplicate', async ({ page, context }) => {
+    const f = await importDash(page, context, blue);
+    await page.goto(f.path);
+    await enterEdit(page);
+    const dlg = await openEdit(page, f.id('t'), 'Edit Tile');
+    for (const h of ['Colour', 'Display', 'Move or copy']) await expect(dlg.getByRole('heading', { name: h, level: 3 })).toBeVisible();
+    await expect(dlg.getByLabel('Description')).toBeVisible();
+    await expect(dlg.getByLabel('Open mode')).toBeVisible();
+    const text = dlg.getByRole('group', { name: 'Text colour' });
+    await expect(text.getByRole('radio', { name: 'Auto' })).toBeChecked();
+    await text.getByRole('radio', { name: 'Light' }).check();
+    await expect(dlg.locator('[data-contrast-warning]')).toContainText('contrast 3.7:1');
+    await text.getByRole('radio', { name: 'Dark' }).check();
+    await expect(dlg.locator('[data-contrast-warning]')).toHaveCount(0);
+    await dlg.getByRole('button', { name: /^Save/ }).click();
+    await expect(dlg).toHaveCount(0);
+    await saveDraft(page);
+    expect(await storedNode(page, f.id('dash'), f.id('t'))).toMatchObject({ textColor: 'dark' });
+
+    const again = await openEdit(page, f.id('t'), 'Edit Tile');
+    await again.getByRole('button', { name: /^Duplicate/ }).click();
+    await expect(again).toHaveCount(0);
+    await expect(page.locator('.tab-canvas').getByText('Blue tile', { exact: true })).toHaveCount(2);
   });
 });

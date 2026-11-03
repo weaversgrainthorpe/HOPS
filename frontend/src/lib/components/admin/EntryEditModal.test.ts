@@ -168,3 +168,95 @@ describe('EntryEditModal URL check', () => {
     editMode.set(false);
   });
 });
+
+// Item 19: the tile dialog matches the folder dialog's sections, order and words; tiles get Text
+// colour (the same control and warning) and a Duplicate button.
+describe('EntryEditModal sections, words and Text colour', () => {
+  beforeEach(() => editMode.set(true));
+  afterEach(() => editMode.set(false));
+  const follows = (a: Element, b: Element) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+  const titles = () =>
+    Array.from(document.querySelectorAll('section.dialog-section')).map((sec) => sec.querySelector('h3, legend')?.textContent?.trim());
+
+  it('Colour, Display, Status check and Move or copy are headed sections in the folder dialog order', async () => {
+    render(EntryEditModal, { entry, onSave: vi.fn(), onCancel: vi.fn(), onMoveCopy: vi.fn() });
+    await tick();
+    expect(titles()).toEqual(['Colour', 'Display', 'Status check', 'Move or copy']);
+    for (const h of ['Colour', 'Display', 'Move or copy']) expect(screen.getByRole('heading', { name: h, level: 3 })).toBeTruthy();
+    const icon = screen.getByRole('button', { name: /Edit icon/ });
+    expect(follows(icon, screen.getByRole('heading', { name: 'Colour' }))).toBe(true);
+    // Inside Colour: the colour, Background opacity, then Text colour (the shared ones in the folder's order).
+    const colour = document.querySelector('.color-label')!;
+    expect(colour.textContent).toBe('Colour');
+    const bg = slider(/^Background opacity/);
+    const text = screen.getByText('Text colour');
+    expect(follows(colour, bg)).toBe(true);
+    expect(follows(bg, text)).toBe(true);
+    expect(screen.getByRole('button', { name: /Move or copy to/ }).classList.contains('btn-secondary')).toBe(true);
+  });
+
+  it('uses the same words: Name, Description, Icon, Open mode', async () => {
+    open();
+    await tick();
+    expect(screen.getByLabelText('Name *')).toBeTruthy();
+    expect(screen.getByLabelText('Description')).toBeTruthy();
+    expect(screen.queryByText(/Subtitle/)).toBeNull();
+    expect(screen.getByText('Icon', { selector: '.label' })).toBeTruthy();
+    expect(screen.getByLabelText('Open mode')).toBeTruthy();
+  });
+
+  it('a note keeps its fields (Body text, no icon, open mode or status check); only the layout changes', async () => {
+    open({ ...entry, type: 'note', url: '' });
+    await tick();
+    expect(screen.getByLabelText('Body text')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Edit icon/ })).toBeNull();
+    expect(screen.queryByLabelText('Open mode')).toBeNull();
+    expect(screen.queryByRole('slider', { name: /^Icon opacity/ })).toBeNull();
+    expect(titles()).toEqual(['Colour', 'Display']);
+  });
+
+  it('Text colour: Auto by default (missing), saved as no key; Light and Dark are saved', async () => {
+    const { onSave } = open({ ...entry, color: '#0f172a' });
+    await tick();
+    expect(screen.getByRole('radio', { name: 'Auto' })).toBeChecked();
+    await save();
+    expect(onSave.mock.calls[0][0].textColor).toBeUndefined();
+    await fireEvent.click(screen.getByRole('radio', { name: 'Dark' }));
+    await save();
+    expect(onSave.mock.calls[1][0].textColor).toBe('dark');
+  });
+
+  it('an explicit choice that is hard to read on the colour is warned about, as on the folder dialog; Auto never is', async () => {
+    open({ ...entry, color: '#3b82f6', textColor: 'auto' });
+    await tick();
+    expect(screen.queryByText(/hard to read/i)).toBeNull();
+    await fireEvent.click(screen.getByRole('radio', { name: 'Light' }));
+    const w = screen.getByText(/hard to read/i);
+    expect(w.closest('[data-contrast-warning]')).toBeTruthy();
+    expect(w.textContent).toMatch(/contrast 3\.7:1/);
+    await fireEvent.click(screen.getByRole('radio', { name: 'Dark' }));
+    expect(screen.queryByText(/hard to read/i)).toBeNull();
+  });
+
+  it('a stored Light choice shows checked', async () => {
+    open({ ...entry, color: '#0f172a', textColor: 'light' });
+    await tick();
+    expect(screen.getByRole('radio', { name: 'Light' })).toBeChecked();
+  });
+
+  it('Duplicate sits in the footer for an existing tile (not a new one) and calls onDuplicate', async () => {
+    const onDuplicate = vi.fn();
+    const r = render(EntryEditModal, { entry, onSave: vi.fn(), onCancel: vi.fn(), onDelete: vi.fn(), onDuplicate });
+    await tick();
+    const dup = screen.getByRole('button', { name: /Duplicate/ });
+    expect(dup.classList.contains('btn-secondary')).toBe(true);
+    expect(follows(screen.getByRole('button', { name: /Delete/ }), dup)).toBe(true);
+    expect(follows(dup, screen.getByRole('button', { name: 'Cancel' }))).toBe(true);
+    await fireEvent.click(dup);
+    expect(onDuplicate).toHaveBeenCalledOnce();
+    r.unmount();
+    render(EntryEditModal, { entry: { ...entry, id: '' }, onSave: vi.fn(), onCancel: vi.fn(), onDuplicate });
+    await tick();
+    expect(screen.queryByRole('button', { name: /Duplicate/ })).toBeNull();
+  });
+});

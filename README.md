@@ -257,7 +257,8 @@ and [Rolling back from 3.x to 2.2.1](DEPLOY.md#rolling-back-from-3x-to-221).
 - **Address** and optional **Away address**, with a per-browser Home / Away
   switch
 - Status badge with response time; tiles On / Off; dashboard, tab, folder and global gates
-- Subtitles, custom colours, and separate background, text and icon opacity
+- Descriptions, custom colours with Auto / Light / Dark text, and separate
+  background, text and icon opacity
 
 ### Look
 - 8 theme presets with Dark, Light and Auto modes, and four text sizes, chosen
