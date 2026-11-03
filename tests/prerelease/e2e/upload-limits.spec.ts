@@ -122,7 +122,7 @@ test.describe('oversize uploads are refused with a message naming the limit and 
 		await page.goto('/settings/dashboards');
 		await page.getByRole('button', { name: 'Import' }).click();
 		await page.locator('input[type="file"][accept=".json,.yml,.yaml"]').setInputFiles(big('huge.json', 'application/json'));
-		await page.getByRole('button', { name: /^Import/ }).last().click();
+		await page.getByRole('button', { name: 'Next' }).click();
 		await expect(page.getByText(/This file is 1\.5 MB, but the largest file you can import is 1 MB/)).toBeVisible();
 	});
 
