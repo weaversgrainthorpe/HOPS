@@ -239,7 +239,10 @@ test.describe('look previews on a light card', () => {
       const dlg = await openEdit(page, f.id(id), 'Edit Folder');
       const cards = dlg.locator('.shape-picker [data-preview-card]');
       await expect(cards).toHaveCount(7);
-      await cards.first().scrollIntoViewIfNeeded();
+      // The whole picker in view (the dialog body scrolls): every card is in the one screenshot.
+      await dlg.locator('.shape-picker').evaluate((e) => e.scrollIntoView({ block: 'center', behavior: 'instant' }));
+      // Measured once the dialog has finished opening (a box taken mid-transition is not where it is drawn).
+      await page.evaluate(() => Promise.all(document.getAnimations().map((x) => x.finished.catch(() => undefined))));
       const boxes = [];
       for (let i = 0; i < 7; i++) boxes.push(await boxOf(cards.nth(i)));
       const png = await page.screenshot({ animations: 'disabled', caret: 'hide' });
@@ -435,7 +438,7 @@ test.describe('the folder background is pictures only', () => {
 const blue = (id: (s: string) => string) => [
   folder(id('f'), 'Blue folder', { x: 0, y: 0, w: 12, h: 8 }, [kid(id('in1'), 'Inner')], { color: '#3b82f6', shape: 'rounded' }),
   folder(id('o'), 'Outlined', { x: 13, y: 0, w: 8, h: 8 }, [kid(id('in2'), 'Two')], { color: '#3b82f6', shape: 'folder-outline', opacity: 0.3 }),
-  kid(id('t'), 'Blue tile', { color: '#3b82f6', placement: { x: 0, y: 9, w: 2, h: 2 } })
+  kid(id('t'), 'Blue tile', { color: '#3b82f6', url: 'https://blue.example.lan/', placement: { x: 0, y: 9, w: 2, h: 2 } })
 ];
 
 test.describe('one text colour rule, outlined folders and matching dialogs', () => {

@@ -297,7 +297,7 @@
       <h3 id="folder-colour-heading" class="part-title">Colour</h3>
       <ColorPicker label="Colour" selectedColor={color} onSelect={(c) => { color = c; colourNote = ''; }} />
       {#if outlined}
-        <p class="hint" data-outline-note>An outlined folder is see-through, so its colour draws the outline only and it has no opacity.</p>
+        <p class="hint outline-note" data-outline-note>An outlined folder is see-through, so its colour draws the outline only and it has no opacity.</p>
       {:else}
         <OpacitySlider id="folder-bg-opacity" label="Background opacity" {opacity} onSelect={(o) => (opacity = o)} />
       {/if}
@@ -482,6 +482,10 @@
     margin: 0.25rem 0 0;
     font-size: 0.875rem;
     opacity: 0.85;
+  }
+  /* The outline note stands apart from the Text colour choice under it. */
+  .outline-note {
+    margin-bottom: 1rem;
   }
   .choice-row {
     display: flex;
