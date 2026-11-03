@@ -19,7 +19,7 @@ test('a stored javascript: tile cannot run and is marked unsafe in edit mode', a
   const dashName = uniqueName('Unsafe');
   await createDashboardViaUI(page, dashName, undefined, made);
   await toolbar(page).getByRole('button', { name: 'Add tile' }).click();
-  const dlg = page.getByRole('dialog', { name: 'New Tile' });
+  const dlg = page.getByRole('dialog', { name: 'New tile' });
   await dlg.locator('input#name').fill('Evil');
   await dlg.locator('input#url').fill('https://example.com');
   await dlg.getByRole('button', { name: 'Create' }).click();
@@ -27,8 +27,8 @@ test('a stored javascript: tile cannot run and is marked unsafe in edit mode', a
   const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && /\/api\/dashboards\//.test(r.url()));
   await toolbar(page).getByRole('button', { name: /Save/ }).click();
   expect((await saved).status()).toBe(200);
-  await page.locator('[aria-label="Exit Edit Mode"]').click();
-  await expect(page.locator('[aria-label="Enter Edit Mode"]')).toBeVisible();
+  await page.locator('[aria-label="Exit edit mode"]').click();
+  await expect(page.locator('[aria-label="Enter edit mode"]')).toBeVisible();
 
   // The stored tile now carries a javascript: address in iframe mode (as legacy data would).
   await page.route('**/api/config', async (route) => {
@@ -57,8 +57,8 @@ test('a stored javascript: tile cannot run and is marked unsafe in edit mode', a
   expect(await page.evaluate(() => (window as any).__pwned)).toBeUndefined();
   expect(alerted).toBe(false);
 
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
-  await expect(page.locator('[aria-label="Exit Edit Mode"]')).toBeVisible();
+  await page.locator('[aria-label="Enter edit mode"]').click();
+  await expect(page.locator('[aria-label="Exit edit mode"]')).toBeVisible();
   await expect(tileNamed(page, 'Evil').getByTestId('tile-url-problem')).toHaveText('Unsafe address: this tile will not open');
-  await page.locator('[aria-label="Exit Edit Mode"]').click();
+  await page.locator('[aria-label="Exit edit mode"]').click();
 });

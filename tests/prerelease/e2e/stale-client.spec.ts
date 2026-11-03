@@ -110,7 +110,7 @@ test.describe('a stale (pre-update) client cannot write an old layout form', () 
     await page.goto(f.path);
     const alpha = page.locator(`[data-node-id="${f.id('a')}"]`).first();
     await expect(alpha).toBeVisible();
-    await page.locator('[aria-label="Enter Edit Mode"]').click();
+    await page.locator('[aria-label="Enter edit mode"]').click();
     const toolbar = page.getByRole('toolbar', { name: 'Editing' });
     await expect(toolbar).toBeVisible();
 

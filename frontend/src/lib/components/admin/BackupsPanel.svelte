@@ -83,7 +83,7 @@
 
   async function handleRestore(backup: BackupInfo) {
     const confirmed = await confirm({
-      title: 'Restore Backup',
+      title: 'Restore backup',
       message: `Restore from "${backup.name}"? A safety backup of the current data is taken first; if that fails, nothing is restored. HOPS then restarts to apply the restore: changes made in the next few seconds won't be included.`,
       confirmText: 'Restore',
       confirmStyle: 'warning',
@@ -110,7 +110,7 @@
 
   async function handleDelete(backup: BackupInfo) {
     const confirmed = await confirm({
-      title: 'Delete Backup',
+      title: 'Delete backup',
       message: `Are you sure you want to delete "${backup.name}"? This action cannot be undone.`,
       confirmText: 'Delete',
       confirmStyle: 'danger',
@@ -454,7 +454,7 @@
           Creating...
         {:else}
           <Icon icon="mdi:plus" width="18" />
-          Create Backup
+          Create backup
         {/if}
       </button>
     </div>

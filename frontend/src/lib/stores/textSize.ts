@@ -13,7 +13,7 @@ export const textSizeConfigs: Record<TextSize, TextSizeConfig> = {
   small: { label: 'Small', fontSize: '14px', scale: 0.875 },
   medium: { label: 'Medium', fontSize: '16px', scale: 1 },
   large: { label: 'Large', fontSize: '18px', scale: 1.125 },
-  xlarge: { label: 'Extra Large', fontSize: '20px', scale: 1.25 }
+  xlarge: { label: 'Extra large', fontSize: '20px', scale: 1.25 }
 };
 
 const textSizeOrder: TextSize[] = ['small', 'medium', 'large', 'xlarge'];

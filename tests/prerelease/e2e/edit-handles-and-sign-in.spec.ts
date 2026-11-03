@@ -97,7 +97,7 @@ test.afterEach(async ({ page }) => {
 });
 
 async function enterEdit(page: Page) {
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
 }
 
@@ -160,7 +160,7 @@ test.describe('editing changes in a real browser', () => {
     await expect(page.locator(sel)).toBeVisible();
     await enterEdit(page);
     await page.locator(sel).dblclick({ position: { x: 20, y: 20 } });
-    const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    const dlg = page.getByRole('dialog', { name: 'Edit folder' });
     await expect(dlg).toBeVisible();
     await dlg.getByRole('button', { name: /^Background/ }).click();
     const picker = page.getByRole('dialog', { name: 'Folder background' });
@@ -168,7 +168,7 @@ test.describe('editing changes in a real browser', () => {
     await picker.getByRole('radio', { name: 'Its own picture' }).check();
     await picker.getByRole('button', { name: /^Image$/ }).click();
 
-    // /presets/network-grid.jpg is in the catalogue three times (Network Grid, Server Room, ...).
+    // /presets/network-grid.jpg is in the catalogue three times (Network grid, Server room, ...).
     const cards = picker.locator('.image-card:has(img[src="/presets/network-grid.jpg"])');
     await expect(cards).toHaveCount(1);
     await cards.click();
@@ -312,7 +312,7 @@ test.describe('editing changes in a real browser', () => {
 
   /** Logged out on a dashboard: the pencil opens the sign-in dialog; sign in with the test admin. */
   async function signInFromPencil(page: Page) {
-    const pencil = page.getByRole('button', { name: 'Enter Edit Mode' });
+    const pencil = page.getByRole('button', { name: 'Enter edit mode' });
     await expect(pencil).toBeVisible();
     await pencil.click();
     const dlg = page.getByRole('dialog', { name: 'Sign in' });
@@ -333,7 +333,7 @@ test.describe('editing changes in a real browser', () => {
       await expect(anon.getByRole('toolbar', { name: 'Editing' })).toHaveCount(0);
 
       // A wrong password: the error is in the dialog, which stays open; nothing else changes.
-      await anon.getByRole('button', { name: 'Enter Edit Mode' }).click();
+      await anon.getByRole('button', { name: 'Enter edit mode' }).click();
       const dlg = anon.getByRole('dialog', { name: 'Sign in' });
       await dlg.getByLabel('Username').fill(ADMIN_USERNAME);
       await dlg.getByLabel('Password', { exact: true }).fill('definitely-wrong');
@@ -346,7 +346,7 @@ test.describe('editing changes in a real browser', () => {
 
       await signInFromPencil(anon);
       await expect(anon.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
-      await expect(anon.getByRole('button', { name: 'Exit Edit Mode' })).toBeVisible();
+      await expect(anon.getByRole('button', { name: 'Exit edit mode' })).toBeVisible();
       expect(new URL(anon.url()).pathname).toBe(f.path);
       // The edit session is on this dashboard: its tile opens the editor.
       await anon.locator(`[data-node-id="${f.id('a')}"]`).click({ button: 'right' });
@@ -471,7 +471,7 @@ test.describe('editing changes in a real browser', () => {
     await editsThreeWays(page, {
       item: page.locator(`[data-node-id="${f.id('a')}"]`),
       handle: 'Edit Alpha',
-      dialog: 'Edit Tile',
+      dialog: 'Edit tile',
       field: page.getByRole('dialog').locator('input#name'),
       value: 'Alpha',
       dblAt: { x: 20, y: 40 }
@@ -485,7 +485,7 @@ test.describe('editing changes in a real browser', () => {
     await editsThreeWays(page, {
       item: page.locator(`[data-node-id="${f.id('grp')}"]`),
       handle: 'Edit Group',
-      dialog: 'Edit Folder',
+      dialog: 'Edit folder',
       field: page.locator('#folder-name'),
       value: 'Group',
       dblAt: { x: 60, y: 20 }
@@ -500,7 +500,7 @@ test.describe('editing changes in a real browser', () => {
     await editsThreeWays(page, {
       item,
       handle: 'Edit Box',
-      dialog: 'Edit Folder',
+      dialog: 'Edit folder',
       field: page.locator('#folder-name'),
       value: 'Box',
       dblAt: { x: 30, y: 60 }
@@ -535,7 +535,7 @@ test.describe('editing changes in a real browser', () => {
     await editsThreeWays(page, {
       item: tab,
       handle: 'Edit Two tab',
-      dialog: 'Edit Tab',
+      dialog: 'Edit tab',
       field: page.getByRole('dialog').getByLabel('Name *', { exact: true }),
       value: 'Two'
     });
@@ -590,7 +590,7 @@ test.describe('handles: innermost only, never overlapping', () => {
     await page.mouse.move(tb.x + tb.width / 2, tb.y + tb.height / 2);
     await page.mouse.down();
     await page.mouse.up();
-    const dlg = page.getByRole('dialog', { name: 'Edit Tile' });
+    const dlg = page.getByRole('dialog', { name: 'Edit tile' });
     await expect(dlg).toBeVisible();
     await expect(dlg.locator('input#name')).toHaveValue('Corner');
     await dlg.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -602,7 +602,7 @@ test.describe('handles: innermost only, never overlapping', () => {
     await expect(folderHandle).toHaveCSS('opacity', '1');
     await expect(tileHandle).toHaveCSS('opacity', '0');
     await folderHandle.click();
-    const fdlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    const fdlg = page.getByRole('dialog', { name: 'Edit folder' });
     await expect(fdlg.locator('#folder-name')).toHaveValue('Plain');
     await fdlg.getByRole('button', { name: 'Cancel', exact: true }).click();
     // Never overlapping, whatever is shown.
@@ -617,7 +617,7 @@ test.describe('handles on a touch device (hover: none)', () => {
     const f = await nestedDash(page, context);
     await page.goto(f.path);
     expect(await page.evaluate(() => matchMedia('(hover: none)').matches)).toBe(true);
-    await page.getByRole('button', { name: 'Enter Edit Mode' }).tap();
+    await page.getByRole('button', { name: 'Enter edit mode' }).tap();
     await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
     const names = ['Edit Outside', 'Edit Corner', 'Edit Plain', 'Edit Main tab'];
     const boxes: Box[] = [];
@@ -630,12 +630,12 @@ test.describe('handles on a touch device (hover: none)', () => {
       for (let j = i + 1; j < boxes.length; j++)
         expect(overlaps(boxes[i], boxes[j]), `${names[i]} vs ${names[j]}`).toBe(false);
     await page.getByRole('button', { name: 'Edit Corner', exact: true }).tap();
-    const dlg = page.getByRole('dialog', { name: 'Edit Tile' });
+    const dlg = page.getByRole('dialog', { name: 'Edit tile' });
     await expect(dlg).toBeVisible();
     await expect(dlg.locator('input#name')).toHaveValue('Corner');
     await dlg.getByRole('button', { name: 'Cancel', exact: true }).tap();
     await page.getByRole('button', { name: 'Edit Plain', exact: true }).tap();
-    await expect(page.getByRole('dialog', { name: 'Edit Folder' }).locator('#folder-name')).toHaveValue('Plain');
+    await expect(page.getByRole('dialog', { name: 'Edit folder' }).locator('#folder-name')).toHaveValue('Plain');
   });
 });
 
@@ -657,7 +657,7 @@ test.describe('Escape in edit dialogs (real browser)', () => {
     const a = page.locator(`[data-node-id="${f.id('a')}"]`);
     await a.click(); // selected: a Delete reaching the page would delete it
     await a.dblclick();
-    const dlg = page.getByRole('dialog', { name: 'Edit Tile' });
+    const dlg = page.getByRole('dialog', { name: 'Edit tile' });
     await expect(dlg).toBeVisible();
     await dlg.locator('input#name').fill('Alpha changed');
     // Arrow keys and Delete on a button inside the dialog stay inside it.
@@ -681,12 +681,12 @@ test.describe('Escape in edit dialogs (real browser)', () => {
     await page.goto(f.path);
     await enterEdit(page);
     await page.locator(`[data-node-id="${f.id('a')}"]`).dblclick();
-    const dlg = page.getByRole('dialog', { name: 'Edit Tile' });
+    const dlg = page.getByRole('dialog', { name: 'Edit tile' });
     await dlg.getByRole('button', { name: /Edit icon/ }).click();
     const iconDlg = page.getByRole('dialog', { name: 'Edit icon' });
     await expect(iconDlg).toBeVisible();
     await iconDlg.getByRole('button', { name: /Browse/ }).click();
-    const picker = page.getByRole('dialog', { name: 'Choose an Icon' });
+    const picker = page.getByRole('dialog', { name: 'Choose an icon' });
     await expect(picker).toBeVisible();
     await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('[aria-labelledby="icon-picker-title"]'))).toBe(true);
 
@@ -708,9 +708,9 @@ test.describe('Escape in edit dialogs (real browser)', () => {
     await page.goto(f.path);
     await enterEdit(page);
     await page.getByRole('tab', { name: 'Switch to Two tab' }).dblclick();
-    const dlg = page.getByRole('dialog', { name: 'Edit Tab' });
+    const dlg = page.getByRole('dialog', { name: 'Edit tab' });
     await expect(dlg).toBeVisible();
-    await dlg.getByRole('button', { name: /Configure Tab Background/ }).click();
+    await dlg.getByRole('button', { name: /Configure tab background/ }).click();
     const picker = page.getByRole('dialog', { name: 'Tab background' });
     await expect(picker).toBeVisible();
     await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('[aria-labelledby="background-config-title"]'))).toBe(true);
@@ -727,10 +727,10 @@ test.describe('Escape in edit dialogs (real browser)', () => {
     const f = await escDash(page, context);
     await page.goto(f.path);
     await enterEdit(page);
-    await page.getByRole('button', { name: 'Edit Dashboard' }).click();
-    const dlg = page.getByRole('dialog', { name: 'Edit Dashboard' });
+    await page.getByRole('button', { name: 'Edit dashboard' }).click();
+    const dlg = page.getByRole('dialog', { name: 'Edit dashboard' });
     await expect(dlg).toBeVisible();
-    await dlg.getByLabel(/Custom Title/).fill('Never applied');
+    await dlg.getByLabel(/Custom title/).fill('Never applied');
     await page.keyboard.press('Escape');
     await expect(dlg).toHaveCount(0);
     await expect(page.getByRole('status').filter({ hasText: 'Unsaved changes' })).toHaveCount(0);
@@ -752,12 +752,12 @@ test.describe('one dashboard dialog', () => {
     for (const t of ['Configure Background', 'Configure Header', 'Dashboard settings']) {
       await expect(page.getByTitle(t, { exact: true })).toHaveCount(0);
     }
-    const handle = page.getByRole('button', { name: 'Edit Dashboard' });
+    const handle = page.getByRole('button', { name: 'Edit dashboard' });
     await expect(handle).toBeVisible();
     await expect(handle).toHaveText('Dashboard');
     await expect(handle).toHaveCSS('opacity', '1');
     await handle.click();
-    const dlg = page.getByRole('dialog', { name: 'Edit Dashboard' });
+    const dlg = page.getByRole('dialog', { name: 'Edit dashboard' });
     await expect(dlg.getByRole('tab')).toHaveText(['Header', 'Background', 'Settings']);
   });
 
@@ -765,9 +765,9 @@ test.describe('one dashboard dialog', () => {
     const f = await dash(page, context);
     await page.goto(f.path);
     await enterEdit(page);
-    await page.getByRole('button', { name: 'Edit Dashboard' }).click();
-    const dlg = page.getByRole('dialog', { name: 'Edit Dashboard' });
-    await dlg.getByLabel(/Custom Title/).fill('Walkthrough Title');
+    await page.getByRole('button', { name: 'Edit dashboard' }).click();
+    const dlg = page.getByRole('dialog', { name: 'Edit dashboard' });
+    await dlg.getByLabel(/Custom title/).fill('Walkthrough Title');
     await dlg.getByRole('tab', { name: 'Background' }).click();
     await dlg.getByRole('button', { name: /^Image$/ }).click();
     const card = dlg.locator('.image-card:has(img[src="/presets/network-grid.jpg"])');
@@ -805,9 +805,9 @@ test.describe('one dashboard dialog', () => {
         ? route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'disk full' }) })
         : route.continue()
     );
-    await page.getByRole('button', { name: 'Edit Dashboard' }).click();
-    const dlg = page.getByRole('dialog', { name: 'Edit Dashboard' });
-    await dlg.getByLabel(/Custom Title/).fill('Not Yet');
+    await page.getByRole('button', { name: 'Edit dashboard' }).click();
+    const dlg = page.getByRole('dialog', { name: 'Edit dashboard' });
+    await dlg.getByLabel(/Custom title/).fill('Not Yet');
     await dlg.getByRole('tab', { name: 'Settings' }).click();
     await dlg.getByLabel('Override for this dashboard: Edit mode idle timeout (minutes)').check();
     await dlg.getByRole('button', { name: 'Save', exact: true }).click();
@@ -857,7 +857,7 @@ test.describe('Settings is the admin home; / shows a dashboard', () => {
       await expect(dlg.getByLabel('Username')).toBeFocused();
       // Nothing admin shows behind the dialog: no sidebar, no dashboard list.
       await expect(anon.getByRole('navigation', { name: 'Settings sections' })).toHaveCount(0);
-      await expect(anon.getByRole('button', { name: 'New Dashboard' })).toHaveCount(0);
+      await expect(anon.getByRole('button', { name: 'New dashboard' })).toHaveCount(0);
 
       // A wrong password: the reason shows once, in the dialog (no second copy in a toast), and
       // the cursor is back in the password field.
@@ -953,10 +953,10 @@ test.describe('Settings is the admin home; / shows a dashboard', () => {
       await page.goto('/');
       await expect(page.getByRole('heading', { name: 'No dashboards yet' })).toBeVisible();
       await expect(page).toHaveURL(/\/$/);
-      await page.getByRole('button', { name: 'Open Settings' }).click();
+      await page.getByRole('button', { name: 'Open settings' }).click();
       await expect(page).toHaveURL(/\/settings\/dashboards$/);
       await expect(page.getByRole('heading', { name: 'Dashboards', level: 2 })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'New Dashboard' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'New dashboard' })).toBeVisible();
 
       // Logged out: the same empty state; its button opens Settings, which signs in in place.
       const { page: anon, ctx } = await anonPage(browser);
@@ -964,13 +964,13 @@ test.describe('Settings is the admin home; / shows a dashboard', () => {
         await anon.goto('/');
         await expect(anon.getByRole('heading', { name: 'No dashboards yet' })).toBeVisible();
         await expect(anon).toHaveURL(/\/$/);
-        await anon.getByRole('button', { name: 'Open Settings' }).click();
+        await anon.getByRole('button', { name: 'Open settings' }).click();
         await expect(anon).toHaveURL(/\/settings\/dashboards$/);
         await expect(anon.getByRole('heading', { name: 'Dashboards', level: 2 })).toHaveCount(0);
         await signInDialog(anon);
         await expect(anon).toHaveURL(/\/settings\/dashboards$/);
         await expect(anon.getByRole('heading', { name: 'Dashboards', level: 2 })).toBeVisible();
-        await expect(anon.getByRole('button', { name: 'New Dashboard' })).toBeVisible();
+        await expect(anon.getByRole('button', { name: 'New dashboard' })).toBeVisible();
       } finally {
         await ctx.close();
       }
@@ -997,7 +997,7 @@ test.describe('Settings is the admin home; / shows a dashboard', () => {
       await expect(own.getByRole('button', { name: 'Log out' })).toHaveCount(0);
       await expect(own).toHaveURL(new RegExp(`${f.path}$`));
       await expect(own.locator(`[data-node-id="${f.id('a')}"]`)).toBeVisible();
-      await expect(own.getByRole('button', { name: 'Enter Edit Mode' })).toHaveAttribute('title', 'Sign in to edit this dashboard');
+      await expect(own.getByRole('button', { name: 'Enter edit mode' })).toHaveAttribute('title', 'Sign in to edit this dashboard');
       expect((await (await own.request.get('/api/auth/check')).json()).authenticated).toBe(false);
 
       // Again, from the Settings sidebar: Settings is left (no sign-in dialog pops up).
@@ -1076,7 +1076,7 @@ test.describe('Settings is the admin home; / shows a dashboard', () => {
     const f = dashes[7];
     await page.goto(f.path);
     await expect(page.locator(`[data-node-id="${f.id('a')}"]`)).toBeVisible();
-    const pencil = page.getByRole('button', { name: 'Enter Edit Mode' });
+    const pencil = page.getByRole('button', { name: 'Enter edit mode' });
     // trial: every actionability check, including that nothing else receives the click.
     await pencil.click({ trial: true, timeout: 3000 });
     await page.getByRole('link', { name: 'Settings' }).click({ trial: true, timeout: 3000 });
@@ -1117,7 +1117,7 @@ test.describe('Settings is the admin home; / shows a dashboard', () => {
     await page.getByRole('link', { name: 'Settings' }).click({ trial: true, timeout: 3000 });
     await page.getByRole('button', { name: 'Log out' }).click({ trial: true, timeout: 3000 });
     // A dashboard in the switcher opens: one of these 8 (not the current one).
-    await page.getByRole('button', { name: 'Exit Edit Mode' }).click();
+    await page.getByRole('button', { name: 'Exit edit mode' }).click();
     await switcher.click();
     const inMenu = await menu.getByRole('menuitem').evaluateAll((els) => els.map((e) => e.getAttribute('href')));
     const pick = dashes.find((d) => inMenu.includes(d.path) && d !== f);
@@ -1162,7 +1162,7 @@ test.describe('one sign-in dialog at a time: navigating closes the pencil\'s', (
       await expect(anon).toHaveURL(new RegExp(`${f.path}$`));
       await expect(anon.getByRole('dialog', { name: 'Sign in' })).toHaveCount(0);
 
-      await anon.getByRole('button', { name: 'Enter Edit Mode' }).click();
+      await anon.getByRole('button', { name: 'Enter edit mode' }).click();
       const dlg = anon.getByRole('dialog', { name: 'Sign in' });
       await expect(dlg).toHaveCount(1);
       await expect(dlg).toContainText('Sign in to edit this dashboard.');
@@ -1206,7 +1206,7 @@ test.describe('one sign-in dialog at a time: navigating closes the pencil\'s', (
       await expect(anon).toHaveURL(new RegExp(`${b.path}$`));
       await expect(anon.locator(`[data-node-id="${b.id('b')}"]`)).toBeVisible();
 
-      await anon.getByRole('button', { name: 'Enter Edit Mode' }).click();
+      await anon.getByRole('button', { name: 'Enter edit mode' }).click();
       await expect(anon.getByRole('dialog', { name: 'Sign in' })).toHaveCount(1);
       await anon.goBack();
       await expect(anon).toHaveURL(new RegExp(`${a.path}$`));
@@ -1214,7 +1214,7 @@ test.describe('one sign-in dialog at a time: navigating closes the pencil\'s', (
       await expect(anon.getByRole('dialog', { name: 'Sign in' })).toHaveCount(0);
 
       // Signing in from A's pencil edits A.
-      await anon.getByRole('button', { name: 'Enter Edit Mode' }).click();
+      await anon.getByRole('button', { name: 'Enter edit mode' }).click();
       const dlg = anon.getByRole('dialog', { name: 'Sign in' });
       await expect(dlg).toHaveCount(1);
       await dlg.getByLabel('Username').fill(ADMIN_USERNAME);
@@ -1320,7 +1320,7 @@ test.describe('background on/off wording', () => {
 
     // Folder: pictures only — no picture of its own (what's behind shows), or its own picture.
     await page.locator(sel).dblclick({ position: { x: 20, y: 20 } });
-    const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    const dlg = page.getByRole('dialog', { name: 'Edit folder' });
     await dlg.getByRole('button', { name: /^Background/ }).click();
     const picker = page.getByRole('dialog', { name: 'Folder background' });
     await expect(picker.getByRole('radiogroup', { name: 'Folder background' })).toBeVisible();
@@ -1333,8 +1333,8 @@ test.describe('background on/off wording', () => {
 
     // Tab.
     await page.getByRole('tab', { name: 'Switch to Main tab' }).dblclick();
-    const tabDlg = page.getByRole('dialog', { name: 'Edit Tab' });
-    await tabDlg.getByRole('button', { name: /Configure Tab Background/ }).click();
+    const tabDlg = page.getByRole('dialog', { name: 'Edit tab' });
+    await tabDlg.getByRole('button', { name: /Configure tab background/ }).click();
     const tabPicker = page.getByRole('dialog', { name: 'Tab background' });
     await expect(tabPicker.getByRole('radio', { name: 'Same as the dashboard' })).toBeVisible();
     await expect(tabPicker.getByRole('radio', { name: 'Its own background' })).toBeVisible();
@@ -1343,8 +1343,8 @@ test.describe('background on/off wording', () => {
     await expect(tabDlg).toHaveCount(0);
 
     // Dashboard.
-    await page.getByRole('button', { name: 'Edit Dashboard' }).click();
-    const dashDlg = page.getByRole('dialog', { name: 'Edit Dashboard' });
+    await page.getByRole('button', { name: 'Edit dashboard' }).click();
+    const dashDlg = page.getByRole('dialog', { name: 'Edit dashboard' });
     await dashDlg.getByRole('tab', { name: 'Background' }).click();
     // The switch is a visually hidden checkbox behind a drawn track; its label text is what shows.
     await expect(dashDlg.getByRole('switch', { name: 'Show background picture' })).toBeChecked();
@@ -1519,13 +1519,13 @@ test.describe('edit mode keeps the view layout', () => {
     await page.goto(f.path);
     await enterEdit(page);
     const bar = page.getByRole('toolbar', { name: 'Editing' });
-    for (const n of ['Save', 'Discard', 'Undo', 'Redo', 'Add tile', 'Add folder', 'Add tab', 'Edit Dashboard'])
+    for (const n of ['Save', 'Discard', 'Undo', 'Redo', 'Add tile', 'Add folder', 'Add tab', 'Edit dashboard'])
       await expect(bar.getByRole('button', { name: n, exact: true }), n).toBeVisible();
     await expect(page.locator('[data-dashboard-tabs]').getByRole('button', { name: /add/i })).toHaveCount(0);
     await expect(page.locator('.header-actions, .bg-failed-row, .add-tab-btn, .editor-shell')).toHaveCount(0);
     // Add tab from the toolbar.
     await bar.getByRole('button', { name: 'Add tab', exact: true }).click();
-    await expect(page.getByRole('dialog', { name: 'New Tab' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'New tab' })).toBeVisible();
   });
 
   test('its buttons are reachable by keyboard, in order, and Enter works', async ({ page, context }) => {
@@ -1536,7 +1536,7 @@ test.describe('edit mode keeps the view layout', () => {
     const bar = page.getByRole('toolbar', { name: 'Editing' });
     await page.getByRole('tab', { name: 'Switch to Two tab' }).focus();
     const reached: string[] = [];
-    for (let i = 0; i < 60 && !reached.includes('Edit Dashboard'); i++) {
+    for (let i = 0; i < 60 && !reached.includes('Edit dashboard'); i++) {
       await page.keyboard.press('Tab');
       const name = await page.evaluate(() => {
         const a = document.activeElement as HTMLElement | null;
@@ -1544,10 +1544,10 @@ test.describe('edit mode keeps the view layout', () => {
       });
       if (name !== null) reached.push(name);
     }
-    expect(reached).toEqual(expect.arrayContaining(['Add tile', 'Add folder', 'Add tab', 'Edit Dashboard']));
-    await expect(bar.getByRole('button', { name: 'Edit Dashboard' })).toBeFocused();
+    expect(reached).toEqual(expect.arrayContaining(['Add tile', 'Add folder', 'Add tab', 'Edit dashboard']));
+    await expect(bar.getByRole('button', { name: 'Edit dashboard' })).toBeFocused();
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('dialog', { name: 'Edit Dashboard' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Edit dashboard' })).toBeVisible();
   });
 
   for (const width of [1280, 375]) {
@@ -1557,7 +1557,7 @@ test.describe('edit mode keeps the view layout', () => {
       await page.goto(f.path);
       await enterEditAt(page, width, 800);
       const bar = page.getByRole('toolbar', { name: 'Editing' });
-      const opens: [string, string][] = [['Edit Dashboard', 'Edit Dashboard'], ['Add tile', 'New Tile'], ['Add tab', 'New Tab']];
+      const opens: [string, string][] = [['Edit dashboard', 'Edit dashboard'], ['Add tile', 'New tile'], ['Add tab', 'New tab']];
       for (const [button, dialog] of opens) {
         await bar.getByRole('button', { name: button, exact: true }).click();
         const dlg = page.getByRole('dialog', { name: dialog });
@@ -1781,7 +1781,7 @@ test.describe('on a touch device (hover: none)', () => {
   test('every handle, folder control and tab handle is shown and none overlap', async ({ page, context }) => {
     const f = await folderDash(page, context);
     await page.goto(f.path);
-    await page.getByRole('button', { name: 'Enter Edit Mode' }).tap();
+    await page.getByRole('button', { name: 'Enter edit mode' }).tap();
     await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
     const named = ['Edit Alpha', 'Edit Group', 'Edit Inner', 'Edit Plain', 'Edit Pinned', 'Edit Main tab', 'Edit Two tab'];
     const boxes: [string, Box][] = [];
@@ -1818,7 +1818,7 @@ test.describe('nested untitled folders on a touch device', () => {
       ]
     }]);
     await page.goto(f.path);
-    await page.getByRole('button', { name: 'Enter Edit Mode' }).tap();
+    await page.getByRole('button', { name: 'Enter edit mode' }).tap();
     await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
     const outer = page.locator(`[data-node-id="${f.id('outer')}"]`);
     const noOverlaps = async (names: string[], extra: [string, Box][]) => {
@@ -1871,7 +1871,7 @@ test.describe('tile size sets the space it takes', () => {
 
   async function pickSize(page: Page, item: ReturnType<Page['locator']>, size: string) {
     await item.dblclick();
-    const dlg = page.getByRole('dialog', { name: 'Edit Tile' });
+    const dlg = page.getByRole('dialog', { name: 'Edit tile' });
     await expect(dlg).toBeVisible();
     await dlg.getByLabel('Size', { exact: true }).selectOption(size);
     await dlg.getByRole('button', { name: 'Save', exact: true }).click();
@@ -1913,7 +1913,7 @@ test.describe('tile size sets the space it takes', () => {
     await allApart(page, ['a', 'b', 'd', 'e', 'f'].map(f.id));
     // Opening it again shows Large.
     await page.locator(`[data-node-id="${f.id('a')}"]`).dblclick();
-    const dlg = page.getByRole('dialog', { name: 'Edit Tile' });
+    const dlg = page.getByRole('dialog', { name: 'Edit tile' });
     await expect(dlg.getByLabel('Size', { exact: true })).toHaveValue('large');
     await dlg.getByRole('button', { name: 'Cancel', exact: true }).click();
 
@@ -2033,7 +2033,7 @@ test.describe('tile size sets the space it takes', () => {
     const nf = page.locator(`.tab-canvas [data-node-id="${nid}"]`);
     await enterEdit(page);
     await nf.dblclick();
-    const dlg = page.getByRole('dialog', { name: 'Edit Tile' });
+    const dlg = page.getByRole('dialog', { name: 'Edit tile' });
     await expect(dlg.getByLabel('Size', { exact: true })).toHaveValue('large');
     await expect(dlg.getByLabel('Size', { exact: true }).locator('option')).toHaveText(['Small', 'Medium', 'Large']);
     await dlg.getByLabel('Size', { exact: true }).selectOption('small');
@@ -2072,7 +2072,7 @@ test.describe('tile size sets the space it takes', () => {
     const ids = { Google: f.id('google'), GitHub: f.id('github'), YouTube: f.id('youtube') } as const;
     type Name = keyof typeof ids;
     const cell = (n: Name) => page.locator(`.tab-canvas [data-node-id="${ids[n]}"]`);
-    const dlg = page.getByRole('dialog', { name: 'Edit Tile' });
+    const dlg = page.getByRole('dialog', { name: 'Edit tile' });
     const sizeIn = async (n: Name) => {
       await cell(n).dblclick();
       await expect(dlg.locator('input#name')).toHaveValue(n);

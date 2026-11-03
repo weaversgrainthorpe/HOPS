@@ -5,7 +5,7 @@ import { getCsrfToken } from '../helpers';
 // REAL browser:
 //  1. the look (picker + tab position) sits between Icon and the colour / Background;
 //  2. every look preview sits on a light card and keeps >= 3:1 against it, for dark and light folders;
-//  3. no text in the Edit Folder or Edit Tile dialog is below 4.5:1 (3:1 large), in the dark and light
+//  3. no text in the Edit folder or Edit tile dialog is below 4.5:1 (3:1 large), in the dark and light
 //     theme — the status-check hints included;
 //  4. Look, Status checks, Background and Move or copy are separate sections: the status-check text
 //     never sits against the Background button;
@@ -63,7 +63,7 @@ test.afterEach(async ({ page, context }) => {
 
 const node = (page: Page, id: string) => page.locator(`.tab-canvas [data-node-id="${id}"]`).first();
 async function enterEdit(page: Page) {
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
 }
 async function saveDraft(page: Page) {
@@ -79,7 +79,7 @@ async function storedNode(page: Page, dashId: string, nodeId: string) {
   const d = cfg.dashboards.find((x: { id: string }) => x.id === dashId);
   return d.tabs[0].root.children.find((n: { id: string }) => n.id === nodeId);
 }
-async function openEdit(page: Page, id: string, name: 'Edit Folder' | 'Edit Tile') {
+async function openEdit(page: Page, id: string, name: 'Edit folder' | 'Edit tile') {
   await node(page, id).click({ button: 'right', position: { x: 12, y: 12 } });
   await page.getByRole('menuitem', { name: 'Edit' }).click();
   const dlg = page.getByRole('dialog', { name });
@@ -202,7 +202,7 @@ test.describe('the folder dialog order and sections', () => {
     const f = await importDash(page, context, fixture);
     await page.goto(f.path);
     await enterEdit(page);
-    const dlg = await openEdit(page, f.id('f'), 'Edit Folder');
+    const dlg = await openEdit(page, f.id('f'), 'Edit folder');
     const icon = dlg.getByRole('button', { name: /Edit icon/ });
     const look = dlg.getByRole('radiogroup', { name: 'Look' });
     const tabPos = dlg.getByRole('radiogroup', { name: 'Tab position' });
@@ -236,7 +236,7 @@ test.describe('look previews on a light card', () => {
       const f = await importDash(page, context, fixture);
       await page.goto(f.path);
       await enterEdit(page);
-      const dlg = await openEdit(page, f.id(id), 'Edit Folder');
+      const dlg = await openEdit(page, f.id(id), 'Edit folder');
       const cards = dlg.locator('.shape-picker [data-preview-card]');
       await expect(cards).toHaveCount(7);
       // The whole picker in view (the dialog body scrolls): every card is in the one screenshot.
@@ -316,7 +316,7 @@ async function saveButtonContrast(dlg: Locator) {
   });
 }
 
-test.describe('text contrast in the Edit Folder and Edit Tile dialogs', () => {
+test.describe('text contrast in the Edit folder and Edit tile dialogs', () => {
   for (const preset of PRESETS) for (const theme of ['dark', 'light'] as const) {
     test(`${preset} preset, ${theme} theme: no text below 4.5:1 (the status-check hints included)`, async ({ page, context }) => {
       await page.addInitScript(([t, p]) => {
@@ -328,7 +328,7 @@ test.describe('text contrast in the Edit Folder and Edit Tile dialogs', () => {
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
       await enterEdit(page);
 
-      const folderDlg = await openEdit(page, f.id('f'), 'Edit Folder');
+      const folderDlg = await openEdit(page, f.id('f'), 'Edit folder');
       // Disabled shows the folder's status-check hint: it is checked for contrast too.
       await folderDlg.getByRole('radio', { name: 'Disabled' }).check();
       await expect(folderDlg.getByTestId('status-gate-hint')).toBeVisible();
@@ -336,23 +336,23 @@ test.describe('text contrast in the Edit Folder and Edit Tile dialogs', () => {
       await folderDlg.getByRole('radio', { name: 'Dark', exact: true }).check();
       await expect(folderDlg.locator('[data-contrast-warning]')).toBeVisible();
       const a = await lowContrastText(folderDlg);
-      expect(a.checked, 'texts checked in Edit Folder').toBeGreaterThan(25);
-      expect(a.bad, 'Edit Folder text below AA').toEqual([]);
+      expect(a.checked, 'texts checked in Edit folder').toBeGreaterThan(25);
+      expect(a.bad, 'Edit folder text below AA').toEqual([]);
       const save = await saveButtonContrast(folderDlg);
-      expect(save.alpha, 'Edit Folder Save has an opaque fill').toBe(255);
-      expect(save.image, 'Edit Folder Save is a solid fill').toBe('none');
-      expect(save.ratio, 'Edit Folder Save label').toBeGreaterThanOrEqual(4.5);
+      expect(save.alpha, 'Edit folder Save has an opaque fill').toBe(255);
+      expect(save.image, 'Edit folder Save is a solid fill').toBe('none');
+      expect(save.ratio, 'Edit folder Save label').toBeGreaterThanOrEqual(4.5);
       await folderDlg.getByRole('button', { name: 'Cancel' }).click();
       await expect(folderDlg).toHaveCount(0);
 
-      const tileDlg = await openEdit(page, f.id('t'), 'Edit Tile');
+      const tileDlg = await openEdit(page, f.id('t'), 'Edit tile');
       await expect(tileDlg.getByRole('group', { name: 'Status check' }).getByRole('radio', { name: 'Off' })).toBeChecked();
       const b = await lowContrastText(tileDlg);
-      expect(b.checked, 'texts checked in Edit Tile').toBeGreaterThan(15);
-      expect(b.bad, 'Edit Tile text below AA').toEqual([]);
+      expect(b.checked, 'texts checked in Edit tile').toBeGreaterThan(15);
+      expect(b.bad, 'Edit tile text below AA').toEqual([]);
       const tsave = await saveButtonContrast(tileDlg);
-      expect(tsave.alpha, 'Edit Tile Save has an opaque fill').toBe(255);
-      expect(tsave.ratio, 'Edit Tile Save label').toBeGreaterThanOrEqual(4.5);
+      expect(tsave.alpha, 'Edit tile Save has an opaque fill').toBe(255);
+      expect(tsave.ratio, 'Edit tile Save label').toBeGreaterThanOrEqual(4.5);
     });
   }
 });
@@ -362,7 +362,7 @@ test.describe('the folder background is pictures only', () => {
     const f = await importDash(page, context, fixture);
     await page.goto(f.path);
     await enterEdit(page);
-    const dlg = await openEdit(page, f.id('f'), 'Edit Folder');
+    const dlg = await openEdit(page, f.id('f'), 'Edit folder');
     await expect(dlg.locator('.background-status')).toHaveText(/No picture of its own — shows what's behind/);
     await dlg.getByRole('button', { name: /^Background/ }).click();
     const picker = page.getByRole('dialog', { name: 'Folder background' });
@@ -384,10 +384,10 @@ test.describe('the folder background is pictures only', () => {
     await page.goto(f.path);
     await enterEdit(page);
     await page.getByRole('tab', { name: 'Switch to Main tab' }).dblclick();
-    const tabDlg = page.getByRole('dialog', { name: 'Edit Tab' });
-    await tabDlg.getByRole('button', { name: /Configure Tab Background/ }).click();
+    const tabDlg = page.getByRole('dialog', { name: 'Edit tab' });
+    await tabDlg.getByRole('button', { name: /Configure tab background/ }).click();
     const picker = page.getByRole('dialog', { name: 'Tab background' });
-    await expect(picker.getByRole('group', { name: /Background Type/ }).getByRole('button')).toHaveText(['None', 'Colour', 'Image', 'Slideshow']);
+    await expect(picker.getByRole('group', { name: /Background type/ }).getByRole('button')).toHaveText(['None', 'Colour', 'Image', 'Slideshow']);
   });
 
   test('a stored colour background keeps rendering, is shown, and "Use as folder colour" saves it as the folder colour', async ({ page, context }) => {
@@ -403,7 +403,7 @@ test.describe('the folder background is pictures only', () => {
     await expect(surface).toHaveCount(1);
     await enterEdit(page);
 
-    let dlg = await openEdit(page, f.id('c'), 'Edit Folder');
+    let dlg = await openEdit(page, f.id('c'), 'Edit folder');
     await expect(dlg.getByText('Colour background #c82828 (set the folder colour instead)')).toBeVisible();
     // The picker shows it as its own choice, ticked; Cancel changes nothing.
     await dlg.getByRole('button', { name: /^Background/ }).click();
@@ -420,7 +420,7 @@ test.describe('the folder background is pictures only', () => {
     expect(stored.background).toEqual({ type: 'color', value: '#c82828', opacity: 0.7 });
 
     // One click: the colour becomes the folder colour, the background goes, saved as one change.
-    dlg = await openEdit(page, f.id('c'), 'Edit Folder');
+    dlg = await openEdit(page, f.id('c'), 'Edit folder');
     await dlg.getByRole('button', { name: 'Use as folder colour' }).click();
     await expect(dlg.getByRole('status').filter({ hasText: 'Folder colour set to #c82828 at 70% opacity' })).toBeVisible();
     await dlg.getByRole('button', { name: /^Save/ }).click();
@@ -454,7 +454,7 @@ test.describe('one text colour rule, outlined folders and matching dialogs', () 
     const f = await importDash(page, context, blue);
     await page.goto(f.path);
     await enterEdit(page);
-    const dlg = await openEdit(page, f.id('o'), 'Edit Folder');
+    const dlg = await openEdit(page, f.id('o'), 'Edit folder');
     await expect(dlg.locator('[data-outline-note]')).toHaveText('An outlined folder is see-through, so its colour draws the outline only and it has no opacity.');
     await expect(dlg.getByRole('slider', { name: /Background opacity/ })).toHaveCount(0);
     const text = dlg.getByRole('group', { name: 'Text colour' });
@@ -469,7 +469,7 @@ test.describe('one text colour rule, outlined folders and matching dialogs', () 
     const stored = await storedNode(page, `${f.id('dash')}`, f.id('o'));
     expect(stored).toMatchObject({ textColor: 'light', description: 'Things with a line round them', opacity: 0.3 });
     // Any other look shows Background opacity again.
-    const again = await openEdit(page, f.id('f'), 'Edit Folder');
+    const again = await openEdit(page, f.id('f'), 'Edit folder');
     await expect(again.getByRole('slider', { name: /^Background opacity/ })).toBeVisible();
   });
 
@@ -477,7 +477,7 @@ test.describe('one text colour rule, outlined folders and matching dialogs', () 
     const f = await importDash(page, context, blue);
     await page.goto(f.path);
     await enterEdit(page);
-    const dlg = await openEdit(page, f.id('t'), 'Edit Tile');
+    const dlg = await openEdit(page, f.id('t'), 'Edit tile');
     for (const h of ['Colour', 'Display', 'Move or copy']) await expect(dlg.getByRole('heading', { name: h, level: 3 })).toBeVisible();
     await expect(dlg.getByLabel('Description')).toBeVisible();
     await expect(dlg.getByLabel('Open mode')).toBeVisible();
@@ -492,7 +492,7 @@ test.describe('one text colour rule, outlined folders and matching dialogs', () 
     await saveDraft(page);
     expect(await storedNode(page, f.id('dash'), f.id('t'))).toMatchObject({ textColor: 'dark' });
 
-    const again = await openEdit(page, f.id('t'), 'Edit Tile');
+    const again = await openEdit(page, f.id('t'), 'Edit tile');
     await again.getByRole('button', { name: /^Duplicate/ }).click();
     await expect(again).toHaveCount(0);
     await expect(page.locator('.tab-canvas').getByText('Blue tile', { exact: true })).toHaveCount(2);
@@ -518,7 +518,7 @@ test.describe('coloured tabs use the one text colour rule', () => {
 
     await enterEdit(page);
     await tab.dblclick();
-    const dlg = page.getByRole('dialog', { name: 'Edit Tab' });
+    const dlg = page.getByRole('dialog', { name: 'Edit tab' });
     await expect(dlg).toBeVisible();
     const text = dlg.getByRole('group', { name: 'Text colour' });
     await expect(text.getByRole('radio', { name: 'Auto' })).toBeChecked();

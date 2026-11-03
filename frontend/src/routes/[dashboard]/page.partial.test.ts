@@ -126,7 +126,7 @@ describe('dashboard page with partial loading', () => {
     await loadConfig({ dashboard: 'nope' });
     render(Page);
     await tick();
-    expect(screen.getByText('Dashboard Not Found')).toBeInTheDocument();
+    expect(screen.getByText('Dashboard not found')).toBeInTheDocument();
     expect(api.getDashboard).not.toHaveBeenCalled();
   });
 

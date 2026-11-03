@@ -4,7 +4,7 @@
 // is used (the dashboard, tab and folder levels): no host may restyle them.
 // - Text (the label, the typed value, the error) >= 4.5:1; the placeholder and the input's border >= 3:1.
 // - The Image URL field's computed colours are the same at all three levels, per theme.
-// - "Add Custom Image URL" (a slideshow) is held to the same bar.
+// - "Add custom image URL" (a slideshow) is held to the same bar.
 import { test, expect, type Page, type BrowserContext, type Locator } from '@playwright/test';
 import { getCsrfToken } from '../helpers';
 
@@ -74,19 +74,19 @@ async function usePreset(page: Page, mode: string, preset: string) {
 /** Open the background section at a level; returns its scope. */
 async function openLevel(page: Page, level: Level, folderId: string): Promise<Locator> {
   if (level === 'dashboard') {
-    await page.getByRole('button', { name: 'Edit Dashboard' }).click();
-    const dlg = page.getByRole('dialog', { name: 'Edit Dashboard' });
+    await page.getByRole('button', { name: 'Edit dashboard' }).click();
+    const dlg = page.getByRole('dialog', { name: 'Edit dashboard' });
     await dlg.getByRole('tab', { name: 'Background' }).click();
     return dlg.getByRole('tabpanel', { name: 'Background' });
   }
   if (level === 'tab') {
     await page.getByRole('tab', { name: 'Switch to Main tab' }).dblclick();
-    await page.getByRole('dialog', { name: 'Edit Tab' }).getByRole('button', { name: /Configure Tab Background/ }).click();
+    await page.getByRole('dialog', { name: 'Edit tab' }).getByRole('button', { name: /Configure tab background/ }).click();
     return page.getByRole('dialog', { name: 'Tab background' });
   }
   await page.locator(`.tab-canvas [data-node-id="${folderId}"]`).first().click({ button: 'right', position: { x: 12, y: 12 } });
   await page.getByRole('menuitem', { name: 'Edit' }).click();
-  const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+  const dlg = page.getByRole('dialog', { name: 'Edit folder' });
   await expect(dlg).toBeVisible();
   await dlg.getByRole('button', { name: /^Background/ }).click();
   return page.getByRole('dialog', { name: 'Folder background' });
@@ -218,7 +218,7 @@ for (const mode of ['dark', 'light'] as const) {
       for (const level of LEVELS) {
         await page.goto(d.path);
         await expect(page.locator('html')).toHaveAttribute('data-theme', mode);
-        await page.locator('[aria-label="Enter Edit Mode"]').click();
+        await page.locator('[aria-label="Enter edit mode"]').click();
         await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
         const scope = await openLevel(page, level, d.id('f'));
         const input = scope.locator('#imageUrl');
@@ -250,7 +250,7 @@ for (const mode of ['dark', 'light'] as const) {
     console.log(`[url-contrast] ${mode} worst: ${worst.slice(0, 3).map((w) => `${w.r.toFixed(2)} ${w.at}`).join(' | ')}`);
   });
 
-  test(`${mode}: "Add Custom Image URL" is readable on every preset (folder level)`, async ({ page, context }) => {
+  test(`${mode}: "Add custom image URL" is readable on every preset (folder level)`, async ({ page, context }) => {
     test.setTimeout(120_000);
     const d = await importDash(page, context);
     const worst: { r: number; at: string }[] = [];
@@ -258,7 +258,7 @@ for (const mode of ['dark', 'light'] as const) {
       await usePreset(page, mode, preset);
       await page.goto(d.path);
       await expect(page.locator('html')).toHaveAttribute('data-theme', mode);
-      await page.locator('[aria-label="Enter Edit Mode"]').click();
+      await page.locator('[aria-label="Enter edit mode"]').click();
       const scope = await openLevel(page, 'folder', d.id('f'));
       await scope.getByRole('button', { name: /Slideshow/ }).click();
       const input = scope.locator('#custom-image-url');
@@ -283,7 +283,7 @@ test('a host that re-scopes theme tokens around the section does not change its 
   const d = await importDash(page, context);
   await usePreset(page, 'dark', 'default');
   await page.goto(d.path);
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   const scope = await openLevel(page, 'folder', d.id('f'));
   const input = scope.locator('#imageUrl');
   await expect(input).toBeVisible();

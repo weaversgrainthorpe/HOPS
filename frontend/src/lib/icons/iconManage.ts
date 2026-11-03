@@ -1,7 +1,7 @@
 /**
  * Settings › Icons: the page's logic, kept out of the component so it can be tested on its own.
  * "Uploaded" icons are the user's own images (an image URL, not built in): the same rule the icon
- * picker's "My Uploads" uses (isUploadedIcon). Every name here is plain text; nothing is HTML.
+ * picker's "My uploads" uses (isUploadedIcon). Every name here is plain text; nothing is HTML.
  */
 import type { Icon, IconCategory } from '$lib/utils/api';
 
@@ -28,7 +28,7 @@ export interface IconUsage {
 
 const KINDS = ['tile', 'folder', 'tab', 'dashboard'] as const;
 
-/** The icon picker's "My Uploads" rule, shared so the page and the picker always agree. */
+/** The icon picker's "My uploads" rule, shared so the page and the picker always agree. */
 export function isUploadedIcon(icon: Pick<Icon, 'imageUrl' | 'isPreset'>): boolean {
 	return !!icon.imageUrl && !icon.isPreset;
 }

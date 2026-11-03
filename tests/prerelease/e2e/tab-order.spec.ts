@@ -122,7 +122,7 @@ test.describe('tab order page', () => {
     try {
       const anon = await ctx.newPage();
       await anon.goto(d.path);
-      await anon.getByRole('button', { name: 'Enter Edit Mode' }).click();
+      await anon.getByRole('button', { name: 'Enter edit mode' }).click();
       await signInDialog(anon);
       await expect(anon.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
       await anon.locator(`[data-node-id="${d.tile}"]`).click({ button: 'right' });

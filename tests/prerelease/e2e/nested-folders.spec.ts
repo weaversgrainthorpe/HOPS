@@ -258,7 +258,7 @@ test.describe('a sub-folder opens as a folder inside a folder', () => {
     const view: Box[] = [];
     for (const p of parts()) view.push(await box(p));
     await expect(page.getByRole('button', { name: 'Edit New folder' })).toHaveCount(0);
-    await page.locator('[aria-label="Enter Edit Mode"]').click();
+    await page.locator('[aria-label="Enter edit mode"]').click();
     await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
     const edit: Box[] = [];
     for (const p of parts()) edit.push(await box(p));
@@ -272,7 +272,7 @@ test.describe('a sub-folder opens as a folder inside a folder', () => {
     const nfHead = header(nested(svc, f.id('nf')));
     await nfHead.hover();
     await nfHead.getByRole('button', { name: 'Edit New folder' }).click();
-    const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    const dlg = page.getByRole('dialog', { name: 'Edit folder' });
     await expect(dlg).toBeVisible();
     await expect(dlg.getByRole('textbox', { name: /^Name/ })).toHaveValue('New folder');
   });
@@ -286,7 +286,7 @@ test.describe('a sub-folder opens as a folder inside a folder', () => {
       const errors: string[] = [];
       page.on('pageerror', (e) => errors.push(e.message));
       await page.goto(f.path);
-      await page.locator('[aria-label="Enter Edit Mode"]').click();
+      await page.locator('[aria-label="Enter edit mode"]').click();
       await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
       const svc = node(page, f.id('svc'));
       const nfBar = header(nested(svc, f.id('nf')));
@@ -405,7 +405,7 @@ test.describe('a sub-folder opens as a folder inside a folder', () => {
     await expect(nested(svc, f.id('deeper'))).toHaveCount(0);
     expect(await shown(page, f.id('svc'))).toEqual(['yt', 'gh', 'deeper'].map(f.id));
     await expect(page.getByRole('toolbar', { name: 'Editing' }).getByRole('button', { name: 'Undo' })).toBeDisabled();
-    await page.getByRole('button', { name: 'Exit Edit Mode' }).click();
+    await page.getByRole('button', { name: 'Exit edit mode' }).click();
     await expect(page.getByRole('toolbar', { name: 'Editing' })).toHaveCount(0);
     // View mode, by keyboard: a labelled button; Enter on it goes up one level, focus to its tile.
     await page.reload();
@@ -463,7 +463,7 @@ const barGrip = async (l: Locator) => {
   return { x: h.x + h.width * 0.6, y: h.y + h.height / 2 };
 };
 async function enterEdit(page: Page) {
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
 }
 async function saveDraft(page: Page) {
@@ -530,7 +530,7 @@ test.describe('inset boxes: room, menus and drags', () => {
     await expect(menu).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Open', exact: true })).toHaveCount(0);
     await menu.getByRole('menuitem', { name: 'Edit', exact: true }).click();
-    const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    const dlg = page.getByRole('dialog', { name: 'Edit folder' });
     await expect(dlg.getByRole('textbox', { name: /^Name/ })).toHaveValue('New folder');
     await dlg.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(dlg).toHaveCount(0);

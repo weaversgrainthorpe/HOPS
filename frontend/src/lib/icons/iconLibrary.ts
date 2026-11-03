@@ -1,6 +1,6 @@
 /**
  * The icon library (icons + categories from the server), shared by the icon picker and
- * Settings › Icons so "My Uploads" and the Icons page always show the same thing. A change made
+ * Settings › Icons so "My uploads" and the Icons page always show the same thing. A change made
  * in one (upload, rename, delete) reloads it, and the other sees the change.
  *
  * A failed load is a state with its message, never an empty library: the last good lists are

@@ -72,7 +72,7 @@ export async function openSettings(page: Page) {
 
 /**
  * Settings → Discovery (a normal Settings section at /settings/discovery), signed in:
- * wait for the sidebar with Discovery current, the section title and its New Scan action.
+ * wait for the sidebar with Discovery current, the section title and its New scan action.
  */
 export async function openDiscovery(page: Page) {
   await page.goto('/settings/discovery');
@@ -80,7 +80,7 @@ export async function openDiscovery(page: Page) {
   await expect(side).toBeVisible();
   await expect(side.getByRole('link', { name: 'Discovery', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('heading', { name: 'Discovery', level: 2, exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'New Scan', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'New scan', exact: true })).toBeVisible();
 }
 
 /**
@@ -104,14 +104,14 @@ export async function createDashboardViaUI(page: Page, name: string, urlPath?: s
   track?.push(name);
   await page.getByRole('heading', { name, level: 3 }).click();
   await page.waitForLoadState('networkidle');
-  // Opening a dashboard doesn't enter edit mode; the "Exit Edit Mode" label is the
+  // Opening a dashboard doesn't enter edit mode; the "Exit edit mode" label is the
   // unambiguous in-edit-mode signal.
-  const enterEdit = page.locator('[aria-label="Enter Edit Mode"]');
-  await expect(enterEdit.or(page.locator('[aria-label="Exit Edit Mode"]'))).toBeVisible();
+  const enterEdit = page.locator('[aria-label="Enter edit mode"]');
+  await expect(enterEdit.or(page.locator('[aria-label="Exit edit mode"]'))).toBeVisible();
   if (await enterEdit.isVisible()) {
     await enterEdit.click();
   }
-  await expect(page.locator('[aria-label="Exit Edit Mode"]')).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator('[aria-label="Exit edit mode"]')).toBeVisible({ timeout: 5_000 });
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
   return new URL(page.url()).pathname;
 }

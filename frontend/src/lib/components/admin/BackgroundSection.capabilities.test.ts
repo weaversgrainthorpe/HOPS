@@ -47,19 +47,19 @@ describe('BackgroundSection renders exactly the capability table', () => {
         expect(document.getElementById('bg-type-label')?.textContent).toContain(caps.typeLabel);
 
         const has = (q: () => unknown) => q() !== null;
-        expect(has(() => screen.queryByLabelText(/^Rotation Interval/)), 'interval').toBe(caps.interval);
-        expect(has(() => screen.queryByRole('group', { name: 'Transition Effect' })), 'transition picker').toBe(caps.transitionPicker);
-        expect(has(() => screen.queryByLabelText(/^Transition Duration/)), 'duration').toBe(caps.duration);
+        expect(has(() => screen.queryByLabelText(/^Rotation interval/)), 'interval').toBe(caps.interval);
+        expect(has(() => screen.queryByRole('group', { name: 'Transition effect' })), 'transition picker').toBe(caps.transitionPicker);
+        expect(has(() => screen.queryByLabelText(/^Transition duration/)), 'duration').toBe(caps.duration);
         expect(has(() => screen.queryByRole('button', { name: 'Ken Burns' })), 'Ken Burns').toBe(caps.kenBurns);
-        expect(has(() => screen.queryByText(/Transition Preview/)), 'preview').toBe(caps.transitionPicker);
-        expect(has(() => screen.queryByText(/^Overlay Darkness/)), 'overlay').toBe(caps.overlay);
-        expect(has(() => screen.queryByText(/^Overlay Blur/)), 'blur').toBe(caps.overlay);
+        expect(has(() => screen.queryByText(/Transition preview/)), 'preview').toBe(caps.transitionPicker);
+        expect(has(() => screen.queryByText(/^Overlay darkness/)), 'overlay').toBe(caps.overlay);
+        expect(has(() => screen.queryByText(/^Overlay blur/)), 'blur').toBe(caps.overlay);
         expect(has(() => screen.queryByLabelText(/^(Background|Picture) opacity/)), 'opacity').toBe(caps.opacity);
         expect(has(() => screen.queryByText(SEE_THROUGH_NOTE)), 'see-through note').toBe(caps.overlayNote === 'seeThroughTab');
 
         const folderNote = screen.queryByText(/on this dashboard\. Turn on 'Animated folder backgrounds' in Dashboard settings to play them\./);
         expect(folderNote !== null, 'folder-animations note').toBe(caps.motionNotes.includes('folderAnimationsOff'));
-        expect(screen.queryByRole('button', { name: 'Open Dashboard settings' }) !== null, 'settings link').toBe(
+        expect(screen.queryByRole('button', { name: 'Open dashboard settings' }) !== null, 'settings link').toBe(
           caps.motionNotes.includes('folderAnimationsOff')
         );
         const reducedNote = screen.queryByText(/on this device, because it asks for reduced motion/);
@@ -82,35 +82,35 @@ describe('BackgroundSection renders exactly the capability table', () => {
       level: 'folder', runtime: { folderAnimationsOn: false, reducedMotion: false }, background: slideshow(), onOpenDashboardSettings: () => {}
     });
     expect(screen.getByText(/^Pictures show as the first image, still, on this dashboard\./)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open Dashboard settings' })).toBeInTheDocument();
-    expect(screen.queryByRole('group', { name: 'Transition Effect' })).toBeNull();
-    expect(screen.queryByLabelText(/^Rotation Interval/)).toBeNull();
-    expect(screen.queryByLabelText(/^Transition Duration/)).toBeNull();
-    expect(screen.queryByText(/^Overlay Darkness/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Open dashboard settings' })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Transition effect' })).toBeNull();
+    expect(screen.queryByLabelText(/^Rotation interval/)).toBeNull();
+    expect(screen.queryByLabelText(/^Transition duration/)).toBeNull();
+    expect(screen.queryByText(/^Overlay darkness/)).toBeNull();
     expect(screen.getByLabelText(/^(Background|Picture) opacity/)).toBeInTheDocument();
   });
 
   it('by hand: tab, see-through — the note in place of darkness and blur; motion controls stay', () => {
     render(BackgroundSection, { level: 'tab', runtime: { reducedMotion: false }, background: slideshow(0.6) });
     expect(screen.getByText(SEE_THROUGH_NOTE)).toBeInTheDocument();
-    expect(screen.queryByText(/^Overlay Darkness/)).toBeNull();
-    expect(screen.queryByText(/^Overlay Blur/)).toBeNull();
-    expect(screen.getByRole('group', { name: 'Transition Effect' })).toBeInTheDocument();
+    expect(screen.queryByText(/^Overlay darkness/)).toBeNull();
+    expect(screen.queryByText(/^Overlay blur/)).toBeNull();
+    expect(screen.getByRole('group', { name: 'Transition effect' })).toBeInTheDocument();
   });
 
   it('by hand: moving the tab opacity slider switches the overlay controls and the note live', async () => {
     const { component } = render(BackgroundSection, { level: 'tab', runtime: { reducedMotion: false }, background: slideshow(1) });
     const slider = screen.getByLabelText(/^(Background|Picture) opacity/);
-    expect(screen.getByText(/^Overlay Darkness/)).toBeInTheDocument();
+    expect(screen.getByText(/^Overlay darkness/)).toBeInTheDocument();
     expect(screen.queryByText(SEE_THROUGH_NOTE)).toBeNull();
     await fireEvent.input(slider, { target: { value: '0.5' } });
-    expect(screen.queryByText(/^Overlay Darkness/)).toBeNull();
+    expect(screen.queryByText(/^Overlay darkness/)).toBeNull();
     expect(screen.getByText(SEE_THROUGH_NOTE)).toBeInTheDocument();
     // Saved see-through: the stored darkness and blur are kept exactly.
     const r = (component as unknown as { build(): { ok: boolean; value?: Background } }).build();
     expect(r).toEqual({ ok: true, value: { ...slideshow(), opacity: 0.5 } });
     await fireEvent.input(slider, { target: { value: '1' } });
-    expect(screen.getByText(/^Overlay Darkness/)).toBeInTheDocument();
+    expect(screen.getByText(/^Overlay darkness/)).toBeInTheDocument();
     expect(screen.queryByText(SEE_THROUGH_NOTE)).toBeNull();
   });
 
@@ -119,7 +119,7 @@ describe('BackgroundSection renders exactly the capability table', () => {
     render(BackgroundSection, {
       level: 'folder', runtime: { folderAnimationsOn: false, reducedMotion: false }, background: slideshow(), onOpenDashboardSettings
     });
-    await fireEvent.click(screen.getByRole('button', { name: 'Open Dashboard settings' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Open dashboard settings' }));
     expect(onOpenDashboardSettings).toHaveBeenCalledTimes(1);
   });
 
@@ -168,9 +168,9 @@ describe('BackgroundSection renders exactly the capability table', () => {
       level: 'folder', runtime: { folderAnimationsOn: false, reducedMotion: false }, background: structuredClone(bg)
     });
     await fireEvent.click(screen.getByRole('button', { name: /^Slideshow$/ }));
-    expect(screen.queryByLabelText(/^Rotation Interval/)).toBeNull();
+    expect(screen.queryByLabelText(/^Rotation interval/)).toBeNull();
     // Pick an image so the slideshow can be saved.
-    await fireEvent.input(screen.getByLabelText(/^Add Custom Image URL/), { target: { value: IMGS[1] } });
+    await fireEvent.input(screen.getByLabelText(/^Add custom image URL/), { target: { value: IMGS[1] } });
     await fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
     const r = (component as unknown as { build(): { ok: boolean; value?: Background } }).build();
     expect(r.ok).toBe(true);

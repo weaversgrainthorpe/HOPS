@@ -183,7 +183,7 @@ test("the sign-in check fails with the server reached: its words, and a way to s
     await dialog.getByLabel('Username').fill(ADMIN_USERNAME);
     await dialog.getByLabel('Password', { exact: true }).fill(ADMIN_INITIAL_PASSWORD);
     await dialog.getByLabel('Password', { exact: true }).press('Enter');
-    await expect(page.getByRole('heading', { name: 'Set a New Password' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Set a new password' })).toBeVisible();
   } finally {
     await ctx.close();
   }

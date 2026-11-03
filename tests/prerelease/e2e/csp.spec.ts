@@ -108,10 +108,10 @@ test('the app, editor, iframe tile, Iconify fallback and Settings run with no CS
 	await page.keyboard.press('Escape');
 
 	// Editor, and the icon picker inside it.
-	await page.locator('[aria-label="Enter Edit Mode"]').click();
+	await page.locator('[aria-label="Enter edit mode"]').click();
 	await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
 	await page.locator(`[data-node-id="${id('Online')}"]`).dblclick();
-	const dlg = page.getByRole('dialog', { name: 'Edit Tile' });
+	const dlg = page.getByRole('dialog', { name: 'Edit tile' });
 	await expect(dlg).toBeVisible();
 	await dlg.getByRole('button', { name: 'Edit icon' }).click();
 	const field = page.getByRole('combobox', { name: /Iconify icon name/ });

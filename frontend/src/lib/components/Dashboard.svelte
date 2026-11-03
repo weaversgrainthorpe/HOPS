@@ -519,7 +519,7 @@
       </TabRail>
     {/if}
     {#each unreadableTabs as t (t.id)}
-      <p class="tab-colour-note" id={tabNoteId(t.id)} role="status">"{t.name}" tab: its colour ({t.color}) can't be read — theme colour shown. Choose a colour in its Edit Tab dialog.</p>
+      <p class="tab-colour-note" id={tabNoteId(t.id)} role="status">"{t.name}" tab: its colour ({t.color}) can't be read — theme colour shown. Choose a colour in its Edit tab dialog.</p>
     {/each}
   </div>
 
@@ -551,7 +551,7 @@
           <p class="hint">Tabs let you organize tiles and folders by purpose (e.g. Media, Tools, Networking).</p>
           <button class="add-first-tab-btn" onclick={handleAddTab}>
             <Icon icon="mdi:plus" width="20" />
-            Add Your First Tab
+            Add your first tab
           </button>
         </div>
       {/if}
@@ -582,7 +582,7 @@
     <div class="empty-dashboard">
       <p>No tabs yet on this dashboard</p>
       <p class="hint">Tabs let you organize tiles and folders by purpose (e.g. Media, Tools, Networking).</p>
-      <a href="/settings">Open Settings</a>
+      <a href="/settings">Open settings</a>
     </div>
   {/if}
 </div>

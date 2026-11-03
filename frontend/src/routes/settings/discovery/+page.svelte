@@ -89,7 +89,7 @@
 </script>
 
 <svelte:head>
-  <title>Network Discovery — HOPS</title>
+  <title>Network discovery — HOPS</title>
 </svelte:head>
 
 <div class="page">
@@ -103,7 +103,7 @@
         Manage detectors
       </Button>
       <Button variant="primary" icon="mdi:radar" onclick={() => goto('/settings/discovery/new')}>
-        New Scan
+        New scan
       </Button>
     </div>
   </header>
@@ -130,7 +130,7 @@
   {:else if scans.length === 0}
     <div class="empty-state">
       <Icon icon="mdi:radar" width="48" />
-      <p>No scans yet. Press <b>New Scan</b> to discover services on your LAN.</p>
+      <p>No scans yet. Press <b>New scan</b> to discover services on your LAN.</p>
     </div>
   {:else}
     <div class="table-scroll"><table class="data-table scans">

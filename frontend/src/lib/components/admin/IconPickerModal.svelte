@@ -36,8 +36,8 @@
 
   // Special virtual categories
   const SPECIAL_CATEGORIES = {
-    'my-uploads': { id: 'my-uploads', name: 'My Uploads', icon: 'mdi:cloud-upload', isPreset: true },
-    'recently-used': { id: 'recently-used', name: 'Recently Used', icon: 'mdi:history', isPreset: true }
+    'my-uploads': { id: 'my-uploads', name: 'My uploads', icon: 'mdi:cloud-upload', isPreset: true },
+    'recently-used': { id: 'recently-used', name: 'Recently used', icon: 'mdi:history', isPreset: true }
   };
 
   // Recently used icons (stored in localStorage)
@@ -262,7 +262,7 @@
     }
 
     const confirmed = await confirm({
-      title: 'Delete Icon',
+      title: 'Delete icon',
       message: 'Are you sure you want to delete this icon?',
       confirmText: 'Delete',
       confirmStyle: 'danger'
@@ -291,7 +291,7 @@
     }
 
     const confirmed = await confirm({
-      title: 'Delete Category',
+      title: 'Delete category',
       message: 'Delete this category? Its icons are never deleted with it: a category that has icons is deleted from Settings › Icons, which asks where they go.',
       confirmText: 'Delete',
       confirmStyle: 'danger'
@@ -331,7 +331,7 @@
     use:focusTrap
   >
     <div class="modal-header">
-      <h2 id="icon-picker-title">Choose an Icon</h2>
+      <h2 id="icon-picker-title">Choose an icon</h2>
       <button class="close-btn" onclick={onCancel} aria-label="Close icon picker">
         <Icon icon="mdi:close" width="24" />
       </button>
@@ -421,15 +421,15 @@
               title="Add new category"
             >
               <Icon icon="mdi:plus" width="20" />
-              <span>Add Category</span>
+              <span>Add category</span>
             </button>
           </div>
         {/if}
 
-        <!-- Add Category Form -->
+        <!-- Add category Form -->
         {#if showAddCategory}
           <div class="add-form">
-            <h3>Add New Category</h3>
+            <h3>Add new category</h3>
             <div class="form-row">
               <input
                 type="text"
@@ -455,31 +455,31 @@
             <div class="form-actions">
               <ActionButton action="cancel" onclick={() => showAddCategory = false} />
               <button class="btn-primary" onclick={handleAddCategory} disabled={saving || !newCategoryId || !newCategoryName || !newCategoryIcon}>
-                {saving ? 'Adding...' : 'Add Category'}
+                {saving ? 'Adding...' : 'Add category'}
               </button>
             </div>
           </div>
         {/if}
 
-        <!-- Add Icon Button (only for regular categories, not special ones) -->
+        <!-- Add icon Button (only for regular categories, not special ones) -->
         {#if !searchQuery.trim() && !showAddCategory && selectedCategory !== 'my-uploads' && selectedCategory !== 'recently-used'}
           <div class="toolbar">
             <button class="btn-add-icon" onclick={() => showAddIcon = !showAddIcon}>
               <Icon icon="mdi:plus" width="18" />
-              Add Icon to {categories.find(c => c.id === selectedCategory)?.name || 'Category'}
+              Add icon to {categories.find(c => c.id === selectedCategory)?.name || 'category'}
             </button>
           </div>
         {/if}
 
-        <!-- Add Icon Form -->
+        <!-- Add icon Form -->
         {#if showAddIcon}
           <div class="add-form">
-            <h3>Add New Icon</h3>
+            <h3>Add new icon</h3>
             <div class="form-row">
               <input
                 type="text"
                 bind:value={newIconName}
-                placeholder="Name (e.g., My Tile)"
+                placeholder="Name (e.g., My tile)"
                 class="form-input"
               />
             </div>
@@ -500,7 +500,7 @@
                 onclick={() => newIconUseUpload = true}
               >
                 <Icon icon="mdi:upload" width="16" />
-                Upload Image
+                Upload image
               </button>
             </div>
 
@@ -521,7 +521,7 @@
                     Uploading...
                   {:else if newIconImageUrl}
                     <img src={newIconImageUrl} alt="Uploaded icon" class="upload-preview" />
-                    <span>Change Image</span>
+                    <span>Change image</span>
                   {:else}
                     <Icon icon="mdi:cloud-upload" width="24" />
                     <span>Choose PNG, SVG, or JPG</span>
@@ -535,7 +535,7 @@
                 <input
                   type="text"
                   bind:value={newIconIcon}
-                  placeholder="Iconify Icon (e.g., mdi:server or simple-icons:docker)"
+                  placeholder="Iconify icon (e.g., mdi:server or simple-icons:docker)"
                   class="form-input"
                 />
               </div>
@@ -543,7 +543,7 @@
                 <input
                   type="text"
                   bind:value={newIconColor}
-                  placeholder="Color (optional, e.g., #FF5733)"
+                  placeholder="Colour (optional, e.g., #FF5733)"
                   class="form-input"
                 />
               </div>
@@ -559,7 +559,7 @@
                 onclick={handleAddIcon}
                 disabled={saving || !newIconName || (newIconUseUpload ? !newIconImageUrl : !newIconIcon)}
               >
-                {saving ? 'Adding...' : 'Add Icon'}
+                {saving ? 'Adding...' : 'Add icon'}
               </button>
             </div>
           </div>

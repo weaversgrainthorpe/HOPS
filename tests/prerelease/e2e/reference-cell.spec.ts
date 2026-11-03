@@ -77,7 +77,7 @@ test('1024: view mode draws the folder taller and moves what is below; edit mode
   expect(vn.y).toBeGreaterThanOrEqual(vi.y + vi.height - 1); // never overlapping
 
   // Edit mode (option A): the saved 24 x 4 box, the note in place of its contents, nothing clipped.
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
   await expect(infra).not.toHaveAttribute('data-render-grown', /.*/);
   const note = infra.locator(`[data-folder-taller-here="${id('infra')}"]`);
@@ -102,7 +102,7 @@ test('1920 (the reference): the same folder is drawn at its saved size, with no 
   const infra = page.locator(`.tab-canvas [data-node-id="${id('infra')}"]`).first();
   await expect(infra.locator('[data-folder-page-content] .cell')).toHaveCount(11);
   await expect(infra).not.toHaveAttribute('data-render-grown', /.*/);
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
   await expect(infra.locator('[data-folder-taller-here]')).toHaveCount(0);
   await expect(infra.locator('[data-folder-page-content] .cell')).toHaveCount(11);

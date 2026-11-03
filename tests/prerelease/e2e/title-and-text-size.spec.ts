@@ -89,11 +89,11 @@ async function allNames(page: Page) {
 }
 
 async function enterEdit(page: Page) {
-  await page.getByRole('button', { name: 'Enter Edit Mode' }).click();
+  await page.getByRole('button', { name: 'Enter edit mode' }).click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
 }
 async function exitEdit(page: Page) {
-  await page.getByRole('button', { name: 'Exit Edit Mode' }).click();
+  await page.getByRole('button', { name: 'Exit edit mode' }).click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toHaveCount(0);
 }
 
@@ -180,7 +180,7 @@ test.describe('the title is back in the centre; no link row', () => {
           await expect(page.locator('.navbar .version'), `${label}: version`).toBeVisible();
           await titleCentred(page, all, label);
           // Every control is still there and clickable.
-          for (const name of ['Search', 'Decrease text size', 'Increase text size', 'Theme Settings', editing ? 'Exit Edit Mode' : 'Enter Edit Mode', 'Help', 'About HOPS', 'Log out']) {
+          for (const name of ['Search', 'Decrease text size', 'Increase text size', 'Theme settings', editing ? 'Exit edit mode' : 'Enter edit mode', 'Help', 'About HOPS', 'Log out']) {
             await page.locator('.navbar .nav-right').getByRole('button', { name, exact: true }).click({ trial: true, timeout: 3000 });
           }
         }
@@ -293,7 +293,7 @@ test.describe('on touch, edit handles sit inside their item\'s corner', () => {
     for (const width of [1280, 1416]) {
       await page.setViewportSize({ width, height: 1600 });
       await page.goto(f.path);
-      await page.getByRole('button', { name: 'Enter Edit Mode' }).tap();
+      await page.getByRole('button', { name: 'Enter edit mode' }).tap();
       await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Edit Smally', exact: true })).toHaveCSS('opacity', '1');
       await handlesInside(page, `corners at ${width}`);
@@ -328,7 +328,7 @@ test.describe('on touch, edit handles sit inside their item\'s corner', () => {
       await expect(page.getByRole('dialog')).toBeVisible();
       await page.keyboard.press('Escape');
       await expect(page.getByRole('dialog')).toHaveCount(0);
-      await page.getByRole('button', { name: 'Exit Edit Mode' }).tap();
+      await page.getByRole('button', { name: 'Exit edit mode' }).tap();
       await expect(page.getByRole('toolbar', { name: 'Editing' })).toHaveCount(0);
     }
   });
@@ -340,7 +340,7 @@ test.describe('on touch, edit handles sit inside their item\'s corner', () => {
     for (const width of [1280, 1416]) {
       await page.setViewportSize({ width, height: 2400 });
       await page.goto(sc.path);
-      await page.getByRole('button', { name: 'Enter Edit Mode' }).tap();
+      await page.getByRole('button', { name: 'Enter edit mode' }).tap();
       await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
       for (const tab of ['Grid', 'Sizes', 'Folders', 'Shapes']) {
         await page.getByRole('tab', { name: `Switch to ${tab} tab`, exact: true }).tap();
@@ -367,7 +367,7 @@ test.describe('on touch, edit handles sit inside their item\'s corner', () => {
       await expect(page.getByRole('dialog')).toHaveCount(0);
       await page.getByRole('toolbar', { name: 'Editing' }).getByRole('button', { name: /Undo/ }).tap();
       await expect(face).toBeVisible();
-      await page.getByRole('button', { name: 'Exit Edit Mode' }).tap();
+      await page.getByRole('button', { name: 'Exit edit mode' }).tap();
       await expect(page.getByRole('toolbar', { name: 'Editing' })).toHaveCount(0);
     }
   });
@@ -383,7 +383,7 @@ test.describe('a touch long-press on a minimised folder in edit mode', () => {
     const id = sc.id;
     await page.goto(sc.path);
     await page.getByRole('tab', { name: 'Switch to Sizes tab', exact: true }).tap();
-    await page.getByRole('button', { name: 'Enter Edit Mode' }).tap();
+    await page.getByRole('button', { name: 'Enter edit mode' }).tap();
     const toolbar = page.getByRole('toolbar', { name: 'Editing' });
     await expect(toolbar).toBeVisible();
     const undo = toolbar.getByRole('button', { name: /Undo/ });

@@ -98,8 +98,8 @@ async function openEditing(page: Page, f: Fixture): Promise<string[]> {
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(f.path);
   await expect(node(page, f.id('a'))).toBeVisible();
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
-  await expect(page.locator('[aria-label="Exit Edit Mode"]')).toBeVisible();
+  await page.locator('[aria-label="Enter edit mode"]').click();
+  await expect(page.locator('[aria-label="Exit edit mode"]')).toBeVisible();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
   return errors;
 }
@@ -182,7 +182,7 @@ test.describe('editor in a real browser', () => {
     await expect(page.locator('.drag-layer .cue')).toContainText(/make a folder/i);
     await page.mouse.up();
     // The new folder's dialog opens; keep its name.
-    const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    const dlg = page.getByRole('dialog', { name: 'Edit folder' });
     await expect(dlg).toBeVisible();
     await expect(dlg.locator('#folder-name')).toHaveValue('New folder');
     await dlg.locator('#folder-name').fill('Merged');
@@ -242,7 +242,7 @@ test.describe('editor in a real browser', () => {
     const fe = await box(page, f.id('fe'));
     await page.mouse.click(fe.x + fe.width / 2, fe.y + 10, { button: 'right' });
     await page.getByRole('menuitem', { name: 'Edit' }).click();
-    let dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    let dlg = page.getByRole('dialog', { name: 'Edit folder' });
     await expect(dlg).toBeVisible();
     await dlg.locator('#folder-name').fill('Open renamed');
     await dlg.getByRole('button', { name: /^Save/ }).click();
@@ -251,7 +251,7 @@ test.describe('editor in a real browser', () => {
     // Collapsed folder
     await node(page, f.id('fk')).click({ button: 'right' });
     await page.getByRole('menuitem', { name: 'Edit' }).click();
-    dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    dlg = page.getByRole('dialog', { name: 'Edit folder' });
     await expect(dlg).toBeVisible();
     await dlg.locator('#folder-name').fill('Kept renamed');
     await dlg.getByRole('button', { name: /^Save/ }).click();
@@ -446,7 +446,7 @@ test.describe('editor: dragging into and out of folders', () => {
     await dragTo(page, a.x + a.width / 2, a.y + a.height / 2, c.x + c.width / 2, c.y + c.height / 2);
     await page.waitForTimeout(700);
     await page.mouse.up();
-    const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    const dlg = page.getByRole('dialog', { name: 'Edit folder' });
     await expect(dlg).toBeVisible();
     await dlg.getByRole('button', { name: /^Save/ }).click();
     await expect(dlg).toBeHidden();
@@ -455,7 +455,7 @@ test.describe('editor: dragging into and out of folders', () => {
     return slot;
   }
 
-  const editModeOn = (page: Page) => expect(page.locator('[aria-label="Exit Edit Mode"]')).toBeVisible();
+  const editModeOn = (page: Page) => expect(page.locator('[aria-label="Exit edit mode"]')).toBeVisible();
 
   test('a tile dragged out of an existing folder onto empty canvas lands on the canvas', async ({ page, context }) => {
     const f = await importFolders(page, context);

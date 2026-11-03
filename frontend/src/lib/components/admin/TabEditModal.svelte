@@ -112,7 +112,7 @@
 
 <Modal
   id="tab-edit"
-  title={tabName ? 'Edit Tab' : 'New Tab'}
+  title={tabName ? 'Edit tab' : 'New tab'}
   onClose={onCancel}
   onBeforeClose={handleBeforeClose}
   maxWidth="520px"
@@ -190,7 +190,7 @@
     <div class="form-group">
       <button type="button" class="btn-background" onclick={() => showBackgroundConfig = true}>
         <Icon icon="mdi:image-multiple" width="20" />
-        Configure Tab Background
+        Configure tab background
       </button>
       <small class="background-status">
         {backgroundSummary(shownBackground, 'Using the dashboard background')}{stagedBackground ? ' — applies when you save this tab' : ''}

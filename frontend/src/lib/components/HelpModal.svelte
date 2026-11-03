@@ -161,7 +161,7 @@
 
       {:else if activeTab === 'editing'}
         <div class="help-section">
-          <h3>Edit Mode</h3>
+          <h3>Edit mode</h3>
           <p class="section-desc">Click the pencil in the top bar to start editing. Your changes are a draft until you click Save in the toolbar at the bottom of the screen.</p>
 
           <div class="feature-list">
@@ -175,42 +175,42 @@
             <div class="feature">
               <Icon icon="mdi:plus-circle" width="24" />
               <div>
-                <strong>Add Items</strong>
+                <strong>Add items</strong>
                 <p>Use Add tile, Add folder and Add tab in the toolbar, or right-click inside a folder or tab.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:pencil" width="24" />
               <div>
-                <strong>Edit Items</strong>
+                <strong>Edit items</strong>
                 <p>Click an item's pencil, double-click it, or right-click it and choose Edit.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:folder-move" width="24" />
               <div>
-                <strong>Move or Copy</strong>
+                <strong>Move or copy</strong>
                 <p>Right-click › Move/Copy to… sends tiles and folders to any dashboard, tab or folder.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:trash-can" width="24" />
               <div>
-                <strong>Delete Items</strong>
+                <strong>Delete items</strong>
                 <p>Delete tabs, folders, or tiles from their menu (right-click) or with the Delete key.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:content-copy" width="24" />
               <div>
-                <strong>Copy/Paste Tiles</strong>
+                <strong>Copy/paste tiles</strong>
                 <p>Select tiles or folders and use Ctrl+C/V to copy them into another folder, tab or dashboard.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:undo" width="24" />
               <div>
-                <strong>Undo, Save and Discard</strong>
+                <strong>Undo, save and discard</strong>
                 <p>Undo and Redo step through your changes one at a time. Save stores them; Discard throws away everything since the last save. Leaving edit mode with unsaved changes asks first.</p>
               </div>
             </div>
@@ -218,7 +218,7 @@
         </div>
 
         <div class="help-section">
-          <h3>Customization Options</h3>
+          <h3>Customisation options</h3>
 
           <div class="feature-list">
             <div class="feature">
@@ -238,7 +238,7 @@
             <div class="feature">
               <Icon icon="mdi:resize" width="24" />
               <div>
-                <strong>Tile Sizes</strong>
+                <strong>Tile sizes</strong>
                 <p>Choose Small, Medium or Large. Inside a folder, tiles are shown at the folder's Contents size.</p>
               </div>
             </div>
@@ -254,13 +254,13 @@
 
       {:else if activeTab === 'features'}
         <div class="help-section">
-          <h3>Background Options</h3>
+          <h3>Background options</h3>
 
           <div class="feature-list">
             <div class="feature">
               <Icon icon="mdi:image" width="24" />
               <div>
-                <strong>Single Image</strong>
+                <strong>Single image</strong>
                 <p>Pick a picture from the built-in gallery or upload your own. A background can go behind the whole dashboard, behind one tab, or inside one folder.</p>
               </div>
             </div>
@@ -281,7 +281,7 @@
             <div class="feature">
               <Icon icon="mdi:cloud-upload" width="24" />
               <div>
-                <strong>Upload Images</strong>
+                <strong>Upload images</strong>
                 <p>Upload your own background images (JPEG, PNG, GIF, WebP).</p>
               </div>
             </div>
@@ -289,34 +289,34 @@
         </div>
 
         <div class="help-section">
-          <h3>Tile Features</h3>
+          <h3>Tile features</h3>
 
           <div class="feature-list">
             <div class="feature">
               <Icon icon="mdi:console" width="24" />
               <div>
-                <strong>Tile Types</strong>
+                <strong>Tile types</strong>
                 <p>A Link opens an address. An SSH tile opens your computer's SSH app. A Note is text only, with no link.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:link-variant" width="24" />
               <div>
-                <strong>Open Modes</strong>
+                <strong>Open modes</strong>
                 <p>Open links in a new tab, the same tab, an embedded iframe, or a popup modal.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:home-export-outline" width="24" />
               <div>
-                <strong>Home & Away Addresses</strong>
+                <strong>Home & away addresses</strong>
                 <p>Give a tile an Away address (for example through a VPN) and a Home / Away button appears in the top bar. Each browser chooses which address its tiles open.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:heart-pulse" width="24" />
               <div>
-                <strong>Status Checks</strong>
+                <strong>Status checks</strong>
                 <p>Turn a tile's status check On and it shows a badge: Online (with the response time), Offline or Error. New tiles start Off. Dashboards, tabs and folders can disable status checks for every tile inside them, and Settings can disable status monitoring everywhere; one Disabled level stops every check beneath it. Settings › Dashboards › Blocked status checks lists tiles that are On but stopped that way.</p>
               </div>
             </div>
@@ -331,13 +331,13 @@
         </div>
 
         <div class="help-section">
-          <h3>In Settings</h3>
+          <h3>In settings</h3>
 
           <div class="feature-list">
             <div class="feature">
               <Icon icon="mdi:radar" width="24" />
               <div>
-                <strong>Network Discovery</strong>
+                <strong>Network discovery</strong>
                 <p>Point HOPS at your home network and let it find what's already running. Tell it which addresses to look at (a range, a CIDR, or individual IPs, in any mix), pick how thorough to be, and it comes back with a draft of everything it spotted. Tick through what you actually want and HOPS adds them to your dashboard, in sensible folders. Scan again later to see what's new, changed or gone. Open <strong>Settings › Discovery</strong>. It's a head start, not magic — what it finds depends on your network and what's blocking it, so expect a few misses and a few false matches. Nothing lands on your dashboard until you accept it.</p>
                 <p><em>Running HOPS in Docker? By default, Docker containers can't "see" the kinds of broadcasts smart TVs, Sonos, and AirPlay use to announce themselves — that's a Docker quirk, not a HOPS one. Port scanning and subdomain lookups still work fine. For full coverage on Linux, run with <code>network_mode: host</code>. The Installation &amp; Deployment Guide has the full picture.</em></p>
               </div>
@@ -352,21 +352,21 @@
             <div class="feature">
               <Icon icon="mdi:qrcode" width="24" />
               <div>
-                <strong>QR Codes</strong>
+                <strong>QR codes</strong>
                 <p>Generate a scannable QR for any dashboard from Settings › Dashboards — open it on a phone or tablet without typing the URL.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:link" width="24" />
               <div>
-                <strong>Dead Links & Duplicates</strong>
+                <strong>Dead links & duplicates</strong>
                 <p>Settings › Dashboards › Dead links lists tiles whose status check has kept failing (for a week, by default). Duplicates lists tiles that point at the same address and can merge them, showing what it would keep first.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:backup-restore" width="24" />
               <div>
-                <strong>Automatic Backups</strong>
+                <strong>Automatic backups</strong>
                 <p>HOPS backs up its database when it starts, before every save, before a restore or factory reset, and before an upgrade. Create, download, upload and restore backups from Settings › Backups.</p>
               </div>
             </div>
@@ -401,22 +401,22 @@
             <div class="feature">
               <Icon icon="mdi:format-size" width="24" />
               <div>
-                <strong>Text Size</strong>
+                <strong>Text size</strong>
                 <p>Adjust text size with navbar controls (persists in browser).</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:history" width="24" />
               <div>
-                <strong>Recently Used</strong>
-                <p>Turn on Show recently used in Theme Settings for a row of the tiles you open most. It is kept in this browser only.</p>
+                <strong>Recently used</strong>
+                <p>Turn on Show recently used in Theme settings for a row of the tiles you open most. It is kept in this browser only.</p>
               </div>
             </div>
           </div>
         </div>
 
         <div class="help-section">
-          <h3>On Mobile</h3>
+          <h3>On mobile</h3>
 
           <div class="feature-list">
             <div class="feature">

@@ -102,7 +102,7 @@ const items = (page: Page) => menu(page).getByRole('menuitem');
 const settle = (page: Page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 
 async function enterEdit(page: Page) {
-  await page.getByRole('button', { name: 'Enter Edit Mode' }).click();
+  await page.getByRole('button', { name: 'Enter edit mode' }).click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
 }
 
@@ -226,7 +226,7 @@ test.describe('the dashboard switcher', () => {
           await menuHolds(page, names, 'v3 Showcase', label);
           await page.getByRole('link', { name: 'Settings' }).click({ trial: true, timeout: 3000 });
           if (width > 480) {
-            await page.getByRole('button', { name: editing ? 'Exit Edit Mode' : 'Enter Edit Mode' }).click({ trial: true, timeout: 3000 });
+            await page.getByRole('button', { name: editing ? 'Exit edit mode' : 'Enter edit mode' }).click({ trial: true, timeout: 3000 });
             await page.getByRole('button', { name: 'Log out' }).click({ trial: true, timeout: 3000 });
             await expect(page.locator('.navbar .logo img'), `${label}: logo`).toBeVisible();
             await expect(page.locator('.navbar .version'), `${label}: version`).toBeVisible();
@@ -369,7 +369,7 @@ test.describe('the dashboard switcher', () => {
     await expect(page).toHaveURL(new RegExp(`${sc.path}$`));
     await expect(toolbar).toBeVisible();
     await toolbar.getByRole('button', { name: 'Add tab' }).click();
-    const tabDlg = page.getByRole('dialog', { name: 'New Tab' });
+    const tabDlg = page.getByRole('dialog', { name: 'New tab' });
     await tabDlg.locator('input#name').fill('Unsaved tab');
     await tabDlg.getByRole('button', { name: 'Create' }).click();
     await expect(page.getByRole('tab', { name: 'Switch to Unsaved tab tab' })).toBeVisible();
@@ -542,7 +542,7 @@ test.describe('the title hidden — a compact "Dashboards ▾" switcher for an a
     const toolbar = page.getByRole('toolbar', { name: 'Editing' });
     await expect(compact(page)).toBeVisible();
     await toolbar.getByRole('button', { name: 'Add tab' }).click();
-    const tabDlg = page.getByRole('dialog', { name: 'New Tab' });
+    const tabDlg = page.getByRole('dialog', { name: 'New tab' });
     await tabDlg.locator('input#name').fill('Unsaved tab');
     await tabDlg.getByRole('button', { name: 'Create' }).click();
     await expect(toolbar.getByRole('button', { name: 'Save' })).toBeEnabled();

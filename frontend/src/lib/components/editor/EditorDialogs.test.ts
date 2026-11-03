@@ -374,7 +374,7 @@ describe('FolderEditModal background', () => {
     expect(screen.getByRole('heading', { name: /Folder background/i })).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('radio', { name: 'Its own picture' }));
     await fireEvent.input(screen.getByLabelText(/^Image URL/), { target: { value: '/presets/network-grid.jpg' } });
-    expect(screen.queryByText(/Overlay Darkness/i)).toBeNull();
+    expect(screen.queryByText(/Overlay darkness/i)).toBeNull();
     await fireEvent.input(document.getElementById('bg-opacity')!, { target: { value: '0.5' } }); // the picker's own slider
     await fireEvent.click(within(screen.getByRole('dialog', { name: /background$/i })).getByRole('button', { name: 'Save' }));
     await tick();

@@ -85,7 +85,7 @@ test('dialog: set an away address (bad one refused), toggle appears only once a 
   await createDashboardViaUI(page, dashName, undefined, made);
   await expect(awayToggle(page)).toHaveCount(0);
   await toolbar(page).getByRole('button', { name: 'Add tile' }).click();
-  const dlg = page.getByRole('dialog', { name: 'New Tile' });
+  const dlg = page.getByRole('dialog', { name: 'New tile' });
   await dlg.locator('input#name').fill('NAS');
   await dlg.locator('input#url').fill(HOME);
   await expect(dlg.getByText('Used when this browser is set to Away, e.g. your Tailscale or public address.')).toBeVisible();

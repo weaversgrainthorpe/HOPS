@@ -35,7 +35,7 @@
         <p class="error-message">{error.message}</p>
         <button class="retry-btn" onclick={reset}>
           <Icon icon="mdi:refresh" width="20" />
-          Try Again
+          Try again
         </button>
       </div>
     </div>

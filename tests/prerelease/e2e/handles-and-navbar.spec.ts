@@ -76,7 +76,7 @@ async function plainDash(page: Page, context: BrowserContext, name: string) {
 const node = (page: Page, id: string) => page.locator(`.tab-canvas [data-node-id="${id}"]`).first();
 
 async function enterEdit(page: Page) {
-  await page.getByRole('button', { name: 'Enter Edit Mode' }).click();
+  await page.getByRole('button', { name: 'Enter edit mode' }).click();
   const toolbar = page.getByRole('toolbar', { name: 'Editing' });
   await expect(toolbar).toBeVisible();
   return toolbar;
@@ -189,7 +189,7 @@ test.describe('the edit handle never covers an item\'s centre', () => {
         await page.waitForTimeout(350); // past the double-click window before the next item
       }
       // Nothing was changed (the open was undone; selecting changes nothing): editing just ends.
-      await page.getByRole('button', { name: 'Exit Edit Mode' }).click();
+      await page.getByRole('button', { name: 'Exit edit mode' }).click();
       await expect(toolbar).toHaveCount(0);
     }
   });
@@ -228,8 +228,8 @@ async function barHolds(page: Page, width: number, editing: boolean, label: stri
     }
   }
   // Every control is still in the bar (compact, never moved into another menu), at a tappable size.
-  const names = ['Search', 'Decrease text size', 'Increase text size', 'Theme Settings', editing ? 'Exit Edit Mode' : 'Enter Edit Mode', 'Help', 'About HOPS', 'Log out'];
-  if (editing) names.push('Export Dashboard');
+  const names = ['Search', 'Decrease text size', 'Increase text size', 'Theme settings', editing ? 'Exit edit mode' : 'Enter edit mode', 'Help', 'About HOPS', 'Log out'];
+  if (editing) names.push('Export dashboard');
   for (const name of names) {
     const b = page.locator('.navbar .nav-right').getByRole('button', { name, exact: true });
     await b.click({ trial: true, timeout: 3000 });
@@ -302,7 +302,7 @@ test.describe('with room short, the navbar controls go compact — as far as the
     await settle(page);
     await barHolds(page, 1280, true, 'edit at 1280, 2 dashboards');
     // And back: view mode at 1920 again, the labels return.
-    await page.getByRole('button', { name: 'Exit Edit Mode' }).click();
+    await page.getByRole('button', { name: 'Exit edit mode' }).click();
     await page.setViewportSize({ width: 1920, height: 900 });
     await page.goto('/');
     await settle(page);

@@ -75,7 +75,7 @@ async function openEditing(page: Page, path: string, first: string): Promise<str
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(path);
   await expect(node(page, first)).toBeVisible();
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
   return errors;
 }
@@ -198,7 +198,7 @@ test.describe('drag and drop in ordered, paged folders', () => {
     expect(find(root, f.id('s'))).toMatchObject({ display: 'collapsed', placement: { w: 6, h: 4 } });
     expect(orderOf(root, f.id('f'))).toEqual([f.id('k1')]);
     // View mode applies this browser's memory: the moved-out sub-folder is still minimised.
-    await page.locator('[aria-label="Exit Edit Mode"]').click();
+    await page.locator('[aria-label="Exit edit mode"]').click();
     await expect(node(page, f.id('s'))).toHaveClass(/collapsed/);
     await page.reload();
     await expect(node(page, f.id('s'))).toHaveClass(/collapsed/);
@@ -319,7 +319,7 @@ test.describe('drag and drop in ordered, paged folders', () => {
     await page.waitForTimeout(700);
     await expect(page.locator('.drag-layer .cue')).toHaveText(/^\s*Make a folder\s*$/i);
     await page.mouse.up();
-    const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    const dlg = page.getByRole('dialog', { name: 'Edit folder' });
     await expect(dlg).toBeVisible();
     await dlg.getByRole('button', { name: /^Save/ }).click();
     await expect(dlg).toBeHidden();
@@ -462,7 +462,7 @@ test.describe('drag and drop in ordered, paged folders', () => {
     const n0 = await box(node(page, f.id('n')));
     await node(page, f.id('f')).locator('.folder-header h3').hover();
     await page.getByRole('button', { name: 'Edit Box', exact: true }).click();
-    const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    const dlg = page.getByRole('dialog', { name: 'Edit folder' });
     await expect(dlg).toBeVisible();
     await dlg.getByLabel('Contents size').selectOption('large');
     await expect(dlg.getByRole('alert')).toHaveCount(0);

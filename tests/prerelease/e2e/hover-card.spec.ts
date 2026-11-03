@@ -209,7 +209,7 @@ test('no popup at any time during an editor drag, even held over another tile', 
   const nas = node(page, f.id('nas')).locator('button.entry');
   const plain = node(page, f.id('plain')).locator('button.entry');
   await expect(nas).toBeVisible();
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
   const a = (await nas.boundingBox())!;
   const b = (await plain.boundingBox())!;

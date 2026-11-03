@@ -227,10 +227,10 @@ test.describe('settings: sidebar and separate pages', () => {
       await expect(anon).toHaveURL(/\/settings\/backups$/);
       // Nothing admin behind the dialog.
       await expect(sidebar(anon)).toHaveCount(0);
-      await expect(anon.getByRole('button', { name: 'Create Backup' })).toHaveCount(0);
+      await expect(anon.getByRole('button', { name: 'Create backup' })).toHaveCount(0);
       await signInDialog(anon);
       await expectOn(anon, PAGES[2]);
-      await expect(anon.getByRole('button', { name: 'Create Backup' })).toBeVisible();
+      await expect(anon.getByRole('button', { name: 'Create backup' })).toBeVisible();
     } finally {
       await ctx.close();
     }
@@ -242,9 +242,9 @@ test.describe('settings: sidebar and separate pages', () => {
       await page.goto(pg.path);
       await expectOn(page, pg);
       if (pg.path === '/settings/global') await expect(page.locator('.row').first()).toBeVisible();
-      const reset = page.getByRole('button', { name: /Factory Reset/i });
+      const reset = page.getByRole('button', { name: /Factory reset/i });
       if (pg.path === '/settings/reset') await expect(reset).toHaveCount(1);
-      else await expect(reset, `no Factory Reset on ${pg.path}`).toHaveCount(0);
+      else await expect(reset, `no Factory reset on ${pg.path}`).toHaveCount(0);
     }
   });
 });
@@ -254,7 +254,7 @@ test.describe('Settings › Backups is the backups page itself', () => {
     await page.goto('/settings/backups');
     await expect(page.getByRole('heading', { name: 'Backups', level: 2 })).toBeVisible();
     await expect(page.locator('#backups .backup-item').first()).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Create Backup' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create backup' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Open Backups' })).toHaveCount(0);
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });

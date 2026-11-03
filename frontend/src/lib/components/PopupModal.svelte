@@ -82,11 +82,11 @@
       <div class="action-buttons">
         <a href={safeHref} target="_blank" class="btn-primary" onclick={(e) => open('_blank', e)}>
           <Icon icon="mdi:open-in-new" width="20" />
-          Open in New Tab
+          Open in new tab
         </a>
         <a href={safeHref} class="btn-secondary" onclick={(e) => open('_self', e)}>
           <Icon icon="mdi:link" width="20" />
-          Open in Same Tab
+          Open in same tab
         </a>
       </div>
     </div>

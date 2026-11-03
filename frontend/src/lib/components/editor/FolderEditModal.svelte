@@ -222,7 +222,7 @@
 
 <Modal
   id="folder-edit"
-  title={isNew ? 'New Folder' : 'Edit Folder'}
+  title={isNew ? 'New folder' : 'Edit folder'}
   onClose={onCancel}
   onBeforeClose={handleBeforeClose}
   maxWidth="520px"

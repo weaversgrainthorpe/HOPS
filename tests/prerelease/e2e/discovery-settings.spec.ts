@@ -42,13 +42,13 @@ test.describe('Discovery is a normal Settings section', () => {
 		await expect(link).toHaveAttribute('href', '/settings/discovery');
 		await link.click();
 		await expectDiscoveryPage(page, /\/settings\/discovery$/, 'Discovery');
-		// Its own actions sit in the section header, on the title's row, like Dashboards' Import / New Dashboard.
+		// Its own actions sit in the section header, on the title's row, like Dashboards' Import / New dashboard.
 		const header = page.locator('.settings-content .section-header');
-		for (const name of ['Diagnostics', 'Manage detectors', 'New Scan']) {
+		for (const name of ['Diagnostics', 'Manage detectors', 'New scan']) {
 			await expect(header.getByRole('button', { name, exact: true })).toBeVisible();
 		}
 		const title = (await header.locator('h2').boundingBox())!;
-		const newScan = (await header.getByRole('button', { name: 'New Scan' }).boundingBox())!;
+		const newScan = (await header.getByRole('button', { name: 'New scan' }).boundingBox())!;
 		expect(Math.abs(title.y + title.height / 2 - (newScan.y + newScan.height / 2)), 'actions on the title row').toBeLessThan(20);
 	});
 
@@ -99,8 +99,8 @@ test.describe('Discovery is a normal Settings section', () => {
 
 	test('every sub-page keeps the sidebar with Discovery highlighted; navigation is by the header and Back', async ({ page }) => {
 		await openDiscovery(page);
-		await page.locator('.section-header').getByRole('button', { name: 'New Scan', exact: true }).click();
-		await expectDiscoveryPage(page, /\/settings\/discovery\/new$/, 'New Discovery Scan');
+		await page.locator('.section-header').getByRole('button', { name: 'New scan', exact: true }).click();
+		await expectDiscoveryPage(page, /\/settings\/discovery\/new$/, 'New discovery scan');
 		await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 		await expectDiscoveryPage(page, /\/settings\/discovery$/, 'Discovery');
 
@@ -130,7 +130,7 @@ test.describe('Discovery is a normal Settings section', () => {
 		const id = await scanId(page);
 		const cases: [string, RegExp, string][] = [
 			['/admin/discovery', /\/settings\/discovery$/, 'Discovery'],
-			['/admin/discovery/new', /\/settings\/discovery\/new$/, 'New Discovery Scan'],
+			['/admin/discovery/new', /\/settings\/discovery\/new$/, 'New discovery scan'],
 			['/admin/discovery/diagnostics', /\/settings\/discovery\/diagnostics$/, 'Discovery diagnostics'],
 			['/admin/discovery/detectors', /\/settings\/discovery\/detectors$/, 'Discovery detectors'],
 			[`/admin/discovery/${id}`, new RegExp(`/settings/discovery/${id}$`), 'Discovery draft']

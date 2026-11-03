@@ -91,12 +91,12 @@ c.commit()
 		await signIn.getByLabel('Username').fill(ADMIN_USERNAME);
 		await signIn.getByLabel('Password', { exact: true }).fill(ADMIN_INITIAL_PASSWORD);
 		await signIn.getByLabel('Password', { exact: true }).press('Enter');
-		await expect(page.getByRole('heading', { name: 'Set a New Password' })).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByRole('heading', { name: 'Set a new password' })).toBeVisible({ timeout: 10_000 });
 		await page.fill('input#current-password', ADMIN_INITIAL_PASSWORD);
 		await page.fill('input#new-password', ADMIN_TEST_PASSWORD);
 		await page.fill('input#confirm-password', ADMIN_TEST_PASSWORD);
-		await page.click('button:has-text("Set Password")');
-		await expect(page.getByRole('heading', { name: 'Set a New Password' })).toHaveCount(0, { timeout: 15_000 });
+		await page.click('button:has-text("Set password")');
+		await expect(page.getByRole('heading', { name: 'Set a new password' })).toHaveCount(0, { timeout: 15_000 });
 	});
 
 	test.afterAll(async () => {

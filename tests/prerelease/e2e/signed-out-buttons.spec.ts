@@ -8,7 +8,7 @@ import { getCsrfToken, signInDialog, setSetting, uniqueName } from '../helpers';
 
 const KEY = 'display.signed_out_buttons';
 
-const pencil = (p: Page) => p.getByRole('button', { name: 'Enter Edit Mode' });
+const pencil = (p: Page) => p.getByRole('button', { name: 'Enter edit mode' });
 const gear = (p: Page) => p.getByRole('link', { name: 'Settings', exact: true });
 const search = (p: Page) => p.getByRole('button', { name: 'Search' });
 

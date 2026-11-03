@@ -7,7 +7,7 @@
   import { clearMustChangePassword } from '$lib/stores/auth';
 
   interface Props {
-    /** Forced first-login flow: shows the default-password notice and says "Set Password". */
+    /** Forced first-login flow: shows the default-password notice and says "Set password". */
     forced?: boolean;
     /** Called ~1.5s after a successful change (the forced dialog closes itself then). */
     onDone?: () => void;
@@ -91,12 +91,12 @@
   {/if}
   <form id="change-password-form" onsubmit={handleSubmit}>
     <div class="form-group">
-      <label for="current-password">Current Password</label>
+      <label for="current-password">Current password</label>
       <PasswordField id="current-password" bind:value={currentPassword} required autocomplete="current-password" disabled={isSubmitting} />
     </div>
 
     <div class="form-group">
-      <label for="new-password">New Password</label>
+      <label for="new-password">New password</label>
       <PasswordField
         id="new-password"
         bind:value={newPassword}
@@ -113,7 +113,7 @@
     </div>
 
     <div class="form-group">
-      <label for="confirm-password">Confirm New Password</label>
+      <label for="confirm-password">Confirm new password</label>
       <PasswordField
         id="confirm-password"
         bind:value={confirmPassword}
@@ -141,7 +141,7 @@
           Changing...
         {:else}
           <Icon icon="mdi:key" width="18" />
-          {forced ? 'Set Password' : 'Change Password'}
+          {forced ? 'Set password' : 'Change password'}
         {/if}
       </button>
     </div>

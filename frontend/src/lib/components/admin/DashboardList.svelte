@@ -73,7 +73,7 @@
 
   async function handleDelete(dashboard: LayoutDashboard) {
     const confirmed = await confirm({
-      title: 'Delete Dashboard',
+      title: 'Delete dashboard',
       message: `Are you sure you want to delete "${dashboard.name}"? This action cannot be undone.`,
       confirmText: 'Delete',
       confirmStyle: 'danger'
@@ -204,7 +204,7 @@
       </button>
       <button onclick={handleNew} class="btn-primary">
         <Icon icon="mdi:plus" width="20" />
-        New Dashboard
+        New dashboard
       </button>
     </div>
   </div>
@@ -229,7 +229,7 @@
             />
           </div>
           <div class="field">
-            <label for="new-path">URL Path <span class="optional">(from the name; change if needed)</span></label>
+            <label for="new-path">URL path <span class="optional">(from the name; change if needed)</span></label>
             <input
               id="new-path"
               type="text"
@@ -264,7 +264,7 @@
                   />
                 </div>
                 <div class="field">
-                  <label for="path-{dashboard.id}">URL Path</label>
+                  <label for="path-{dashboard.id}">URL path</label>
                   <input
                     id="path-{dashboard.id}"
                     type="text"
@@ -323,7 +323,7 @@
     <div class="empty-state">
       <Icon icon="mdi:view-dashboard-outline" width="64" />
       <p>No dashboards yet</p>
-      <button onclick={handleNew} class="btn-primary">Create Your First Dashboard</button>
+      <button onclick={handleNew} class="btn-primary">Create your first dashboard</button>
     </div>
   {/if}
 </div>

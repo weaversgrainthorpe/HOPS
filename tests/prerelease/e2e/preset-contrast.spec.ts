@@ -98,7 +98,7 @@ for (const mode of ['dark', 'light'] as const) {
       await usePreset(page, mode, preset);
       await page.goto(dashPath);
       await expect(page.locator('html')).toHaveAttribute('data-theme', mode);
-      await page.locator('[aria-label="Enter Edit Mode"]').click();
+      await page.locator('[aria-label="Enter edit mode"]').click();
       const toggle = page.locator('.edit-toggle.active');
       await expect(toggle).toBeVisible();
       await page.mouse.move(5, 600); // not hovered: the resting active look

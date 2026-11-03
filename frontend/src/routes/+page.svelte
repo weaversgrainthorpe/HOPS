@@ -67,7 +67,7 @@
       <h1>No dashboards yet</h1>
       <p>Create your first dashboard in Settings.</p>
       <div class="actions">
-        <Button variant="primary" icon="mdi:cog" onclick={() => goto('/settings')}>Open Settings</Button>
+        <Button variant="primary" icon="mdi:cog" onclick={() => goto('/settings')}>Open settings</Button>
       </div>
     </div>
   {/if}

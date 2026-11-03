@@ -160,7 +160,7 @@ test.describe('one-row tab bar', () => {
     const dashId = made.at(-1)!;
     await page.goto(many);
     await expect(tab(page, 1)).toBeVisible();
-    await page.locator('[aria-label="Enter Edit Mode"]').click();
+    await page.locator('[aria-label="Enter edit mode"]').click();
     await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
     const strip = page.locator('[data-drag-tabbar]');
     await expect(strip).toHaveCount(1);
@@ -217,7 +217,7 @@ test.describe('one-row tab bar', () => {
   test('dragging a tile: a tab at the end of the visible row opens when held, once, and the row still edge-scrolls', async ({ page, context }) => {
     const many = await seed(page, context, 60, undefined, 0);
     await page.goto(many);
-    await page.locator('[aria-label="Enter Edit Mode"]').click();
+    await page.locator('[aria-label="Enter edit mode"]').click();
     await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
     const strip = page.locator('[data-drag-tabbar]');
     const stripBox = (await strip.boundingBox())!;
@@ -446,9 +446,9 @@ test.describe('one-row tab bar', () => {
     const forty = await seed(page, context, 40);
     await page.goto(forty);
     await expect(tab(page, 1)).toBeVisible();
-    await page.locator('[aria-label="Enter Edit Mode"]').click();
+    await page.locator('[aria-label="Enter edit mode"]').click();
     await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
-    const handle = (n: number) => page.getByRole('button', { name: `Edit Tab ${n} tab` });
+    const handle = (n: number) => page.getByRole('button', { name: `Edit tab ${n} tab` });
     await expect(page.locator('[data-tab-button][tabindex="0"]')).toHaveCount(1);
     await expect(page.locator('.tab-container [data-edit-handle][tabindex="0"]')).toHaveCount(1);
     await page.getByRole('button', { name: 'Scroll tabs left' }).focus();

@@ -155,7 +155,7 @@ const box = async (l: Locator) => {
 const settle = (page: Page, ms = 600) => page.waitForTimeout(ms);
 
 async function enterEdit(page: Page) {
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
 }
 async function open(page: Page, f: Dash) {

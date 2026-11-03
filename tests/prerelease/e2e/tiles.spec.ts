@@ -30,7 +30,7 @@ test('tile CRUD: add Link tile, reload, edit name, save, reload again', async ({
   // A dashboard made in Settings comes with a Home tab; add the tile there.
   await createDashboardViaUI(page, dashName, undefined, made);
   await toolbar(page).getByRole('button', { name: 'Add tile' }).click();
-  const newDlg = page.getByRole('dialog', { name: 'New Tile' });
+  const newDlg = page.getByRole('dialog', { name: 'New tile' });
   await newDlg.locator('input#name').fill(tileName);
   await newDlg.locator('input#url').fill(tileURL);
   await newDlg.getByRole('button', { name: 'Create' }).click();
@@ -45,11 +45,11 @@ test('tile CRUD: add Link tile, reload, edit name, save, reload again', async ({
   expect(stored).toContain(tileURL);
 
   // Edit: the page reloads in non-edit mode; turn editing back on, then double-click the tile.
-  const enter = page.locator('[aria-label="Enter Edit Mode"]');
+  const enter = page.locator('[aria-label="Enter edit mode"]');
   if (await enter.isVisible()) await enter.click();
   await expect(toolbar(page)).toBeVisible();
   await tileNamed(page, tileName).dblclick();
-  const dlg = page.getByRole('dialog', { name: 'Edit Tile' });
+  const dlg = page.getByRole('dialog', { name: 'Edit tile' });
   await expect(dlg.locator('input#url')).toHaveValue(tileURL);
   await dlg.locator('input#name').fill(renamedTile);
   await dlg.getByRole('button', { name: 'Save', exact: true }).click();

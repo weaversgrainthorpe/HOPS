@@ -87,10 +87,10 @@ async function seedAndOpenIconEditor(page: Page, context: BrowserContext): Promi
 	expect(r.status(), await r.text()).toBe(200);
 	made = id('dash');
 	await page.goto(`/${p}`);
-	await page.locator('[aria-label="Enter Edit Mode"]').click();
+	await page.locator('[aria-label="Enter edit mode"]').click();
 	await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
 	await page.locator(`[data-node-id="${id('t')}"]`).dblclick();
-	const dlg = page.getByRole('dialog', { name: 'Edit Tile' });
+	const dlg = page.getByRole('dialog', { name: 'Edit tile' });
 	await expect(dlg).toBeVisible();
 	await dlg.getByRole('button', { name: 'Edit icon' }).click();
 	const field = page.getByRole('combobox', { name: /Iconify icon name/ });
@@ -349,7 +349,7 @@ test.describe('icon type-ahead', () => {
 		// Reload the dashboard in view mode: the names chunk is not fetched.
 		chunks.length = 0;
 		await page.reload();
-		await expect(page.locator('[aria-label="Enter Edit Mode"]')).toBeVisible();
+		await expect(page.locator('[aria-label="Enter edit mode"]')).toBeVisible();
 		await page.waitForLoadState('networkidle');
 		expect(chunks.length).toBeGreaterThan(0);
 		expect(chunks.some((c) => c.url === namesChunk || c.names)).toBe(false);
@@ -399,7 +399,7 @@ test.describe('icon type-ahead', () => {
 
 		// The tile editor picked the accepted icon up: Done, then the tile preview shows it.
 		await page.getByRole('dialog', { name: 'Edit icon' }).getByRole('button', { name: 'Done' }).click();
-		await page.getByRole('dialog', { name: 'Edit Tile' }).getByRole('button', { name: 'Edit icon' }).click();
+		await page.getByRole('dialog', { name: 'Edit tile' }).getByRole('button', { name: 'Edit icon' }).click();
 		await expect(page.getByRole('combobox', { name: /Iconify icon name/ })).toHaveValue('mdi:server-minus-outline');
 	});
 
@@ -421,7 +421,7 @@ test.describe('icon type-ahead', () => {
 		await expect(field).toHaveValue('mdi:server');
 		await expect(list).toHaveCount(0);
 		await expect(page.getByRole('dialog', { name: 'Edit icon' })).toBeVisible();
-		await expect(page.getByRole('dialog', { name: 'Edit Tile' })).toBeVisible();
+		await expect(page.getByRole('dialog', { name: 'Edit tile' })).toBeVisible();
 		// A second Escape with the list closed closes the Edit icon dialog as before.
 		await page.keyboard.press('Escape');
 		await expect(page.getByRole('dialog', { name: 'Edit icon' })).toHaveCount(0);

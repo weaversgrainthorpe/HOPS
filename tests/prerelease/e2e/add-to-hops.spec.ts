@@ -167,7 +167,7 @@ async function bookmarkOnHops(page: Page, o: Record<string, string>) {
 async function openEditing(page: Page, path: string, tab: string) {
   await page.goto(path);
   await page.getByRole('tab', { name: tab }).click();
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
 }
 
@@ -244,7 +244,7 @@ const bar = (p: Page) => p.getByRole('toolbar', { name: 'Editing' });
 /** A change in the editor: a tile added through the toolbar's Add tile (an undoable draft edit). */
 async function addTileInEditor(p: Page, name: string) {
   await bar(p).getByRole('button', { name: 'Add tile' }).click();
-  const dlg = p.getByRole('dialog', { name: 'New Tile' });
+  const dlg = p.getByRole('dialog', { name: 'New tile' });
   await dlg.locator('input#name').fill(name);
   await dlg.locator('input#url').fill(`https://${name.toLowerCase().replace(/\W+/g, '')}.addh.test/`);
   await dlg.getByRole('button', { name: 'Create' }).click();

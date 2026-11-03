@@ -107,7 +107,7 @@
 
 <Modal
   id="import-config"
-  title="Import Dashboards"
+  title="Import dashboards"
   titleIcon="mdi:tray-arrow-down"
   onClose={onClose}
   maxWidth="600px"
@@ -228,7 +228,7 @@
       />
       <button class="btn-secondary" onclick={selectFile}>
         <Icon icon="mdi:file-upload" width="20" />
-        Select File
+        Select file
       </button>
       {#if selectedFile}
         <span class="file-name">{selectedFile.name}</span>

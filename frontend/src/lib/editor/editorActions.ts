@@ -646,7 +646,7 @@ export async function deleteTabWithConfirm(tabId: string): Promise<boolean> {
   const tab = d ? tabOf(d, tabId) : undefined;
   if (!d || !tab) return false;
   const ok = await confirm({
-    title: 'Delete Tab',
+    title: 'Delete tab',
     message: `Delete "${tab.name}" and all its contents? You can undo this (Ctrl+Z) until you save.`,
     confirmText: 'Delete',
     confirmStyle: 'danger'

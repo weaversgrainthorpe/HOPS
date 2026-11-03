@@ -24,7 +24,7 @@ const PAGES = [
 	{ path: '/settings/discovery', heading: 'Discovery' },
 	{ path: '/settings/discovery/detectors', heading: 'Discovery detectors' },
 	{ path: '/settings/discovery/diagnostics', heading: 'Discovery diagnostics' },
-	{ path: '/settings/discovery/new', heading: 'New Discovery Scan' },
+	{ path: '/settings/discovery/new', heading: 'New discovery scan' },
 	{ path: '/settings/discovery/SCAN', heading: 'Discovery draft' },
 	{ path: '/settings/backups', heading: 'Backups' },
 	{ path: '/settings/logs', heading: 'Logs' },
@@ -270,7 +270,7 @@ test.describe('factory reset: emergency-stop button', () => {
 		await page.route('**/api/config/reset', (r) => { resets++; return r.abort(); });
 		await open(page, '/settings/reset', 'Factory reset');
 		await page.getByRole('button', { name: 'Factory reset', exact: true }).click();
-		const dlg = page.getByRole('dialog', { name: 'Factory Reset' });
+		const dlg = page.getByRole('dialog', { name: 'Factory reset' });
 		await expect(dlg).toBeVisible();
 		await expect(dlg).toContainText(/cannot be undone/);
 		await dlg.getByRole('button', { name: 'Cancel' }).click();
@@ -288,7 +288,7 @@ test.describe('factory reset: emergency-stop button', () => {
 		await page.keyboard.down('Space');
 		await expect.poll(() => btn.locator('.estop-cap').evaluate((e) => getComputedStyle(e).transform)).not.toBe(before);
 		await page.keyboard.up('Space');
-		const dlg = page.getByRole('dialog', { name: 'Factory Reset' });
+		const dlg = page.getByRole('dialog', { name: 'Factory reset' });
 		await expect(dlg).toBeVisible();
 		await page.keyboard.press('Escape');
 		await expect(dlg).toHaveCount(0);

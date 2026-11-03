@@ -21,7 +21,7 @@ const { chromium } = require('@playwright/test');
   await page.locator('button[aria-label^="Open "]').first().waitFor();
   await page.getByRole('tab', { name: 'Switch to T1 tab' }).click();
   await page.waitForTimeout(500);
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   const bar = page.getByRole('toolbar', { name: 'Editing' });
   await bar.waitFor();
   const tiles = page.locator('[data-node-id^="tabs-t"]:visible');
@@ -94,7 +94,7 @@ const { chromium } = require('@playwright/test');
   // 3. Save the long session's end state (nothing changed overall) and leave.
   const save = bar.getByRole('button', { name: /Save/ });
   console.log('Save enabled after undoing everything:', await save.isEnabled());
-  await page.getByRole('button', { name: 'Exit Edit Mode' }).click();
+  await page.getByRole('button', { name: 'Exit edit mode' }).click();
   const disc = page.getByRole('dialog').getByRole('button', { name: /Discard|Leave|Exit/ });
   if (await disc.count()) await disc.first().click();
   console.log(errors.length ? 'errors: ' + errors.slice(0, 3).join('; ') : 'no page errors');

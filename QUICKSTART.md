@@ -145,9 +145,9 @@ host. For all the options, see [Proxmox container](DEPLOY.md#proxmox-container-h
 3. To sign in, click the **pencil** button in the top bar (its tooltip says
    *Sign in to edit this dashboard*), or the **gear** (Settings).
 4. Sign in with username `admin` and password `admin`.
-5. HOPS asks you to **Set a New Password** straight away, and you can't
+5. HOPS asks you to **Set a new password** straight away, and you can't
    carry on until you do. Type `admin` as the current password, then your
-   new one twice (8 to 72 characters), and click **Set Password**.
+   new one twice (8 to 72 characters), and click **Set password**.
 
 You can change the password later under **Settings › Password**. If you
 ever forget it, run the program with `reset-password` on the computer that
@@ -195,7 +195,7 @@ picture, and three tabs across the top:
 
 Other things in the top bar: **Search** (or press `/`) finds tiles and
 folders on the dashboard you are looking at; the two **A** buttons change
-text size; **Theme Settings** picks light, dark and colour themes; **Help**
+text size; **Theme settings** picks light, dark and colour themes; **Help**
 (once signed in) lists keyboard shortcuts; **About HOPS** (once signed in)
 shows the version and a list of features. Step 8 covers these in more
 detail.
@@ -231,7 +231,7 @@ the end it's your dashboard: organise it the way that suits you.
 ### Create the dashboard
 
 1. Click the **gear** (Settings). You are on **Dashboards**.
-2. Click **New Dashboard**.
+2. Click **New dashboard**.
 3. Type a **Name**, for example `Home`.
 4. The **URL Path** fills itself in from the name as you type (`Home` becomes
    `/home`). You can change it if you'd like a different address.
@@ -349,7 +349,7 @@ Click **Add tab**, give it a **Tab Name** (and an icon or colour if you
 like), and click **Create**. A coloured tab has a **Text colour** like tiles
 and folders: *Auto* picks black or white, whichever is easier to read. Drag tabs to reorder them. To change a tab
 later, click the pencil next to its name (or right-click it): the **Edit
-Tab** dialog also has **Duplicate** and **Delete**.
+tab** dialog also has **Duplicate** and **Delete**.
 
 Tabs and folders are both ways to organise, and you can use either or both.
 Some people give each area its own tab (*Network*, *Media*, *Home
@@ -397,12 +397,12 @@ Everything here is in the item's dialog: in edit mode, click the item's pencil (
 
 **Open mode** decides what a click does:
 
-- **New Tab** (the default): opens the address in a new browser tab.
-- **Same Tab**: replaces HOPS with the service.
-- **iFrame Modal**: shows the service in a window on top of HOPS. Some
-  sites refuse to be shown this way; use New Tab for those.
-- **Popup Modal**: asks first, with **Open in New Tab** and **Open in Same
-  Tab** buttons.
+- **New tab** (the default): opens the address in a new browser tab.
+- **Same tab**: replaces HOPS with the service.
+- **iFrame modal**: shows the service in a window on top of HOPS. Some
+  sites refuse to be shown this way; use New tab for those.
+- **Popup modal**: asks first, with **Open in new tab** and **Open in same
+  tab** buttons.
 
 SSH tiles always open your SSH app, so they have no Open mode choice.
 
@@ -453,7 +453,7 @@ through Tailscale, a VPN or a public address. A tile can hold both:
 
 ### Folder looks
 
-The **Edit Folder** dialog shows a live preview of each **Look**: *Rounded
+The **Edit folder** dialog shows a live preview of each **Look**: *Rounded
 box*, *Simple tab*, *Folder (flat)*, *Folder with paper*, *Folder
 (outlined)*, *Folder (cartoon)* and *Folder (open flap)*. Every look except
 Rounded box has a tab; **Tab position** puts it on the *Left*, *Centre* or
@@ -518,10 +518,10 @@ Ctrl+C and Ctrl+V copy the selected items too, even to another dashboard.
 
 ### Themes and text size
 
-**Theme Settings** (in the top bar) has a **Brightness Mode** (*Dark*,
+**Theme settings** (in the top bar) has a **Brightness mode** (*Dark*,
 *Light*, or *Auto* to follow your device) and eight presets under
-**Theme Preset**: Default, Metallic, Modern, Subtle, Cyberpunk, Sunset, Ocean and Forest.
-Click **Apply Theme**.
+**Theme preset**: Default, Metallic, Modern, Subtle, Cyberpunk, Sunset, Ocean and Forest.
+Click **Apply theme**.
 
 The two **A** buttons make the text smaller or larger: *Small*, *Medium*,
 *Large* or *Extra Large*.
@@ -529,7 +529,7 @@ The two **A** buttons make the text smaller or larger: *Small*, *Medium*,
 Both are kept in this browser, so each person and each device can choose
 their own. Nothing is saved to the dashboard.
 
-Also in Theme Settings: **Show recently used** adds a row of the tiles you
+Also in Theme settings: **Show recently used** adds a row of the tiles you
 open most, above the tabs. It is kept in this browser only, and **Clear
 history** empties it.
 
@@ -541,21 +541,21 @@ then click **Save** in the toolbar.
 
 **Dashboard background.** In edit mode, click **Dashboard** in the toolbar
 and open **Background**. Turn on **Show background picture**, then choose a
-**Background Type**:
+**Background type**:
 
 - **None**: no background.
 - **Color**: one plain colour.
-- **Image**: one picture. Click one in the **Image Gallery** (HOPS comes
+- **Image**: one picture. Click one in the **Image gallery** (HOPS comes
   with pictures in categories such as Network, Servers, Homelab and Space,
   and they work with no internet connection), click **Upload** to add your
   own (JPEG, PNG, GIF or WebP), or type an **Image URL**.
-- **Slideshow**: click several pictures to add them to **Selected Images**.
-  Set the **Rotation Interval** (5 to 3600 seconds), a **Transition
-  Effect** (Crossfade, Slide, Zoom In, Ken Burns, *Random* and many more)
-  and its **Transition Duration**. A preview shows the effect.
+- **Slideshow**: click several pictures to add them to **Selected images**.
+  Set the **Rotation interval** (5 to 3600 seconds), a **Transition
+  effect** (Crossfade, Slide, Zoom in, Ken Burns, *Random* and many more)
+  and its **Transition duration**. A preview shows the effect.
 
-For pictures, **Image Fit** chooses *Cover*, *Contain* or *Fill*, and
-**Overlay Darkness** and **Overlay Blur** darken and soften the picture so
+For pictures, **Image fit** chooses *Cover*, *Contain* or *Fill*, and
+**Overlay darkness** and **Overlay blur** darken and soften the picture so
 tiles stay easy to read. **Background opacity** fades the background
 itself. Click **Save** in the dialog.
 
@@ -567,12 +567,12 @@ the options; what works is up to you. A good start is one picture behind
 the dashboard, with plain colours on tabs and folders, and pictures added
 only where they help you find things.
 
-**Tab background.** Open the tab's dialog and click **Configure Tab
-Background**. Choose **Same as the dashboard** or **Its own background**
+**Tab background.** Open the tab's dialog and click **Configure tab
+background**. Choose **Same as the dashboard** or **Its own background**
 (the same choices as above), then **Save**. The tab dialog also has its own
 **Background Color**, **Opacity** and **Text colour**.
 
-**Folder background.** In **Edit Folder**, the folder's colour and opacity
+**Folder background.** In **Edit folder**, the folder's colour and opacity
 are under **Colour**. For a picture, click **Background…** and choose **Its
 own picture** (an *Image* or a *Slideshow*) or **No picture of its own —
 show what's behind**, then **Save**. Folder slideshows play only
@@ -584,8 +584,8 @@ show the first picture, still.
 ### Header
 
 **Dashboard › Header** controls the top bar's left and centre: **Show left
-section** with **Custom Text (optional)** (empty shows the HOPS logo and
-links to your dashboards), and **Show center title** with **Custom Title
+section** with **Custom text (optional)** (empty shows the HOPS logo and
+links to your dashboards), and **Show center title** with **Custom title
 (optional)** (empty shows the dashboard's name). The buttons on the
 right are always there.
 
@@ -608,7 +608,7 @@ name and icon filled in. Pick the **Dashboard**, **Tab** and (optionally)
 
 ### Network Discovery
 
-**Settings › Discovery › New Scan** scans your network for services with a
+**Settings › Discovery › New scan** scans your network for services with a
 web page (NAS, router, Proxmox, Home Assistant, media servers and many
 more). Enter the **Targets to scan** (e.g. `192.168.1.0/24`), choose a
 **Scan intensity** (*Light active* is the default), and click
@@ -619,7 +619,7 @@ network, so expect a few misses and a few false finds.
 ### Import from Homer, Dashy or Heimdall
 
 Coming from another dashboard? On **Settings › Dashboards**, click
-**Import**, then **Select File**. HOPS reads:
+**Import**, then **Select file**. HOPS reads:
 
 - **Homer YAML**: `config.yml` from Homer.
 - **Dashy YAML**: `conf.yml` from Dashy.
@@ -653,7 +653,7 @@ imported here: restore it in **Settings › Backups**.
 
 The **Export** button next to a dashboard in Settings › Dashboards saves
 that dashboard as a HOPS JSON file. **Export all**, at the top of Settings ›
-Dashboards, saves every dashboard in one file. **Export Dashboard** in the
+Dashboards, saves every dashboard in one file. **Export dashboard** in the
 top bar while editing offers both. Import reads either. The file carries your
 uploaded icons and backgrounds with it, so it can be imported into another
 HOPS. An export holds dashboards only. It is not a backup: a backup is the
@@ -754,7 +754,7 @@ before a restore or factory reset, and before an upgrade.
 
 On **Settings › Backups** you can:
 
-- **Create Backup** at any time.
+- **Create backup** at any time.
 - **Download** a backup (the download includes the images it uses). Keep a
   copy somewhere other than the HOPS machine.
 - **Upload a backup**, and **Restore** one. Restoring takes a safety backup

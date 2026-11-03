@@ -67,12 +67,12 @@ describe('BackgroundConfigModal at every level', () => {
   it('folder level hides the overlay darkness and blur; tab level shows them', () => {
     const bg: Background = { type: 'image', value: '/presets/network-grid.jpg' };
     const { unmount } = render(BackgroundConfigModal, { runtime: MOVING, level: 'folder', background: bg, onSave: vi.fn(), onCancel: vi.fn() });
-    expect(screen.queryByText(/Overlay Darkness/i)).toBeNull();
-    expect(screen.queryByText(/Overlay Blur/i)).toBeNull();
+    expect(screen.queryByText(/Overlay darkness/i)).toBeNull();
+    expect(screen.queryByText(/Overlay blur/i)).toBeNull();
     unmount();
     open('tab', bg);
-    expect(screen.getByText(/Overlay Darkness/i)).toBeInTheDocument();
-    expect(screen.getByText(/Overlay Blur/i)).toBeInTheDocument();
+    expect(screen.getByText(/Overlay darkness/i)).toBeInTheDocument();
+    expect(screen.getByText(/Overlay blur/i)).toBeInTheDocument();
   });
 
   it('folder level never writes overlay fields (a picture picked there has none)', async () => {
@@ -89,7 +89,7 @@ describe('BackgroundConfigModal at every level', () => {
 
   it('picking a picture listed under several names selects exactly one card', async () => {
     open('dashboard', { type: 'image', value: '/presets/dark-gradient.jpg' });
-    const card = await screen.findByTitle('Network Grid');
+    const card = await screen.findByTitle('Network grid');
     await fireEvent.click(card);
     expect(document.querySelectorAll('.image-card.selected')).toHaveLength(1);
     expect(document.querySelectorAll('.image-card img[src="/presets/network-grid.jpg"]')).toHaveLength(1);
@@ -267,7 +267,7 @@ describe('BackgroundConfigModal at every level', () => {
 
   it('an invalid custom URL shows an inline error and is not added', async () => {
     const { onSave } = open('tab', { type: 'slideshow', images: ['/presets/network-grid.jpg'] });
-    const input = screen.getByLabelText(/Add Custom Image URL/i);
+    const input = screen.getByLabelText(/Add custom image URL/i);
     for (const bad of ['javascript:alert(1)', '/api/config', 'ftp://x.example/a.jpg', '/backgrounds/../api/x']) {
       await fireEvent.input(input, { target: { value: bad } });
       await fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
@@ -281,7 +281,7 @@ describe('BackgroundConfigModal at every level', () => {
 
   it('a valid custom URL is added (and clears the error)', async () => {
     const { onSave } = open('tab', { type: 'slideshow', images: [] });
-    const input = screen.getByLabelText(/Add Custom Image URL/i);
+    const input = screen.getByLabelText(/Add custom image URL/i);
     await fireEvent.input(input, { target: { value: 'javascript:alert(1)' } });
     await fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
     expect(screen.getByRole('alert')).toBeInTheDocument();
@@ -322,8 +322,8 @@ describe('BackgroundConfigModal at every level', () => {
 
   describe('slideshow timing is bounded', () => {
     const imgs = ['/presets/network-grid.jpg', '/presets/dark-gradient.jpg'];
-    const interval = () => screen.getByLabelText(/^Rotation Interval/) as HTMLInputElement;
-    const duration = () => screen.getByLabelText(/^Transition Duration/) as HTMLInputElement;
+    const interval = () => screen.getByLabelText(/^Rotation interval/) as HTMLInputElement;
+    const duration = () => screen.getByLabelText(/^Transition duration/) as HTMLInputElement;
 
     it('the inputs carry the bounds', () => {
       open('tab', { type: 'slideshow', images: imgs });
@@ -369,7 +369,7 @@ describe('BackgroundConfigModal at every level', () => {
   });
 });
 
-// The folder background is pictures only. Edit Folder owns the folder's colour; the
+// The folder background is pictures only. Edit folder owns the folder's colour; the
 // dashboard and tab levels keep every option; a stored folder colour background is never dropped.
 describe('folder background: pictures only', () => {
   const typeButtons = () =>
@@ -414,7 +414,7 @@ describe('folder background: pictures only', () => {
     expect(onSave).toHaveBeenCalledWith(undefined);
   });
 
-  describe('a stored colour background (from before folders took their colour from Edit Folder)', () => {
+  describe('a stored colour background (from before folders took their colour from Edit folder)', () => {
     const colourBg: Background = { type: 'color', value: '#123456', opacity: 0.6 };
     const legacyOption = () => screen.getByRole('radio', { name: /^Colour background \(set the folder colour instead\)/ }) as HTMLInputElement;
 

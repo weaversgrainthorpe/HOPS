@@ -27,7 +27,7 @@ test('a folder colour set back to None is gone after Save and reload', async ({ 
   const dashName = uniqueName('ClearColour');
   await createDashboardViaUI(page, dashName, undefined, made);
   await toolbar(page).getByRole('button', { name: 'Add folder' }).click();
-  const create = page.getByRole('dialog', { name: 'New Folder' });
+  const create = page.getByRole('dialog', { name: 'New folder' });
   await create.locator('#folder-name').fill('Cerise');
   await create.getByRole('button', { name: 'Pink', exact: true }).click();
   await create.getByRole('button', { name: /Create/ }).click();
@@ -38,7 +38,7 @@ test('a folder colour set back to None is gone after Save and reload', async ({ 
 
   await folder.click({ button: 'right', position: { x: 8, y: 8 } });
   await page.getByRole('menuitem', { name: 'Edit' }).click();
-  const edit = page.getByRole('dialog', { name: 'Edit Folder' });
+  const edit = page.getByRole('dialog', { name: 'Edit folder' });
   await edit.getByRole('button', { name: /^None/ }).first().click();
   await edit.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(edit).toHaveCount(0);
@@ -54,7 +54,7 @@ test("a tile's away address cleared in the dialog is gone after Save", async ({ 
   const dashName = uniqueName('ClearAway');
   await createDashboardViaUI(page, dashName, undefined, made);
   await toolbar(page).getByRole('button', { name: 'Add tile' }).click();
-  const create = page.getByRole('dialog', { name: 'New Tile' });
+  const create = page.getByRole('dialog', { name: 'New tile' });
   await create.locator('input#name').fill('NAS');
   await create.locator('input#url').fill('http://nas.example.lan/');
   await create.locator('#away-url').fill('https://nas.away.example/');
@@ -63,7 +63,7 @@ test("a tile's away address cleared in the dialog is gone after Save", async ({ 
   expect(JSON.stringify(await savedDashboard(page, dashName))).toContain('nas.away.example');
 
   await page.locator('[data-node-id]', { hasText: 'NAS' }).dblclick();
-  const edit = page.getByRole('dialog', { name: 'Edit Tile' });
+  const edit = page.getByRole('dialog', { name: 'Edit tile' });
   await edit.locator('#away-url').fill('');
   await edit.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(edit).toHaveCount(0);

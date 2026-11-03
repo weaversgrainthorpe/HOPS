@@ -85,7 +85,7 @@
 
 <Modal
   id="qr-code"
-  title="QR Code"
+  title="QR code"
   titleIcon="mdi:qrcode"
   onClose={onClose}
   maxWidth="420px"
