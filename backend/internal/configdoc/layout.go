@@ -25,6 +25,8 @@ import (
 //   - a folder's `shape`, when present, is one of FolderShapes and its
 //     `tabPosition`, when present, one of FolderTabPositions; its
 //     `minimisedIcon`, when present, one of FolderMinimisedIcons;
+//   - a tab's, tile's or folder's `textColor`, when present, is one of
+//     TextColors, and a tile's or folder's `description`, when present, is text;
 //   - a tab-level folder's open box is at least FolderMinCellsOf, which
 //     counts a tab-height allowance for every shape.
 //
@@ -157,6 +159,11 @@ var FolderTabPositions = []string{"left", "centre", "right"}
 // "contents" (the mini-grid of what is inside) or "own" (the folder's own
 // icon). Absent means "contents". Twin of the frontend's FolderNode field.
 var FolderMinimisedIcons = []string{"contents", "own"}
+
+// TextColors is a tab's, tile's or folder's text colour: "auto" (the more readable
+// of white and black on its colour), "light" or "dark". Absent means "auto".
+// Twin of the frontend's TextColorMode.
+var TextColors = []string{"auto", "light", "dark"}
 
 // Default shapes: folders made in HOPS (new, merge, Discovery
 // promote) start Flat; converted folders (v2, Homer, Dashy, Heimdall) are

@@ -1,63 +1,86 @@
 import { describe, it, expect } from 'vitest';
-import { getAutoTextColor, getTextColorValue } from './colorContrast';
+import { autoTextFor, parseHex, textColourOn, MIN_TEXT_CONTRAST, contrastRatio } from './colorContrast';
+import { deriveFolderColours } from '$lib/layout/folderColours';
 
-describe('getAutoTextColor', () => {
-	it('returns dark text for light backgrounds', () => {
-		expect(getAutoTextColor('#ffffff')).toBe('dark');
-		expect(getAutoTextColor('#fafafa')).toBe('dark');
-		expect(getAutoTextColor('#f1f5f9')).toBe('dark');
-	});
+// Item 16: ONE Auto text-colour rule everywhere: whichever of white or black contrasts more.
+const TABLE: [string, '#ffffff' | '#000000'][] = [
+  ['#3b82f6', '#000000'], // the blue in the report: black 5.7:1 beats white 3.7:1
+  ['#ffffff', '#000000'],
+  ['#000000', '#ffffff'],
+  ['#0f172a', '#ffffff'],
+  ['#1e293b', '#ffffff'],
+  ['#f59e0b', '#000000'], // amber: the old luminance rule gave white (2.1:1)
+  ['#ef4444', '#000000'],
+  ['#22c55e', '#000000'],
+  ['#6366f1', '#000000'], // indigo: black 4.7:1 beats white 4.5:1
+  ['#8b5cf6', '#000000'],
+  ['#64748b', '#ffffff'],
+  ['#ec4899', '#000000'],
+  ['#2563eb', '#ffffff'],
+  ['#fff', '#000000'],
+  ['#777777', '#000000']
+];
 
-	it('returns light text for dark backgrounds', () => {
-		expect(getAutoTextColor('#000000')).toBe('light');
-		expect(getAutoTextColor('#0f172a')).toBe('light');
-		expect(getAutoTextColor('#1e293b')).toBe('light');
-	});
+describe('the one Auto text rule', () => {
+  it.each(TABLE)('%s gives %s from every caller (tile and folder)', (colour, want) => {
+    expect(autoTextFor(parseHex(colour)!)).toBe(want === '#ffffff' ? 'light' : 'dark');
+    expect(textColourOn(colour, 'auto').text).toBe(want);
+    expect(textColourOn(colour, undefined).text).toBe(want);
+    expect(deriveFolderColours(colour, 'auto').text).toBe(want);
+    expect(deriveFolderColours(colour).text).toBe(want);
+  });
 
-	it('handles colors without # prefix', () => {
-		expect(getAutoTextColor('ffffff')).toBe('dark');
-		expect(getAutoTextColor('000000')).toBe('light');
-	});
+  it('Auto always reaches the readable minimum on the colour itself', () => {
+    for (const [c] of TABLE) expect(textColourOn(c, 'auto').contrast).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST);
+  });
 
-	it('falls back to light when input is invalid', () => {
-		expect(getAutoTextColor('not-a-color')).toBe('light');
-		expect(getAutoTextColor('')).toBe('light');
-	});
-
-	it('picks light text for primary blue', () => {
-		expect(getAutoTextColor('#3b82f6')).toBe('light');
-	});
-
-	it('picks light text for #f59e0b (vivid orange-yellow)', () => {
-		// Documents a known weakness: with the simple 0.5 luminance threshold,
-		// vivid mid-tones like the warning amber land just under 0.5 and get
-		// white text — which can have poor contrast. Components that use this
-		// color in a badge should set the text color explicitly.
-		expect(getAutoTextColor('#f59e0b')).toBe('light');
-	});
+  it('#3b82f6 gives black text for both a tile and a folder', () => {
+    expect(textColourOn('#3b82f6', 'auto').text).toBe('#000000');
+    expect(deriveFolderColours('#3b82f6', 'auto').text).toBe('#000000');
+  });
 });
 
-describe('getTextColorValue', () => {
-	it('returns white for light mode', () => {
-		expect(getTextColorValue('light')).toBe('#ffffff');
-	});
+describe('textColourOn (a tile)', () => {
+  it('an explicit Light or Dark choice wins, and is warned about when hard to read', () => {
+    const light = textColourOn('#3b82f6', 'light');
+    expect(light.text).toBe('#ffffff');
+    expect(light.contrastWarning).toBe(true);
+    expect(light.contrast).toBeCloseTo(contrastRatio('#ffffff', '#3b82f6'), 5);
+    const dark = textColourOn('#3b82f6', 'dark');
+    expect(dark.text).toBe('#000000');
+    expect(dark.contrastWarning).toBe(false);
+  });
 
-	it('returns black for dark mode', () => {
-		expect(getTextColorValue('dark')).toBe('#000000');
-	});
+  it('Auto is never warned about', () => {
+    for (const [c] of TABLE) expect(textColourOn(c, 'auto').contrastWarning).toBe(false);
+  });
 
-	it('auto mode requires a background color', () => {
-		// Without background, auto mode falls through to dark branch
-		expect(getTextColorValue('auto')).toBe('#000000');
-	});
+  it('no colour: the theme text, whatever the choice', () => {
+    for (const m of ['auto', 'light', 'dark', undefined]) {
+      expect(textColourOn(undefined, m)).toMatchObject({ text: 'inherit', themed: true, invalid: false, contrastWarning: false });
+      expect(textColourOn('', m).text).toBe('inherit');
+    }
+  });
 
-	it('auto mode picks white for dark background', () => {
-		expect(getTextColorValue('auto', '#000000')).toBe('#ffffff');
-		expect(getTextColorValue('auto', '#0f172a')).toBe('#ffffff');
-	});
+  it('a colour that cannot be read: the theme text, and says so', () => {
+    for (const bad of ['not-a-color', '3b82f6', 'rgb(1,2,3)', '#12345', '#1234567']) {
+      expect(textColourOn(bad, 'auto')).toMatchObject({ text: 'inherit', themed: true, invalid: true });
+    }
+  });
+});
 
-	it('auto mode picks black for light background', () => {
-		expect(getTextColorValue('auto', '#ffffff')).toBe('#000000');
-		expect(getTextColorValue('auto', '#fafafa')).toBe('#000000');
-	});
+describe('parseHex', () => {
+  it('reads the rgb part of #rgba and #rrggbbaa (alpha ignored): the auto text uses the rgb part', () => {
+    expect(parseHex('#3b82f680')).toEqual([59, 130, 246]);
+    expect(parseHex('#fff8')).toEqual([255, 255, 255]);
+    expect(textColourOn('#3b82f680', 'auto')).toMatchObject({ text: '#000000', themed: false, invalid: false });
+    expect(textColourOn('#0f172acc', 'auto').text).toBe('#ffffff');
+  });
+
+  it('reads #rgb and #rrggbb (what CSS draws)', () => {
+    expect(parseHex('#fff')).toEqual([255, 255, 255]);
+    expect(parseHex('#3B82F6')).toEqual([59, 130, 246]);
+    expect(parseHex('3b82f6')).toBeNull();
+    expect(parseHex(42)).toBeNull();
+  });
 });

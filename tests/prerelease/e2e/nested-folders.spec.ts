@@ -274,7 +274,7 @@ test.describe('a sub-folder opens as a folder inside a folder', () => {
     await nfHead.getByRole('button', { name: 'Edit New folder' }).click();
     const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
     await expect(dlg).toBeVisible();
-    await expect(dlg.getByRole('textbox', { name: /^Folder name/ })).toHaveValue('New folder');
+    await expect(dlg.getByRole('textbox', { name: /^Name/ })).toHaveValue('New folder');
   });
 
   // On a tab shape an outer box's go-up target is its tab (its name lives there), not the bar row.
@@ -531,7 +531,7 @@ test.describe('inset boxes: room, menus and drags', () => {
     await expect(menu.getByRole('menuitem', { name: 'Open', exact: true })).toHaveCount(0);
     await menu.getByRole('menuitem', { name: 'Edit', exact: true }).click();
     const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
-    await expect(dlg.getByRole('textbox', { name: /^Folder name/ })).toHaveValue('New folder');
+    await expect(dlg.getByRole('textbox', { name: /^Name/ })).toHaveValue('New folder');
     await dlg.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(dlg).toHaveCount(0);
     // Close: back up to Services' own level (this browser's memory; the draft is unchanged).

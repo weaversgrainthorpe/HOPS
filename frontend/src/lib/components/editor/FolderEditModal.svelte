@@ -7,7 +7,7 @@
    */
   export type FolderFields = Pick<
     FolderNode,
-    | 'name' | 'icon' | 'iconUrl' | 'iconBgColor' | 'color' | 'opacity' | 'textColor' | 'display' | 'showTitle' | 'shape'
+    | 'name' | 'description' | 'icon' | 'iconUrl' | 'iconBgColor' | 'color' | 'opacity' | 'textColor' | 'display' | 'showTitle' | 'shape'
     | 'tabPosition' | 'size' | 'contentSize' | 'minimisedIcon'
   > & {
     background?: Background | null;
@@ -31,9 +31,10 @@
   import StatusCheckSetting from './StatusCheckSetting.svelte';
   import { gateSetting, type GateSetting, type StatusContext } from '$lib/editor/statusChecks';
   import { FOLDER_SHAPES, TAB_POSITIONS, hasTab, isFolderShape, sizeOf } from '$lib/layout/geometry';
-  import { MIN_TEXT_CONTRAST, deriveFolderColours } from '$lib/layout/folderColours';
+  import { deriveFolderColours } from '$lib/layout/folderColours';
   import { NO_OWN_ICON_NOTE } from '$lib/layout/folderIcon';
   import LookPreview from './LookPreview.svelte';
+  import TextColourSetting from './TextColourSetting.svelte';
   import type { FolderShape, ItemSize, TabPosition } from '$lib/types/layout';
 
   interface Props {
@@ -82,6 +83,9 @@
   // Form state starts from the folder (intentionally captures the initial values).
   // svelte-ignore state_referenced_locally
   let name = $state(folder.name ?? '');
+  // Optional; a blank one is removed (missing = none).
+  // svelte-ignore state_referenced_locally
+  let description = $state(typeof folder.description === 'string' ? folder.description : '');
   // svelte-ignore state_referenced_locally
   let icon = $state(folder.icon ?? '');
   // svelte-ignore state_referenced_locally
@@ -117,6 +121,8 @@
   const TAB_POSITION_LABELS: Record<TabPosition, string> = { left: 'Left', centre: 'Centre', right: 'Right' };
   /** The look's colours as drawn: an explicit text colour that fails is warned about here. */
   const colours = $derived(deriveFolderColours(color, textColor));
+  /** An outlined folder is see-through: no opacity, and no fill to measure its text against. */
+  const outlined = $derived(shape === 'folder-outline');
   /** A look refused here (shown under the picker; Save is refused while it stands). */
   const shapeError = $derived(checkShape ? checkShape(shape, tabPosition) : null);
   const SHAPE_LABELS: Record<FolderShape, string> = {
@@ -131,6 +137,18 @@
   /** A contents size refused here (shown in the dialog; Save is refused while it stands). */
   const contentSizeError = $derived(checkContentSize ? checkContentSize(contentSize) : null);
   let nameEl = $state<HTMLInputElement | null>(null);
+
+  /** Everything the dialog can change, as one string (compared with the form as opened). */
+  function formSnapshot(): string {
+    return JSON.stringify([
+      name, description, icon, iconUrl, iconBgColor, color, opacity, textColor, display, showTitle, minimisedIcon,
+      contentSize, size, shape, tabPosition, stagedBackground, statusSetting
+    ]);
+  }
+  // svelte-ignore state_referenced_locally
+  const baseline = formSnapshot();
+  /** Unsaved changes: Duplicate copies the SAVED folder, so it waits and says why. */
+  const dirty = $derived(formSnapshot() !== baseline);
 
   // A merge creates "New folder" and opens this dialog with the name selected for editing.
   $effect(() => {
@@ -176,6 +194,7 @@
     if (shapeError) return; // shown under the look picker
     onSave({
       name: name.trim(),
+      description: description.trim() || undefined,
       icon: icon || undefined,
       iconUrl: iconUrl || undefined,
       iconBgColor,
@@ -209,13 +228,18 @@
 >
   <form id="folder-edit-form" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
     <div class="form-group">
-      <label for="folder-name">Folder name *</label>
+      <label for="folder-name">Name *</label>
       <input id="folder-name" type="text" bind:value={name} bind:this={nameEl} placeholder="e.g. Media, Tools" />
       {#if problem}<p class="problem" role="alert">{problem}</p>{/if}
     </div>
 
     <div class="form-group">
-      <span class="label">Icon (optional)</span>
+      <label for="folder-description">Description</label>
+      <input id="folder-description" type="text" bind:value={description} placeholder="Optional" />
+    </div>
+
+    <div class="form-group">
+      <span class="label">Icon</span>
       <button type="button" class="icon-summary" onclick={() => (showIconEditor = true)}>
         <span class="icon-preview-tile" class:has-bg={iconBgColor} style:background-color={iconBgColor}>
           {#if iconUrl}
@@ -283,30 +307,18 @@
 
     <section class="dialog-section" aria-labelledby="folder-colour-heading">
       <h3 id="folder-colour-heading" class="part-title">Colour</h3>
-      <ColorPicker label="Folder colour" selectedColor={color} onSelect={(c) => { color = c; colourNote = ''; }} />
-      {#if shape === 'folder-outline'}
-        <p class="hint" data-outline-note>An outlined folder is see-through: its colour draws the outline only, so it has no opacity or text colour.</p>
+      <ColorPicker label="Colour" hideLabel selectedColor={color} onSelect={(c) => { color = c; colourNote = ''; }} />
+      {#if outlined}
+        <p class="hint outline-note" data-outline-note>An outlined folder is see-through, so its colour draws the outline only and it has no opacity.</p>
       {:else}
-      <OpacitySlider {opacity} onSelect={(o) => (opacity = o)} />
-
-      <fieldset class="form-group">
-        <legend>Text colour</legend>
-        <div class="choice-row">
-          {#each [['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']] as [v, label] (v)}
-            <label class="choice">
-              <input type="radio" name="folder-text-color" value={v} bind:group={textColor} />
-              {label}
-            </label>
-          {/each}
-        </div>
-        {#if colours.contrastWarning}
-          <p class="problem" role="status" data-contrast-warning>
-            {textColor === 'light' ? 'Light' : 'Dark'} text is hard to read on this colour (contrast {colours.contrast.toFixed(1)}:1,
-            needs {MIN_TEXT_CONTRAST}:1). Choose Auto or another colour.
-          </p>
-        {/if}
-      </fieldset>
+        <OpacitySlider id="folder-bg-opacity" label="Background opacity" {opacity} onSelect={(o) => (opacity = o)} />
       {/if}
+      <!-- An outline has no fill to measure against, so no contrast is shown for it; Auto is the theme's text. -->
+      <!-- An outline uses Light and Dark even with no colour; a filled folder with none shows the theme's text. -->
+      <div class="text-colour-row">
+        <TextColourSetting name="folder-text-color" bind:value={textColor} contrast={!outlined && colours.contrastWarning ? colours.contrast : null}
+          noColourNote={!outlined && colours.themed ? 'Text colour applies when the folder has a colour.' : null} />
+      </div>
     </section>
 
     <section class="dialog-section" aria-labelledby="folder-display-heading">
@@ -397,9 +409,13 @@
           <button type="button" class="btn-danger" onclick={onDelete}><Icon icon="mdi:trash-can" width="20" /> Delete</button>
         {/if}
         {#if !isNew && onDuplicate}
-          <button type="button" class="btn-secondary" onclick={onDuplicate}><Icon icon="mdi:content-copy" width="20" /> Duplicate</button>
+          <button type="button" class="btn-secondary" onclick={onDuplicate} disabled={dirty}
+            aria-describedby={dirty ? 'folder-dup-hint' : undefined}><Icon icon="mdi:content-copy" width="20" /> Duplicate</button>
         {/if}
       </div>
+      {#if !isNew && onDuplicate && dirty}
+        <p class="dup-hint" id="folder-dup-hint" role="status">Save your changes before duplicating.</p>
+      {/if}
       <div class="actions-right">
         <button type="button" class="btn-secondary" onclick={onCancel}>Cancel</button>
         <button type="submit" form="folder-edit-form" class="btn-primary">
@@ -486,6 +502,13 @@
     margin: 0.25rem 0 0;
     font-size: 0.875rem;
     opacity: 0.85;
+  }
+  .text-colour-row {
+    margin: 0 0 1.25rem;
+  }
+  /* The outline note stands apart from the Text colour choice under it. */
+  .outline-note {
+    margin-bottom: 1rem;
   }
   .choice-row {
     display: flex;
@@ -657,6 +680,18 @@
   .actions-right {
     display: flex;
     gap: 0.75rem;
+  }
+  /* Duplicate copies the saved folder, so with unsaved changes it waits and says why (a line of its
+     own, under the buttons). */
+  .modal-actions {
+    flex-wrap: wrap;
+  }
+  .dup-hint {
+    order: 1;
+    flex-basis: 100%;
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
   }
   .modal-actions button {
     display: inline-flex;

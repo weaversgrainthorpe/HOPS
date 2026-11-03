@@ -15,6 +15,7 @@ import type { LayoutDashboard, LayoutTab } from '$lib/types/layout';
 import { begin, session, resetEditSessionForTests } from '$lib/stores/editSession';
 import { clearSelection } from '$lib/stores/nodeSelection';
 import { FOLDER_SHAPES, TAB_POSITIONS } from '$lib/layout/geometry';
+import { deriveFolderColours } from '$lib/layout/folderColours';
 
 let width = 1440;
 let shapeH: number | undefined; // the measured height of every folder shape (the canvas's one observer)
@@ -312,5 +313,25 @@ describe('FolderShape alone (the picker previews use it too)', () => {
     const front = r.container.querySelector('[data-shape-front]') as HTMLElement;
     expect(front).toBeTruthy();
     expect(front.querySelector('.folder-surface')).toBeTruthy();
+  });
+});
+
+// Fix round 2 (N1): a #rrggbbaa folder keeps its transparency, like a tile and a tab in the same colour;
+// its text is still chosen on the rgb part.
+describe('a folder colour with an alpha part', () => {
+  it('a painted look fades by the alpha (times its opacity); the text is chosen on the rgb', () => {
+    const r = render(FolderShape, { look: { shape: 'folder-flat', color: '#3b82f680' }, variant: 'open', dashboardId: 'd1' });
+    const o = Number((r.container.querySelector('[data-shape-paint]') as HTMLElement).style.opacity);
+    expect(o).toBeCloseTo(0.95 * (0x80 / 255), 3);
+    r.unmount();
+    const s = render(FolderShape, { look: { shape: 'folder-flat', color: '#3b82f680', opacity: 0.5 }, variant: 'open', dashboardId: 'd1' });
+    expect(Number((s.container.querySelector('[data-shape-paint]') as HTMLElement).style.opacity)).toBeCloseTo(0.5 * (0x80 / 255), 3);
+    expect(deriveFolderColours('#3b82f680').text).toBe('#000000');
+    expect(deriveFolderColours('#3b82f680').alpha).toBeCloseTo(0x80 / 255, 5);
+    expect(deriveFolderColours('#3b82f6').alpha).toBe(1);
+  });
+  it('an opaque colour is unchanged (0.95 default)', () => {
+    const r = render(FolderShape, { look: { shape: 'folder-flat', color: '#3b82f6' }, variant: 'open', dashboardId: 'd1' });
+    expect((r.container.querySelector('[data-shape-paint]') as HTMLElement).style.opacity).toBe('0.95');
   });
 });

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Entry } from '$lib/types';
+  import { untrack } from 'svelte';
   import Icon from '@iconify/svelte';
   import ColoredIcon from '../ColoredIcon.svelte';
   import ColorPicker from './ColorPicker.svelte';
@@ -12,6 +13,8 @@
   import { tileSizeOf, type TileSize } from '$lib/editor/editorActions';
   import { isSshUrl, parseSshUrl, buildSshUrl, validateSsh, SSH_DEFAULT_PORT } from '$lib/utils/ssh';
   import { awayUrlProblem, linkUrlProblem } from '$lib/utils/tileUrl';
+  import TextColourSetting from '../editor/TextColourSetting.svelte';
+  import { textColourOn, type TextColorMode } from '$lib/utils/colorContrast';
 
   interface Props {
     entry: Entry;
@@ -19,6 +22,8 @@
     onSave: (entry: Entry, extra: { size?: TileSize }) => void;
     onCancel: () => void;
     onDelete?: () => void;
+    /** Duplicates the tile (an existing one only), as on the folder dialog. */
+    onDuplicate?: () => void;
     /**
      * Opens the Move/Copy dialog (any tab or folder, any dashboard). A tile
      * goes in and comes out with its kind, id and placement untouched (the
@@ -31,7 +36,7 @@
     checkSize?: (size: TileSize) => string | null;
   }
 
-  let { entry, onSave, onCancel, onDelete, onMoveCopy, statusContext, checkSize }: Props = $props();
+  let { entry, onSave, onCancel, onDelete, onDuplicate, onMoveCopy, statusContext, checkSize }: Props = $props();
 
   // Size (Small, Medium or Large only): picking one stages it (checked at once, refusals shown
   // inline); Save passes it as `{ size }` so the editor sets the span on a tab. Not picking passes
@@ -51,6 +56,11 @@
   // svelte-ignore state_referenced_locally
   let editedEntry = $state<Entry>({ ...entry });
   let showIconEditor = $state(false);
+  // Text colour: Auto (missing), Light or Dark, the same control and warning as the folder dialog.
+  const modeOf = (e: Entry): TextColorMode => (e.textColor === 'light' || e.textColor === 'dark' ? e.textColor : 'auto');
+  // svelte-ignore state_referenced_locally
+  let textColor = $state<TextColorMode>(modeOf(entry));
+  const textOn = $derived(textColourOn(editedEntry.color, textColor));
   // Status check: On / Off (a tile with no setting is Off). Saved with the dialog.
   // svelte-ignore state_referenced_locally
   const initialStatus = tileSetting(entry);
@@ -62,6 +72,7 @@
   // pre-v1.7.0 don't carry a `type` field).
   $effect(() => {
     editedEntry = { ...entry, type: entry.type ?? 'link' };
+    textColor = modeOf(entry);
     kind = kindOf(entry);
     const f = parseSshUrl(entry.url ?? '');
     sshHost = f?.host ?? '';
@@ -71,7 +82,17 @@
     sshAwayHost = af?.host ?? '';
     sshAwayPort = af?.port ?? SSH_DEFAULT_PORT;
     awayUrlText = entry.awayUrl ?? '';
+    // The form as opened: Duplicate copies the SAVED tile, so it waits while this differs.
+    baseline = untrack(formSnapshot);
   });
+
+  /** Everything the dialog can change, as one string (compared with the form as opened). */
+  function formSnapshot(): string {
+    return JSON.stringify([editedEntry, textColor, statusSetting, sizeValue, kind, sshHost, sshPort, sshUser, sshAwayHost, sshAwayPort, awayUrlText]);
+  }
+  let baseline = $state<string | null>(null);
+  /** Unsaved changes in the dialog (Duplicate would copy the saved tile without them). */
+  const dirty = $derived(baseline !== null && formSnapshot() !== baseline);
 
   // The Tile type dropdown: Link, SSH (a link tile whose ssh:// URL is built from
   // Host/Port/User) or Note. A link tile whose URL starts with ssh:// opens as SSH.
@@ -168,6 +189,8 @@
       if (awayUrlText.trim()) editedEntry.awayUrl = awayUrlText.trim();
       else editedEntry.awayUrl = undefined; // undefined = removed on save
     }
+    // Auto is the default: stored as no key (missing = Auto).
+    editedEntry.textColor = textColor === 'auto' ? undefined : textColor;
     if (sshLike && (editedEntry.openMode === 'iframe' || editedEntry.openMode === 'popup')) {
       editedEntry.openMode = 'sametab';
     }
@@ -216,6 +239,8 @@
   onClose={onCancel}
   onBeforeClose={handleBeforeClose}
 >
+  <!-- The folder dialog's parts in its order (item 19): the item itself, then Colour, Display, Status
+       check and Move or copy, each a section with its own heading. -->
   <form id="entry-edit-form" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
     <div class="form-grid">
       <div class="form-group full-width">
@@ -248,7 +273,7 @@
       </div>
 
       <div class="form-group full-width">
-        <label for="description">{isNote ? 'Body text' : 'Subtitle/Description'}</label>
+        <label for="description">{isNote ? 'Body text' : 'Description'}</label>
         {#if isNote}
           <textarea
             id="description"
@@ -261,7 +286,7 @@
             id="description"
             type="text"
             bind:value={editedEntry.description}
-            placeholder="Optional subtitle"
+            placeholder="Optional"
           />
         {/if}
       </div>
@@ -363,7 +388,7 @@
       <!-- Icon: small preview + one button to open the icon sub-modal,
            which handles picking / uploading / Iconify name / icon background. -->
       <div class="form-group full-width">
-        <label>Icon</label>
+        <span class="label">Icon</span>
         <button type="button" class="icon-summary" onclick={() => showIconEditor = true}>
           <span class="icon-preview-tile"
                 class:has-bg={editedEntry.iconBgColor}
@@ -393,24 +418,27 @@
       </div>
       {/if}
 
-      <!-- Tile background colour + opacity — inline, no sub-modal. They
-           belong to the tile itself, not to the icon. -->
-      <div class="form-group full-width">
+    </div>
+
+    <section class="dialog-section" aria-labelledby="entry-colour-heading">
+      <h3 id="entry-colour-heading" class="part-title">Colour</h3>
+      <div class="stack">
         <ColorPicker
+          label="Colour"
+          hideLabel
           selectedColor={editedEntry.color}
           onSelect={(color) => editedEntry.color = color}
         />
-      </div>
-
-      <!-- The tile's opacity fades its background only; the text and
-           the icon have their own (the status badge is never faded). -->
-      <div class="form-group full-width">
+        <!-- The tile's opacity fades its background only; the text and the icon have their own (the
+             status badge is never faded). -->
         <OpacitySlider
           id="entry-bg-opacity"
           label="Background opacity"
           opacity={editedEntry.opacity}
           onSelect={(opacity) => editedEntry.opacity = opacity}
         />
+        <TextColourSetting name="entry-text-color" bind:value={textColor} contrast={textOn.contrastWarning ? textOn.contrast : null}
+          noColourNote={textOn.themed ? 'Text colour applies when the tile has a colour.' : null} />
         <OpacitySlider
           id="entry-text-opacity"
           label="Text opacity"
@@ -428,67 +456,85 @@
           />
         {/if}
       </div>
+    </section>
 
-      <div class="form-group">
-        <label for="size">Size</label>
-        <select
-          id="size"
-          bind:value={sizeValue}
-          onchange={pickSize}
-          aria-invalid={sizeError ? 'true' : undefined}
-          aria-describedby={sizeError ? 'size-error' : undefined}
-        >
-          <option value="small">Small</option>
-          <option value="medium">Medium</option>
-          <option value="large">Large</option>
-        </select>
-        {#if sizeError}
-          <p id="size-error" class="field-error" role="alert">{sizeError}</p>
-        {/if}
-      </div>
-
-      {#if !isNote}
+    <section class="dialog-section" aria-labelledby="entry-display-heading">
+      <h3 id="entry-display-heading" class="part-title">Display</h3>
+      <div class="form-grid">
         <div class="form-group">
-          <label for="openMode">Open Mode</label>
-          {#if sshLike}
-            <select id="openMode" disabled aria-describedby="openMode-ssh">
-              <option>In place</option>
-            </select>
-            <small id="openMode-ssh">SSH opens your computer's SSH app, so the iFrame and Popup modes aren't available.</small>
-          {:else}
-            <select id="openMode" bind:value={editedEntry.openMode}>
-              <option value="newtab">New Tab</option>
-              <option value="sametab">Same Tab</option>
-              <option value="iframe">iFrame Modal</option>
-              <option value="popup">Popup Modal</option>
-            </select>
+          <label for="size">Size</label>
+          <select
+            id="size"
+            bind:value={sizeValue}
+            onchange={pickSize}
+            aria-invalid={sizeError ? 'true' : undefined}
+            aria-describedby={sizeError ? 'size-error' : undefined}
+          >
+            <option value="small">Small</option>
+            <option value="medium">Medium</option>
+            <option value="large">Large</option>
+          </select>
+          {#if sizeError}
+            <p id="size-error" class="field-error" role="alert">{sizeError}</p>
           {/if}
         </div>
 
-        <div class="form-group full-width">
-          <StatusCheckSetting level="tile" bind:value={statusSetting} context={statusContext} />
-        </div>
-      {/if}
+        {#if !isNote}
+          <div class="form-group">
+            <label for="openMode">Open mode</label>
+            {#if sshLike}
+              <select id="openMode" disabled aria-describedby="openMode-ssh">
+                <option>In place</option>
+              </select>
+              <small id="openMode-ssh">SSH opens your computer's SSH app, so the iFrame and Popup modes aren't available.</small>
+            {:else}
+              <select id="openMode" bind:value={editedEntry.openMode}>
+                <option value="newtab">New Tab</option>
+                <option value="sametab">Same Tab</option>
+                <option value="iframe">iFrame Modal</option>
+                <option value="popup">Popup Modal</option>
+              </select>
+            {/if}
+          </div>
+        {/if}
+      </div>
+    </section>
 
-      {#if onMoveCopy && entry.id}
-        <div class="form-group full-width move-section">
-          <button type="button" class="btn-move-toggle" onclick={onMoveCopy}>
-            <Icon icon="mdi:folder-move" width="18" />
-            Move or copy to…
-          </button>
-        </div>
-      {/if}
-    </div>
+    {#if !isNote}
+      <section class="dialog-section status-section">
+        <StatusCheckSetting level="tile" bind:value={statusSetting} context={statusContext} />
+      </section>
+    {/if}
 
+    {#if onMoveCopy && entry.id}
+      <section class="dialog-section" aria-labelledby="entry-move-heading">
+        <h3 id="entry-move-heading" class="part-title">Move or copy</h3>
+        <button type="button" class="btn-secondary move-btn" onclick={onMoveCopy}>
+          <Icon icon="mdi:folder-move" width="18" /> Move or copy to…
+        </button>
+      </section>
+    {/if}
   </form>
 
   {#snippet footer()}
     <div class="modal-actions">
-      {#if onDelete}
-        <button type="button" class="btn-danger" onclick={handleDelete}>
-          <Icon icon="mdi:trash-can" width="20" />
-          Delete
-        </button>
+      <div class="actions-left">
+        {#if onDelete}
+          <button type="button" class="btn-danger" onclick={handleDelete}>
+            <Icon icon="mdi:trash-can" width="20" />
+            Delete
+          </button>
+        {/if}
+        {#if entry.id && onDuplicate}
+          <button type="button" class="btn-secondary" onclick={onDuplicate} disabled={dirty}
+            aria-describedby={dirty ? 'entry-dup-hint' : undefined}>
+            <Icon icon="mdi:content-copy" width="20" />
+            Duplicate
+          </button>
+        {/if}
+      </div>
+      {#if entry.id && onDuplicate && dirty}
+        <p class="dup-hint" id="entry-dup-hint" role="status">Save your changes before duplicating.</p>
       {/if}
       <div class="action-right">
         <button type="button" class="btn-secondary" onclick={onCancel}>
@@ -527,7 +573,8 @@
     grid-column: 1 / -1;
   }
 
-  label {
+  label,
+  .label {
     font-weight: 500;
     font-size: 0.875rem;
     color: var(--text-primary);
@@ -648,13 +695,58 @@
     width: 100%;
   }
 
+  .actions-left,
   .action-right {
     display: flex;
     gap: 0.75rem;
+  }
+
+  /* Duplicate copies the saved tile, so with unsaved changes it waits and says why (a line of its own,
+     under the buttons). */
+  .modal-actions {
+    flex-wrap: wrap;
+  }
+  .dup-hint {
+    order: 1;
+    flex-basis: 100%;
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+  }
+
+  .action-right {
     margin-left: auto;
   }
 
-  button {
+  /* Each part of the dialog is its own section, with a heading and room around it (as on the folder
+     dialog). */
+  .dialog-section {
+    margin: 1.5rem 0 0;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .part-title,
+  .status-section :global(.status-checks legend) {
+    margin: 0 0 0.85rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .stack {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .move-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .modal-actions button {
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -677,6 +769,7 @@
       flex-direction: column;
     }
 
+    .actions-left,
     .action-right {
       width: 100%;
       margin-left: 0;
@@ -698,35 +791,6 @@
   @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
-  }
-
-  /* Move section styles */
-  .move-section {
-    margin-top: 0.5rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--border);
-  }
-
-  .btn-move-toggle {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    width: 100%;
-    padding: 0.75rem 1rem;
-    background: var(--bg-tertiary);
-    border: 1px dashed var(--border);
-    border-radius: 0.375rem;
-    /* On --bg-tertiary: the secondary text is 3.9:1 on the forest dark preset; the primary passes. */
-    color: var(--text-primary);
-    font-size: 0.875rem;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .btn-move-toggle:hover {
-    background: var(--bg-secondary);
-    border-color: var(--accent-solid);
-    color: var(--accent-text);
   }
 
   /* Placeholders readable (>= 4.5:1 on every preset); the browser default grey is 3.2–4.2:1. */

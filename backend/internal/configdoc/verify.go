@@ -697,6 +697,7 @@ func (v *verifier) checkIDs(doc Obj) {
 			tn := note(fmt.Sprintf("tab[%d]", j), tm)
 			v.checkBackground(tn, tm)
 			v.noKeys(tn, tm, "layout", "designWidth", legacyEnabledKey)
+			v.checkTextColor(tn, tm)
 			root, ok := tm["root"].(Obj)
 			if !ok {
 				v.add("%s: root is %T, want object", tn, tm["root"])
@@ -751,8 +752,10 @@ func (v *verifier) checkContainer(owner string, c Obj, note func(string, Obj) st
 			if _, ok := SizeSpan(km["size"]); !ok {
 				v.add("%s: size is %s, want \"small\", \"medium\" or \"large\"", n, trunc(show(km["size"])))
 			}
+			v.checkItemText(n, km)
 		case "folder":
 			v.checkBackground(n, km)
+			v.checkItemText(n, km)
 			v.noKeys(n, km, "layout")
 			v.checkFolderShape(n, km)
 			for _, k := range []string{"size", "contentSize"} {
@@ -801,6 +804,36 @@ func (v *verifier) checkFolderShape(n string, f Obj) {
 	check("shape", FolderShapes)
 	check("tabPosition", FolderTabPositions)
 	check("minimisedIcon", FolderMinimisedIcons)
+}
+
+// checkItemText requires a tile's or a folder's textColor, when present, to be
+// one of TextColors (absent means Auto) and its description, when present, to
+// be text. The same rule for both kinds; no length limit (as a tile's
+// description has always had none).
+func (v *verifier) checkItemText(n string, o Obj) {
+	v.checkTextColor(n, o)
+	if raw, has := o["description"]; has {
+		if _, ok := raw.(string); !ok {
+			v.add("%s: description is %T, want text (or absent)", n, raw)
+		}
+	}
+}
+
+// checkTextColor requires a tab's, tile's or folder's textColor, when present,
+// to be one of TextColors.
+func (v *verifier) checkTextColor(n string, o Obj) {
+	raw, has := o["textColor"]
+	if !has {
+		return
+	}
+	if s, ok := raw.(string); ok {
+		for _, a := range TextColors {
+			if s == a {
+				return
+			}
+		}
+	}
+	v.add("%s: textColor is %s, want one of %s (or absent)", n, trunc(show(raw)), quoteList(TextColors))
 }
 
 // quoteList is names as "a", "b" or "c".

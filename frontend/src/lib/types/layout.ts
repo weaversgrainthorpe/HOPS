@@ -39,11 +39,14 @@ export interface FolderNode {
   kind: 'folder';
   id: string;
   name: string;
+  /** Optional text about the folder (the server checks it is text, as a tile's). Missing = none. */
+  description?: string;
   icon?: string;
   iconUrl?: string;
   iconBgColor?: string;
   color?: string;
   opacity?: number;
+  /** Auto (the one rule: the more readable of white and black), Light or Dark. Missing = Auto. */
   textColor?: 'auto' | 'light' | 'dark';
   display: 'expanded' | 'collapsed';
   /** Its size when minimised on a tab; kept but unused while inside a folder. */

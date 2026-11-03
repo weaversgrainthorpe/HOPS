@@ -35,6 +35,7 @@
   import { reportBackgroundError, markBackgroundLoaded } from '$lib/stores/backgroundErrors';
   import { reducedMotion } from '$lib/stores/backgroundAnimation';
   import RecentRow from './RecentRow.svelte';
+  import { textColourOn } from '$lib/utils/colorContrast';
   import { recentOn, recordTileOpen, RECENT_CONTEXT, type RecentContext } from '$lib/utils/recentTiles';
 
   // The route's dashboard: the stored v3 dashboard (every dashboard is editable).
@@ -61,6 +62,8 @@
     iconBgColor?: string;
     color?: string;
     opacity?: number;
+    /** Auto (missing), Light or Dark: the one text rule, as tiles and folders. */
+    textColor?: 'auto' | 'light' | 'dark';
     background?: Background;
     statusChecksEnabled?: unknown;
   }
@@ -68,6 +71,13 @@
   const barTabs = $derived<BarTab[]>(
     editing ? ((draft?.tabs ?? []) as unknown as BarTab[]) : (dashboard.tabs as unknown as BarTab[])
   );
+  // Edit mode: tabs whose stored colour can't be read (drawn in the theme). Each is named in a visible
+  // note under the tab bar, which is also that tab's accessible description (never a tooltip only).
+  const unreadableTabs = $derived(
+    editing ? barTabs.filter((t) => textColourOn(t.color, t.textColor).invalid) : []
+  );
+  const tabNoteId = (id: string) => `tab-colour-note-${id}`;
+
   // The dashboard-level look (background, per-tab backgrounds) the page shows: the draft's while editing.
   type Look = { background?: Background; header?: HeaderConfig };
   const look = $derived<Look>((draft ?? dashboard) as unknown as Look);
@@ -300,10 +310,11 @@
   function tabFields(
     name: string, icon?: string, iconUrl?: string, iconBgColor?: string, color?: string, opacity?: number,
     background?: Background | null,
-    statusChecksEnabled?: boolean | null
+    statusChecksEnabled?: boolean | null,
+    textColor?: 'light' | 'dark'
   ): TabFields {
     return {
-      name, icon, iconUrl, iconBgColor, color, opacity,
+      name, icon, iconUrl, iconBgColor, color, opacity, textColor,
       ...(background !== undefined ? { background } : {}),
       ...(statusChecksEnabled !== undefined ? { statusChecksEnabled } : {})
     };
@@ -457,19 +468,25 @@
         data-drag-tabbar={editing ? '' : undefined}
       >
         {#each barTabs as tab, index (tab.id)}
+          <!-- A coloured tab's name: THE one text rule (textColourOn), as tiles and folders. A colour that
+               can't be read draws the theme, and edit mode marks the tab and says why (never silent). -->
+          {@const tabText = textColourOn(tab.color, tab.textColor)}
           <div class="tab-container" data-drag-tabbox={editing ? tab.id : undefined}>
             <div
               class="tab"
               class:active={activeTabIndex === index}
-              class:custom-color={tab.color}
+              class:custom-color={!tabText.themed}
+              class:colour-unreadable={editing && tabText.invalid}
               class:draggable={editing}
-              style:--tab-bg={tab.color || 'var(--bg-secondary)'}
+              style:--tab-bg={tabText.themed ? 'var(--bg-secondary)' : tab.color}
+              style:--tab-text={tabText.themed ? undefined : tabText.text}
               style:--tab-opacity={tab.opacity !== undefined ? tab.opacity : 0.95}
               role="tab"
               tabindex={activeTabIndex === index ? 0 : -1}
               aria-selected={activeTabIndex === index}
               aria-label={`Switch to ${tab.name} tab`}
               title={editing ? 'Drag to reorder (or Alt+Left / Alt+Right); drop items here to move them to this tab' : undefined}
+              aria-describedby={editing && tabText.invalid ? tabNoteId(tab.id) : undefined}
               data-drag-tab={editing ? tab.id : undefined}
               data-tab-button={tab.id}
               use:tabSource={{ tabId: tab.id, enabled: editing }}
@@ -501,6 +518,9 @@
       </div>
       </TabRail>
     {/if}
+    {#each unreadableTabs as t (t.id)}
+      <p class="tab-colour-note" id={tabNoteId(t.id)} role="status">"{t.name}" tab: its colour ({t.color}) can't be read — theme colour shown. Choose a colour in its Edit Tab dialog.</p>
+    {/each}
   </div>
 
   {#if editing}
@@ -586,6 +606,7 @@
       tabIconBgColor={t.iconBgColor}
       tabColor={t.color}
       tabOpacity={t.opacity}
+      tabTextColor={t.textColor}
       tabBackground={t.background}
       tabStatusChecks={t.statusChecksEnabled}
       statusContext={tabStatusContext}
@@ -786,17 +807,38 @@
     border-radius: 0.25rem 0.25rem 0 0;
   }
 
+  /* A coloured tab: its name is --tab-text, from the one text rule (textColourOn). The colour is drawn
+     as chosen (no brightness filter), so the contrast the rule picked is the contrast shown; hover
+     and open are shown by the border, the fill going opaque, and (open) bold text and the strip. */
+  .tab.custom-color,
+  .tab.custom-color:hover,
+  .tab.custom-color.active {
+    color: var(--tab-text);
+  }
+
   .tab.custom-color {
-    color: white;
     border-color: rgba(255, 255, 255, 0.3);
   }
 
+  /* Hover: the theme's outline token (the accent, lightened on dark themes and darkened on light ones),
+     which stands out against the page in both themes; white vanished on a light page. */
   .tab.custom-color:hover {
-    filter: brightness(1.1);
+    border-color: var(--tab-outline);
+  }
+
+  /* Edit mode: a stored colour that can't be read is drawn as the theme and marked; the note under the
+     tab bar says why. An inset shadow, not an outline, so the keyboard focus ring still shows. */
+  .tab.colour-unreadable {
+    box-shadow: inset 0 0 0 2px var(--color-error, #b91c1c);
+  }
+
+  .tab-colour-note {
+    margin: 0.5rem 0 0;
+    font-size: 0.875rem;
+    color: var(--color-error-text);
   }
 
   .tab.custom-color.active {
-    filter: brightness(1.2);
     border-color: white;
     border-width: 2px;
     border-bottom: 2px solid var(--bg-primary);

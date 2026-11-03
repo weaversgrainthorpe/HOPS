@@ -49,6 +49,12 @@ export interface Entry {
   // logos (e.g. GitHub's octocat) on dark tiles where they'd otherwise
   // vanish. Undefined means "no backing, icon sits directly on the tile".
   iconBgColor?: string;
+  /**
+   * The colour of the name and description on a coloured tile: Auto (the more readable of white and
+   * black on its colour, the one rule folders use too), Light or Dark. Missing = Auto. A tile with no
+   * colour of its own shows the theme's text.
+   */
+  textColor?: 'auto' | 'light' | 'dark';
   order: number;
   showStatus?: boolean;
 }

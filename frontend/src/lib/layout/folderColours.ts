@@ -11,8 +11,10 @@
  * (`invalid`), so the renderer can show a visible note.
  */
 
-/** WCAG AA for normal text. */
-export const MIN_TEXT_CONTRAST = 4.5;
+import { MIN_TEXT_CONTRAST, alphaOf, autoTextFor, contrastRatio, parseHex, ratio, type Rgb } from '$lib/utils/colorContrast';
+
+/** WCAG AA for normal text (the one shared value). */
+export { MIN_TEXT_CONTRAST, contrastRatio };
 
 const WHITE = '#ffffff';
 const BLACK = '#000000';
@@ -44,16 +46,11 @@ export interface FolderColours {
   themed: boolean;
   /** A stored colour was given but could not be read. */
   invalid: boolean;
-}
-
-type Rgb = [number, number, number];
-
-function parseHex(v: string): Rgb | null {
-  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(v.trim());
-  if (!m) return null;
-  const h = m[1].length === 3 ? [...m[1]].map((c) => c + c).join('') : m[1];
-  const n = parseInt(h, 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  /**
+   * The colour's own alpha (#rgba / #rrggbbaa; 1 otherwise). The panels are drawn from the rgb part, so
+   * the shape fades by this too, as a tile or tab in that colour does.
+   */
+  alpha: number;
 }
 
 function toHex(c: Rgb): string {
@@ -63,25 +60,6 @@ function toHex(c: Rgb): string {
 /** `c` mixed with `to` by share `t` (0 = c, 1 = to), per sRGB channel. */
 function mix(c: Rgb, to: Rgb, t: number): Rgb {
   return [0, 1, 2].map((i) => c[i] + (to[i] - c[i]) * t) as Rgb;
-}
-
-function luminance(c: Rgb): number {
-  const [r, g, b] = c.map((x) => {
-    const s = x / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  });
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-
-function ratio(a: Rgb, b: Rgb): number {
-  const la = luminance(a), lb = luminance(b);
-  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
-}
-
-/** The WCAG 2 contrast ratio of two #rgb / #rrggbb colours (1 when either can't be read). */
-export function contrastRatio(a: string, b: string): number {
-  const ca = parseHex(a), cb = parseHex(b);
-  return ca && cb ? ratio(ca, cb) : 1;
 }
 
 /**
@@ -110,14 +88,16 @@ export function deriveFolderColours(color?: string | null, textColor?: 'auto' | 
       contrast: NaN,
       contrastWarning: false,
       themed: true,
-      invalid: given
+      invalid: given,
+      alpha: 1
     };
   }
   const white: Rgb = [255, 255, 255], black: Rgb = [0, 0, 0];
-  // The auto text: whichever of white / black contrasts more with the colour (always >= 4.58:1). The
-  // panels shade away from it only as far as it stays readable, so it passes on both (and on the
-  // gradient between front and base, since luminance moves monotonically along it).
-  const autoLight = ratio(rgb, white) >= ratio(rgb, black);
+  // The auto text: THE one rule (autoTextFor, shared with tiles): whichever of white / black contrasts
+  // more with the colour (always >= 4.58:1). The panels shade away from it only as far as it stays
+  // readable, so it passes on both (and on the gradient between front and base, since luminance moves
+  // monotonically along it).
+  const autoLight = autoTextFor(rgb) === 'light';
   const auto = autoLight ? white : black;
   const back = autoLight ? toHex(mix(rgb, black, BACK_DARKEN)) : shadeKeeping(rgb, black, BACK_DARKEN, auto);
   const front = autoLight ? shadeKeeping(rgb, white, FRONT_LIGHTEN, auto) : toHex(mix(rgb, white, FRONT_LIGHTEN));
@@ -134,6 +114,16 @@ export function deriveFolderColours(color?: string | null, textColor?: 'auto' | 
     contrast,
     contrastWarning: explicit && contrast < MIN_TEXT_CONTRAST,
     themed: false,
-    invalid: false
+    invalid: false,
+    alpha: alphaOf(color)
   };
+}
+
+/**
+ * The text on an outlined folder: it is see-through, so Light and Dark are used as chosen and Auto (or
+ * missing) is the theme's text (undefined: what shows through; there is no fill to contrast with, so no
+ * contrast is measured or warned about).
+ */
+export function outlineText(textColor?: string | null): string | undefined {
+  return textColor === 'light' ? WHITE : textColor === 'dark' ? BLACK : undefined;
 }

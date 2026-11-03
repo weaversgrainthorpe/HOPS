@@ -119,7 +119,7 @@ test.describe('background dialog driven by the capability table', () => {
     await expectMotion(picker, false);
     // What does apply is still offered.
     await expect(picker.getByRole('group', { name: /Picture type/ }).getByRole('button')).toHaveText(['Image', 'Slideshow']);
-    await expect(picker.getByLabel(/^Background opacity/)).toBeVisible();
+    await expect(picker.getByLabel(/^Picture opacity/)).toBeVisible();
     await expect(picker.getByText(/^Overlay Darkness/)).toHaveCount(0);
   });
 

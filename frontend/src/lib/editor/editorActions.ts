@@ -570,6 +570,8 @@ export interface TabFields {
   iconBgColor?: string;
   color?: string;
   opacity?: number;
+  /** Auto (undefined: the key is removed; missing = Auto), Light or Dark. */
+  textColor?: 'light' | 'dark';
   /** A background picked in the dialog: undefined = unchanged, null = removed. */
   background?: Background | null;
   /** Status-check gate: undefined = unchanged, false = Disabled, null or true = Enabled (key removed). */
@@ -578,7 +580,8 @@ export interface TabFields {
 
 function tabPatch(f: TabFields): Partial<LayoutTab> {
   const patch: Partial<LayoutTab> = {
-    name: f.name, icon: f.icon, iconUrl: f.iconUrl, iconBgColor: f.iconBgColor, color: f.color, opacity: f.opacity
+    name: f.name, icon: f.icon, iconUrl: f.iconUrl, iconBgColor: f.iconBgColor, color: f.color, opacity: f.opacity,
+    textColor: f.textColor
   };
   return patch;
 }

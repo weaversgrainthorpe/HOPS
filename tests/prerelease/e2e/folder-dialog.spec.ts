@@ -24,7 +24,7 @@ const folder = (id: string, name: string, box: { x: number; y: number; w: number
   placement: box, content: { children }, ...extra
 });
 
-async function importDash(page: Page, context: BrowserContext, children: (id: (s: string) => string) => Child[]) {
+async function importDash(page: Page, context: BrowserContext, children: (id: (s: string) => string) => Child[], tabExtra: Child = {}, moreTabs: Child[] = []) {
   const p = `m6a${Date.now().toString(36)}${(seq++).toString(36)}`;
   const id = (s: string) => `${p}-${s}`;
   const dash = {
@@ -33,7 +33,7 @@ async function importDash(page: Page, context: BrowserContext, children: (id: (s
       statusChecksEnabled: null, statusCheckIntervalMinutes: null, statusCheckTimeoutSeconds: null,
       editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null
     },
-    tabs: [{ id: id('tab'), name: 'Main', order: 0, root: { columns: 24, children: children(id) } }]
+    tabs: [{ id: id('tab'), name: 'Main', order: 0, root: { columns: 24, children: children(id) }, ...tabExtra }, ...moreTabs]
   };
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
@@ -206,7 +206,7 @@ test.describe('the folder dialog order and sections', () => {
     const icon = dlg.getByRole('button', { name: /Edit icon/ });
     const look = dlg.getByRole('radiogroup', { name: 'Look' });
     const tabPos = dlg.getByRole('radiogroup', { name: 'Tab position' });
-    const colour = dlg.getByText('Folder colour', { exact: true });
+    const colour = dlg.locator('.color-label', { hasText: 'Colour' });
     const bgBtn = dlg.getByRole('button', { name: /^Background/ });
     // Measured in one scroll position (the dialog body scrolls), top to bottom.
     const ys: number[] = [];
@@ -239,7 +239,10 @@ test.describe('look previews on a light card', () => {
       const dlg = await openEdit(page, f.id(id), 'Edit Folder');
       const cards = dlg.locator('.shape-picker [data-preview-card]');
       await expect(cards).toHaveCount(7);
-      await cards.first().scrollIntoViewIfNeeded();
+      // The whole picker in view (the dialog body scrolls): every card is in the one screenshot.
+      await dlg.locator('.shape-picker').evaluate((e) => e.scrollIntoView({ block: 'center', behavior: 'instant' }));
+      // Measured once the dialog has finished opening (a box taken mid-transition is not where it is drawn).
+      await page.evaluate(() => Promise.all(document.getAnimations().map((x) => x.finished.catch(() => undefined))));
       const boxes = [];
       for (let i = 0; i < 7; i++) boxes.push(await boxOf(cards.nth(i)));
       const png = await page.screenshot({ animations: 'disabled', caret: 'hide' });
@@ -409,7 +412,7 @@ test.describe('the folder background is pictures only', () => {
     await expect(picker.getByText(/#c82828/)).toBeVisible();
     await picker.getByRole('button', { name: 'Cancel' }).click();
     // Saving the dialog untouched keeps it exactly.
-    await dlg.getByRole('textbox', { name: /Folder name/ }).fill('Old one');
+    await dlg.getByRole('textbox', { name: /^Name/ }).fill('Old one');
     await dlg.getByRole('button', { name: /^Save/ }).click();
     await saveDraft(page);
     let stored = await storedNode(page, f.id('dash'), f.id('c'));
@@ -427,5 +430,139 @@ test.describe('the folder background is pictures only', () => {
     expect(stored.opacity).toBe(0.7);
     expect(stored).not.toHaveProperty('background');
     await expect(node(page, f.id('c')).locator('.folder-surface .background-root')).toHaveCount(0);
+  });
+});
+
+// Items 16, 18 and 19 (3.1 polish F1): one Auto text rule for tiles and folders, an outlined folder
+// keeps Text colour (hides only Background opacity), and the tile dialog matches the folder dialog.
+const blue = (id: (s: string) => string) => [
+  folder(id('f'), 'Blue folder', { x: 0, y: 0, w: 12, h: 8 }, [kid(id('in1'), 'Inner')], { color: '#3b82f6', shape: 'rounded' }),
+  folder(id('o'), 'Outlined', { x: 13, y: 0, w: 8, h: 8 }, [kid(id('in2'), 'Two')], { color: '#3b82f6', shape: 'folder-outline', opacity: 0.3 }),
+  kid(id('t'), 'Blue tile', { color: '#3b82f6', url: 'https://blue.example.lan/', placement: { x: 0, y: 9, w: 2, h: 2 } })
+];
+
+test.describe('one text colour rule, outlined folders and matching dialogs', () => {
+  test('the same blue gives black text on a tile and on a folder', async ({ page, context }) => {
+    const f = await importDash(page, context, blue);
+    await page.goto(f.path);
+    const tileName = node(page, f.id('t')).locator('.title');
+    await expect(tileName).toHaveCSS('color', 'rgb(0, 0, 0)');
+    await expect(page.locator(`[aria-label="Blue folder folder"]`)).toHaveCSS('color', 'rgb(0, 0, 0)');
+  });
+
+  test('an outlined folder keeps Text colour (no contrast number) and hides only Background opacity', async ({ page, context }) => {
+    const f = await importDash(page, context, blue);
+    await page.goto(f.path);
+    await enterEdit(page);
+    const dlg = await openEdit(page, f.id('o'), 'Edit Folder');
+    await expect(dlg.locator('[data-outline-note]')).toHaveText('An outlined folder is see-through, so its colour draws the outline only and it has no opacity.');
+    await expect(dlg.getByRole('slider', { name: /Background opacity/ })).toHaveCount(0);
+    const text = dlg.getByRole('group', { name: 'Text colour' });
+    await expect(text).toBeVisible();
+    await text.getByRole('radio', { name: 'Light' }).check();
+    await expect(dlg.locator('[data-contrast-warning]')).toHaveCount(0);
+    await dlg.getByRole('textbox', { name: 'Description' }).fill('Things with a line round them');
+    await dlg.getByRole('button', { name: /^Save/ }).click();
+    await expect(dlg).toHaveCount(0);
+    await expect(page.locator(`[aria-label="Outlined folder"]`)).toHaveCSS('color', 'rgb(255, 255, 255)');
+    await saveDraft(page);
+    const stored = await storedNode(page, `${f.id('dash')}`, f.id('o'));
+    expect(stored).toMatchObject({ textColor: 'light', description: 'Things with a line round them', opacity: 0.3 });
+    // Any other look shows Background opacity again.
+    const again = await openEdit(page, f.id('f'), 'Edit Folder');
+    await expect(again.getByRole('slider', { name: /^Background opacity/ })).toBeVisible();
+  });
+
+  test('the tile dialog has the folder dialog sections, Text colour with its warning, and Duplicate', async ({ page, context }) => {
+    const f = await importDash(page, context, blue);
+    await page.goto(f.path);
+    await enterEdit(page);
+    const dlg = await openEdit(page, f.id('t'), 'Edit Tile');
+    for (const h of ['Colour', 'Display', 'Move or copy']) await expect(dlg.getByRole('heading', { name: h, level: 3 })).toBeVisible();
+    await expect(dlg.getByLabel('Description')).toBeVisible();
+    await expect(dlg.getByLabel('Open mode')).toBeVisible();
+    const text = dlg.getByRole('group', { name: 'Text colour' });
+    await expect(text.getByRole('radio', { name: 'Auto' })).toBeChecked();
+    await text.getByRole('radio', { name: 'Light' }).check();
+    await expect(dlg.locator('[data-contrast-warning]')).toContainText('contrast 3.7:1');
+    await text.getByRole('radio', { name: 'Dark' }).check();
+    await expect(dlg.locator('[data-contrast-warning]')).toHaveCount(0);
+    await dlg.getByRole('button', { name: /^Save/ }).click();
+    await expect(dlg).toHaveCount(0);
+    await saveDraft(page);
+    expect(await storedNode(page, f.id('dash'), f.id('t'))).toMatchObject({ textColor: 'dark' });
+
+    const again = await openEdit(page, f.id('t'), 'Edit Tile');
+    await again.getByRole('button', { name: /^Duplicate/ }).click();
+    await expect(again).toHaveCount(0);
+    await expect(page.locator('.tab-canvas').getByText('Blue tile', { exact: true })).toHaveCount(2);
+  });
+});
+
+// Fix round 1: a coloured tab's name follows the same rule, open, hovered and on a phone; the Tab
+// dialog has the same Text colour control and warning.
+test.describe('coloured tabs use the one text colour rule', () => {
+  test('an amber tab shows black text open, hovered and on a phone; its dialog warns about Light', async ({ page, context }) => {
+    const f = await importDash(page, context, blue, { color: '#f59e0b' });
+    await page.goto(f.path);
+    const tab = page.locator(`[data-tab-button="${f.id('tab')}"]`);
+    await expect(tab).toHaveClass(/active/);
+    await expect(tab).toHaveCSS('color', 'rgb(0, 0, 0)');
+    await expect(tab).toHaveCSS('filter', 'none');
+    await tab.hover();
+    await expect(tab).toHaveCSS('color', 'rgb(0, 0, 0)');
+    await expect(tab).toHaveCSS('filter', 'none');
+    await page.setViewportSize({ width: 390, height: 800 });
+    await expect(tab).toHaveCSS('color', 'rgb(0, 0, 0)');
+    await page.setViewportSize({ width: 1280, height: 720 });
+
+    await enterEdit(page);
+    await tab.dblclick();
+    const dlg = page.getByRole('dialog', { name: 'Edit Tab' });
+    await expect(dlg).toBeVisible();
+    const text = dlg.getByRole('group', { name: 'Text colour' });
+    await expect(text.getByRole('radio', { name: 'Auto' })).toBeChecked();
+    await text.getByRole('radio', { name: 'Light' }).check();
+    await expect(dlg.locator('[data-contrast-warning]')).toBeVisible();
+    await dlg.getByRole('button', { name: /^Save/ }).click();
+    await expect(dlg).toHaveCount(0);
+    await expect(tab).toHaveCSS('color', 'rgb(255, 255, 255)');
+  });
+});
+
+// Fix round 2: hover shows on the light theme; an unreadable tab colour says why in visible text and
+// keeps the focus ring.
+test.describe('coloured tabs: hover on light, unreadable colours', () => {
+  test('light theme: hovering a coloured tab changes its border to one that stands out from the page', async ({ page, context }) => {
+    await page.addInitScript(() => localStorage.setItem('hops_theme', 'light'));
+    const f = await importDash(page, context, blue, {}, [
+      { id: `amber-${Date.now().toString(36)}`, name: 'Amber', order: 1, color: '#f59e0b', root: { columns: 24, children: [] } }
+    ]);
+    await page.goto(f.path);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    // The coloured tab is not the open one: only hover changes its border.
+    const tab = page.getByRole('tab', { name: 'Switch to Amber tab' });
+    await expect(tab).not.toHaveClass(/active/);
+    const before = await tab.evaluate((e) => getComputedStyle(e).borderTopColor);
+    await tab.hover();
+    await expect.poll(() => tab.evaluate((e) => getComputedStyle(e).borderTopColor)).not.toBe(before);
+    const after = await tab.evaluate((e) => getComputedStyle(e).borderTopColor);
+    expect(after).not.toMatch(/rgba?\(255, 255, 255/);
+  });
+
+  test('edit mode: an unreadable tab colour is named in visible text, and the tab keeps its focus ring', async ({ page, context }) => {
+    const f = await importDash(page, context, blue, { color: 'bluish' });
+    await page.goto(f.path);
+    await expect(page.getByText(/can't be read/)).toHaveCount(0);
+    await enterEdit(page);
+    const note = page.getByRole('status').filter({ hasText: `"Main" tab: its colour (bluish) can't be read` });
+    await expect(note).toBeVisible();
+    const tab = page.locator(`[data-tab-button="${f.id('tab')}"]`);
+    await expect(tab).toHaveAttribute('aria-describedby', (await note.getAttribute('id'))!);
+    await tab.focus();
+    await page.keyboard.press('ArrowRight'); // keyboard use: focus-visible applies
+    await tab.focus();
+    const ring = await tab.evaluate((e) => getComputedStyle(e).outlineStyle);
+    expect(ring).not.toBe('none');
   });
 });
