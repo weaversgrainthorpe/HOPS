@@ -44,6 +44,9 @@ func saveChecksProblem(svc *settings.Service, doc configdoc.Obj) error {
 		if ne := nameBoundsError(d); ne != nil {
 			return fmt.Errorf("sample dashboard %q: %w", id, ne)
 		}
+		if de := descriptionBoundsError(d, nil); de != nil {
+			return fmt.Errorf("sample dashboard %q: %w", id, de)
+		}
 		if err := configdoc.VerifyDashboard(d); err != nil {
 			return fmt.Errorf("sample dashboard %q: %w", id, err)
 		}

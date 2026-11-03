@@ -19,6 +19,9 @@ const (
 	maxDashboardBodyBytes = 16 << 20 // PUT /api/dashboards/{id}, POST transfer
 	maxSmallBodyBytes     = 1 << 20  // POST /api/dashboards, PUT order
 	maxDashboardNameRunes = 200
+	// maxDescriptionRunes caps a tile's or folder's description (a note
+	// tile's body text), on save and import.
+	maxDescriptionRunes = 2000
 )
 
 // decodeBody reads one JSON value from the request, bounded to limit bytes.
@@ -137,6 +140,9 @@ func (r *Router) handlePutDashboardV3(w http.ResponseWriter, id string, in confi
 		if ne := nameBoundsError(nd); ne != nil {
 			return nil, nil, ne
 		}
+		if de := descriptionBoundsError(nd, storedLongDescriptions(stored)); de != nil {
+			return nil, nil, de
+		}
 		// A stored tile address v3 refuses (a v2 rdp: tile, say) is kept while unchanged.
 		if err := configdoc.VerifyDashboardKeeping(nd, configdoc.StoredTileURLs(prev)); err != nil {
 			return nil, nil, verifyErr(err)
@@ -160,6 +166,40 @@ func nameBoundsError(d configdoc.Obj) *apiError {
 		}
 	}
 	return nil
+}
+
+// storedLongDescriptions is every description in doc over
+// maxDescriptionRunes: stored before the cap, each is kept while unchanged.
+func storedLongDescriptions(doc configdoc.Obj) map[string]bool {
+	kept := map[string]bool{}
+	configdoc.Walk(doc, func(_, _ configdoc.Obj, _ []configdoc.Obj, n configdoc.Obj) bool {
+		if s, ok := n["description"].(string); ok && utf8.RuneCountInString(s) > maxDescriptionRunes {
+			kept[s] = true
+		}
+		return true
+	})
+	return kept
+}
+
+// descriptionBoundsError bounds every tile's and folder's description in d to
+// maxDescriptionRunes, naming the item, unless it is one of kept. A visible
+// 400, nothing stored. (Descriptions that are not text are left to the verifier.)
+func descriptionBoundsError(d configdoc.Obj, kept map[string]bool) *apiError {
+	var ae *apiError
+	configdoc.Walk(configdoc.Obj{"dashboards": []any{d}}, func(_, _ configdoc.Obj, _ []configdoc.Obj, n configdoc.Obj) bool {
+		s, ok := n["description"].(string)
+		if !ok || utf8.RuneCountInString(s) <= maxDescriptionRunes || kept[s] {
+			return true
+		}
+		kind := "tile"
+		if n["kind"] == "folder" {
+			kind = "folder"
+		}
+		name, _ := n["name"].(string)
+		ae = newAPIError(http.StatusBadRequest, fmt.Sprintf("The description of %s %q is longer than %d characters", kind, name, maxDescriptionRunes))
+		return false
+	})
+	return ae
 }
 
 // handleDashboardsRoot serves /api/dashboards (no id): POST creates one.
