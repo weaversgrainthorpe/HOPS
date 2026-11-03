@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ActionButton from '$lib/components/shared/ActionButton.svelte';
   import Icon from '@iconify/svelte';
   import { focusTrap } from '$lib/utils/focusTrap';
   import { dialogContentKeydown, dialogWindowEscape } from '$lib/utils/dialogKeys';
@@ -36,7 +37,7 @@
   >
     <div class="modal-header">
       <h2 id="help-modal-title"><Icon icon="mdi:help-circle" width="28" /> Help</h2>
-      <button class="close-btn" onclick={onClose}>
+      <button class="close-btn" onclick={onClose} aria-label="Close">
         <Icon icon="mdi:close" width="24" />
       </button>
     </div>
@@ -439,7 +440,7 @@
 
     <div class="modal-footer">
       <span class="version">HOPS v{appVersion}</span>
-      <button class="btn-primary" onclick={onClose}>Got it!</button>
+      <ActionButton action="close" onclick={onClose} />
     </div>
   </div>
 </div>

@@ -499,7 +499,7 @@
               <span class="cat-count">{n} icon{n === 1 ? '' : 's'}</span>
               <span class="cat-actions">
                 <Button variant="secondary" size="small" icon="mdi:pencil" onclick={() => void startRename(c)} ariaLabel={`Rename ${c.name}`} />
-                <Button variant="danger" size="small" icon="mdi:delete-outline" onclick={() => void startCategoryDelete(c)} disabled={catBusy} ariaLabel={`Delete category ${c.name}`} />
+                <Button variant="danger" size="small" icon="mdi:trash-can" onclick={() => void startCategoryDelete(c)} disabled={catBusy} ariaLabel={`Delete category ${c.name}`} />
               </span>
             {/if}
           </li>

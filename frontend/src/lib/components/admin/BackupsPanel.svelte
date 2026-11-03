@@ -521,7 +521,7 @@
                 {#if busy && actionType === 'delete'}
                   <Icon icon="mdi:loading" width="18" class="spin" />
                 {:else}
-                  <Icon icon="mdi:delete-outline" width="18" />
+                  <Icon icon="mdi:trash-can" width="18" />
                 {/if}
               </button>
             </div>
