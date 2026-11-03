@@ -680,15 +680,19 @@ export async function previewImport(file: File): Promise<ImportPreview> {
 
 /**
  * Import a file. choices (one per dashboard, in file order, from previewImport)
- * say what to do with each; the server refuses them if the names changed since.
+ * say what to do with each, and targets give the clash ids the preview showed;
+ * the server refuses them if the clashes changed since.
  */
 export async function importConfig(
   file: File,
-  options?: { autoMatchIcons?: boolean; choices?: ImportChoice[] }
+  options?: { autoMatchIcons?: boolean; choices?: ImportChoice[]; targets?: string[] }
 ): Promise<ImportResult> {
   const fields: Record<string, string> = {};
   if (options?.autoMatchIcons) fields.autoMatchIcons = 'true';
   if (options?.choices) fields.choices = JSON.stringify(options.choices);
+  // The clash each dashboard had when checked ('' for none): the server refuses the import if
+  // that has changed since, so a Replace is always of the dashboard the admin saw.
+  if (options?.targets) fields.targets = JSON.stringify(options.targets);
   return postImport(file, fields) as Promise<ImportResult>;
 }
 

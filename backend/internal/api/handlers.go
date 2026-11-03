@@ -1003,6 +1003,9 @@ func (r *Router) handleExportConfig(w http.ResponseWriter, req *http.Request) {
 	switch scope := req.URL.Query().Get("scope"); {
 	case scope == "dashboards" && dashboardId == "":
 		list, _ := cfg["dashboards"].([]any)
+		if list == nil {
+			list = []any{} // an empty list, which import refuses as "no dashboards", never null
+		}
 		cfg = configdoc.Obj{"dashboards": list}
 		exportType = "dashboards"
 		filename = "hops-all-dashboards"
@@ -1808,6 +1811,13 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		writeAPIError(w, ce)
 		return
 	}
+	var targets []string
+	if choices != nil {
+		if targets, ce = parseImportTargets(req.FormValue("targets"), len(imported)); ce != nil {
+			writeAPIError(w, ce)
+			return
+		}
+	}
 	if choices != nil {
 		allSkipped := true
 		for _, c := range choices {
@@ -1822,6 +1832,22 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 				"success": true, "imported": 0, "summary": sum,
 				"message": "Nothing was imported: every dashboard was skipped.",
 			})
+			return
+		}
+	}
+
+	// Every refusal the choices can bring is checked before the pre-import
+	// backup, so a refused import takes none (and rotates none away). The write
+	// checks again against the document as it is then.
+	if choices != nil {
+		cur, lerr := configdoc.Load(r.db)
+		if lerr != nil {
+			slog.Error("import: stored config unreadable", "component", "import", "error", lerr)
+			writeJSONError(w, importUnreadableMsg, http.StatusInternalServerError)
+			return
+		}
+		if _, _, ae := checkImportChoices(cur, imported, choices, targets); ae != nil {
+			writeAPIError(w, ae)
 			return
 		}
 	}
@@ -1869,9 +1895,11 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		// dashboard's ids for its replacement and keeps its id, path and place.
 		summary = newImportSummary()
 		rows := importRows(stored, imported)
+		var keepNames map[int]string
 		replaceAt := map[string]int{} // stored dashboard id -> its index in existing
 		if choices != nil {
-			if ae := checkChoices(rows, choices); ae != nil {
+			var ae *apiError
+			if rows, keepNames, ae = checkImportChoices(stored, imported, choices, targets); ae != nil {
 				return nil, nil, ae
 			}
 			for i, c := range choices {
@@ -1903,12 +1931,10 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		for id := range configdoc.ReservedDashboardIDs { // never import a dashboard onto a collection route
 			used[id] = true
 		}
-		takenNames := map[string]bool{}
-		for _, e := range existing {
-			if em, ok := e.(configdoc.Obj); ok {
-				n, _ := em["name"].(string)
-				takenNames[nameKey(n)] = true
-			}
+		// A replaced dashboard's id stays reserved for its replacement, so an
+		// Add earlier in the file can't take it.
+		for id := range replaceAt {
+			used[id] = true
 		}
 
 		// Append imported dashboards, renaming paths (and ids) if they conflict
@@ -1927,7 +1953,8 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 				if rerr != nil {
 					return nil, nil, rerr
 				}
-				d["id"] = target["id"]
+				targetID, _ := target["id"].(string)
+				d["id"] = targetID
 				d["path"] = target["path"]
 				d["revision"] = rev + 1
 				if o, has := target["order"]; has {
@@ -1935,6 +1962,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 				} else {
 					delete(d, "order")
 				}
+				delete(used, targetID) // reserved above for exactly this dashboard
 				idRenames += makeIDsUnique(d, used)
 				existing[replaceAt[rows[i].Clash.ID]] = d
 				summary.Replaced = append(summary.Replaced, dashboardLabel(d))
@@ -1942,12 +1970,9 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 				continue
 			case importKeep:
 				from := dashboardLabel(d)
-				d["name"] = nextFreeName(from, takenNames)
+				d["name"] = keepNames[i] // checked for length with the choices
 				if ae := freshIDs(d); ae != nil {
 					return nil, nil, ae
-				}
-				if ne := nameBoundsError(d); ne != nil {
-					return nil, nil, newAPIError(http.StatusBadRequest, fmt.Sprintf("Import refused — the new name for %q, %q: %s. Nothing was imported.", from, d["name"], ne.Error()))
 				}
 				summary.Renamed = append(summary.Renamed, importRenamed{From: from, To: dashboardLabel(d)})
 			}
@@ -1986,7 +2011,6 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			idRenames += makeIDsUnique(d, used)
 			existing = append(existing, d)
 			names = append(names, dashboardLabel(d))
-			takenNames[nameKey(dashboardLabel(d))] = true
 			if choice == importAdd {
 				summary.Added = append(summary.Added, dashboardLabel(d))
 			}
@@ -2015,7 +2039,18 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		}
 
 		// Restore embedded assets (icons, backgrounds) from import
-		assetsRestored, assetsFailed = r.restoreAssets(importedConfig)
+		// Only the pictures of the dashboards imported; a skipped one's stay out.
+		assetSource := importedConfig
+		if len(summary.Skipped) > 0 {
+			var kept []configdoc.Obj
+			for i, d := range imported {
+				if choices[i] != importSkip {
+					kept = append(kept, d)
+				}
+			}
+			assetSource = assetsOnlyFor(importedConfig, kept)
+		}
+		assetsRestored, assetsFailed = r.restoreAssets(assetSource)
 
 		message := fmt.Sprintf("Imported %d dashboard(s) from %s format: %s", len(names), importFormat, strings.Join(names, ", "))
 		if choices != nil {

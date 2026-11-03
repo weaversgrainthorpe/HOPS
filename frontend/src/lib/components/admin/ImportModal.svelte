@@ -67,7 +67,11 @@
     error = null;
     partial = null;
     try {
-      const result = await importConfig(selectedFile, { autoMatchIcons, choices: choices as ImportChoice[] });
+      const result = await importConfig(selectedFile, {
+        autoMatchIcons,
+        choices: choices as ImportChoice[],
+        targets: preview.dashboards.map((d) => d.clash?.id ?? '')
+      });
       const lines = result.summary ? summaryLines(result.summary) : [];
       const message = result.message || 'Import finished.';
       const problems = importProblems(result);

@@ -65,7 +65,7 @@ describe('ImportModal', () => {
     const box = await screen.findByTestId('import-success');
     expect(box).toHaveTextContent('Added: Garage');
     expect(box).toHaveTextContent('Kept both: Home, the new one is "Home (2)"');
-    expect(vi.mocked(api.importConfig).mock.calls[0][1]).toMatchObject({ choices: ['keep', 'add'] });
+    expect(vi.mocked(api.importConfig).mock.calls[0][1]).toMatchObject({ choices: ['keep', 'add'], targets: ['d1', ''] });
     expect(onImportSuccess).toHaveBeenCalled();
     await new Promise((r) => setTimeout(r, 1700));
     expect(onClose).not.toHaveBeenCalled(); // the summary stays until closed
@@ -122,6 +122,6 @@ describe('ImportModal', () => {
     expect(screen.queryByTestId('import-nothing')).not.toBeInTheDocument();
     await fireEvent.click(go);
     await screen.findByTestId('import-success');
-    expect(vi.mocked(api.importConfig).mock.calls[0][1]).toMatchObject({ choices: ['replace', 'skip'] });
+    expect(vi.mocked(api.importConfig).mock.calls[0][1]).toMatchObject({ choices: ['replace', 'skip'], targets: ['d1', ''] });
   });
 });
