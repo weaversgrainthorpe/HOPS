@@ -7,11 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-This release is mostly about consistency and polish: pages, dialogs and
-buttons now look and read the same everywhere, and text stays readable on
-any colour you pick. It also makes moving dashboards between HOPS installs
-a one-file job, with a say over what gets imported. And many things that
-used to fail quietly now tell you what went wrong.
+3.1 lets you move dashboards between HOPS installs in one file, choosing
+what to import; choose the text colour on tiles and tabs; describe folders;
+hide the edit buttons from visitors; and keep using HOPS when the server
+can't be reached. It also makes the whole app look and read the same
+everywhere, and turns many quiet failures into clear messages.
 
 ### What you'll notice
 Most of this release is about making HOPS easier to read and quicker to
