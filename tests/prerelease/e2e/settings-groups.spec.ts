@@ -120,8 +120,11 @@ test.describe('global settings groups', () => {
     await page.mouse.wheel(0, 100_000);
     await expect.poll(() => page.evaluate(() => window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2)).toBe(true);
     await expectCurrent(subList(page), 'Discovery');
-    // A little way back up, the highlight leaves the last group again.
-    await page.mouse.wheel(0, -400);
+    // A little way back up, the highlight leaves the last group again: scroll until its heading sits
+    // well below the band that makes a group current (the upper 40%), whatever the group's height.
+    const y = (await heading(page, 'Discovery').boundingBox())!.y;
+    await page.mouse.wheel(0, y - 0.7 * 800);
+    await expect.poll(async () => (await heading(page, 'Discovery').boundingBox())!.y).toBeGreaterThan(0.55 * 800);
     await expect(subList(page).getByRole('link', { name: 'Discovery', exact: true })).not.toHaveAttribute('aria-current', 'location');
   });
 
