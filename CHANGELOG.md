@@ -44,6 +44,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   says what was added, replaced, renamed and skipped.
 
 ### Changed
+- **Buttons look and read the same everywhere.** Save, Discard, Undo, Redo,
+  Cancel, Close, Delete, Duplicate and Reset to default each have one icon
+  (the edit toolbar's), one word and one style in every page, dialog and
+  banner, and the edit toolbar uses the same buttons as the pages. Tab order
+  says Undo, Discard, Save; Global settings says Discard instead of Revert.
+  Delete is the same red everywhere, disabled buttons look the same
+  everywhere, and a hovered button stays readable in every colour theme.
 - **One hover popup for tiles and folders.** Hovering a tile or folder, or
   moving to it with the keyboard, shows its name in larger text, then its
   description, then any notes such as the away address. Before, tiles showed
