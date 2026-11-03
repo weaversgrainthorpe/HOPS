@@ -93,6 +93,36 @@ describe('ImportModal', () => {
     expect(toast.success).not.toHaveBeenCalled();
   });
 
+  it('fields HOPS does not recognise are named before and after the import, never a plain success', async () => {
+    const note = "1 field HOPS doesn't recognise will be kept but not used: tab \"Main\" › mood";
+    vi.mocked(api.previewImport).mockResolvedValue({
+      ...preview,
+      dashboards: [preview.dashboards[0], { ...preview.dashboards[1], unknownFields: note }]
+    });
+    const line = "Dashboard \"Garage\": 1 field HOPS doesn't recognise was kept but is not used: tab \"Main\" › mood";
+    vi.mocked(api.importConfig).mockResolvedValue({
+      success: true,
+      message: "Imported from HOPS v3 export format. Added \"Garage\"; skipped \"Home\". 1 dashboard(s) have fields HOPS doesn't recognise (listed separately)",
+      assetsFailed: [],
+      unknownFields: [line],
+      summary: { added: ['Garage'], replaced: [], renamed: [], skipped: ['Home'] }
+    });
+    render(ImportModal, { props: { onClose: vi.fn(), onImportSuccess: vi.fn() } });
+    await pickFile();
+    await fireEvent.click(screen.getByRole('button', { name: /^Next$/ }));
+    await screen.findByTestId('import-rows');
+    const rows = screen.getAllByTestId('import-row');
+    expect(within(rows[1]).getByTestId('import-row-unknown')).toHaveTextContent(note);
+    expect(within(rows[0]).queryByTestId('import-row-unknown')).not.toBeInTheDocument();
+
+    await fireEvent.click(within(rows[0]).getByRole('radio', { name: /^Skip/ }));
+    await fireEvent.click(screen.getByRole('button', { name: /^Import$/ }));
+    const box = await screen.findByTestId('import-warning');
+    expect(box).toHaveTextContent(line);
+    expect(screen.queryByTestId('import-success')).not.toBeInTheDocument();
+    expect(toast.warning).toHaveBeenCalled();
+  });
+
   it('a refused file says why, and nothing is imported', async () => {
     vi.mocked(api.previewImport).mockRejectedValue(
       new Error('Import refused — This file is a HOPS backup (the whole app), not a dashboard export.')

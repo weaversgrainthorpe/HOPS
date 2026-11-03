@@ -173,6 +173,9 @@
             <span class="row-name">{row.name}</span>
             <span class="row-meta">{row.path} · {row.tabs} {row.tabs === 1 ? 'tab' : 'tabs'}</span>
           </div>
+          {#if row.unknownFields}
+            <p class="row-unknown" data-testid="import-row-unknown">{row.unknownFields}</p>
+          {/if}
           {#if row.clash}
             <fieldset class="row-choice">
               <legend>You already have a dashboard called "{row.clash.name}" ({row.clash.path}).</legend>
@@ -414,6 +417,14 @@
   .hint {
     font-size: 0.8125rem;
     color: var(--text-secondary);
+  }
+
+  /* Fields HOPS doesn't recognise: imported, but said so before the import. */
+  .row-unknown {
+    margin: 0.25rem 0 0;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    overflow-wrap: anywhere;
   }
 
   .nothing-note {
