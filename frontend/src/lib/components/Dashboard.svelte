@@ -831,6 +831,12 @@
   .tab.colour-unreadable {
     box-shadow: inset 0 0 0 2px var(--color-error, #b91c1c);
   }
+  /* The open tab keeps its glow alongside the marker. */
+  .tab.active.colour-unreadable {
+    box-shadow:
+      inset 0 0 0 2px var(--color-error, #b91c1c),
+      0 0 12px color-mix(in srgb, var(--accent-solid) 55%, transparent);
+  }
 
   .tab-colour-note {
     margin: 0.5rem 0 0;
