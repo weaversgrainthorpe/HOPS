@@ -304,12 +304,12 @@ test.describe('a folder opened inside a folder makes room', () => {
     await expect(nested(page, d.id('sub'))).toBeVisible();
     await expect.poll(async () => (await rect(home)).height).toBeGreaterThan(storedH);
 
-    await page.locator('[aria-label="Enter Edit Mode"]').click();
+    await page.locator('[aria-label="Enter edit mode"]').click();
     await expect(noRoom(page)).toHaveCount(1);
     await expect(noRoom(page)).toHaveText('Not enough room — make the folder bigger.');
     expect((await rect(home)).height).toBeCloseTo(storedH, 0);
 
-    await page.getByRole('button', { name: 'Exit Edit Mode' }).click();
+    await page.getByRole('button', { name: 'Exit edit mode' }).click();
     await expect(noRoom(page)).toHaveCount(0);
     await expect.poll(async () => (await rect(home)).height).toBeGreaterThan(storedH);
   });

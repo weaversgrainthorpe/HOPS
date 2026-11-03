@@ -39,7 +39,7 @@ test('dashboard CRUD round-trip via UI: create → rename → delete', async ({ 
   const renamed = `${original}-renamed`;
 
   await openSettings(page);
-  await page.click('button:has-text("New Dashboard")');
+  await page.click('button:has-text("New dashboard")');
   await page.fill('input#new-name', original);
   await page.click('.new-dashboard-form button.btn-primary:has-text("Save")');
   await expect(page.getByRole('heading', { name: original, level: 3 })).toBeVisible();
@@ -68,7 +68,7 @@ test('a new dashboard\'s URL path follows its name until the path is edited', as
   const name = uniqueName('Media Room');
   const slug = `/${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
   await openSettings(page);
-  await page.click('button:has-text("New Dashboard")');
+  await page.click('button:has-text("New dashboard")');
   await page.fill('input#new-name', name);
   await expect(page.locator('input#new-path')).toHaveValue(slug);
   // Once the path is typed in by hand, renaming no longer overwrites it.
@@ -96,16 +96,16 @@ test('dashboard hierarchy + folder background colour renders after reload (the r
 
   await createDashboardViaUI(page, dashName, undefined, made);
 
-  // Add a tab (the New Tab dialog uses input#name); it becomes the shown tab.
+  // Add a tab (the New tab dialog uses input#name); it becomes the shown tab.
   await page.getByRole('toolbar', { name: 'Editing' }).getByRole('button', { name: 'Add tab' }).click();
-  const tabDlg = page.getByRole('dialog', { name: 'New Tab' });
+  const tabDlg = page.getByRole('dialog', { name: 'New tab' });
   await tabDlg.locator('input#name').fill(tabName);
   await tabDlg.getByRole('button', { name: 'Create' }).click();
   await expect(page.getByRole('tab', { name: `Switch to ${tabName} tab` })).toHaveAttribute('aria-selected', 'true');
 
   // Add a folder with a colour from the preset palette.
   await page.getByRole('toolbar', { name: 'Editing' }).getByRole('button', { name: 'Add folder' }).click();
-  const folderDlg = page.getByRole('dialog', { name: 'New Folder' });
+  const folderDlg = page.getByRole('dialog', { name: 'New folder' });
   await folderDlg.locator('#folder-name').fill(folderName);
   await folderDlg.getByRole('button', { name: 'Pink', exact: true }).click();
   await folderDlg.getByRole('button', { name: /Create/ }).click();
@@ -114,7 +114,7 @@ test('dashboard hierarchy + folder background colour renders after reload (the r
   await saveDraft(page);
 
   // Exit edit mode so we get the rendered (not-editing) appearance
-  await page.locator('[aria-label="Exit Edit Mode"]').click();
+  await page.locator('[aria-label="Exit edit mode"]').click();
 
   // Reload — this is the key step. The bug class is "save works, reload
   // surfaces the regression because the rendered tree is rebuilt fresh

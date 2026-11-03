@@ -68,13 +68,13 @@ test.afterEach(async ({ page, context }) => {
 });
 
 async function enterEdit(page: Page) {
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
 }
 async function openFolderPicker(page: Page, folderId: string) {
   await page.locator(`.tab-canvas [data-node-id="${folderId}"]`).first().click({ button: 'right', position: { x: 12, y: 12 } });
   await page.getByRole('menuitem', { name: 'Edit' }).click();
-  const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+  const dlg = page.getByRole('dialog', { name: 'Edit folder' });
   await expect(dlg).toBeVisible();
   await dlg.getByRole('button', { name: /^Background/ }).click();
   const picker = page.getByRole('dialog', { name: 'Folder background' });
@@ -83,14 +83,14 @@ async function openFolderPicker(page: Page, folderId: string) {
 }
 async function openTabPicker(page: Page) {
   await page.getByRole('tab', { name: 'Switch to Main tab' }).dblclick();
-  await page.getByRole('dialog', { name: 'Edit Tab' }).getByRole('button', { name: /Configure Tab Background/ }).click();
+  await page.getByRole('dialog', { name: 'Edit tab' }).getByRole('button', { name: /Configure tab background/ }).click();
   const picker = page.getByRole('dialog', { name: 'Tab background' });
   await expect(picker).toBeVisible();
   return picker;
 }
 async function openDashboardBackground(page: Page) {
-  await page.getByRole('button', { name: 'Edit Dashboard' }).click();
-  const dlg = page.getByRole('dialog', { name: 'Edit Dashboard' });
+  await page.getByRole('button', { name: 'Edit dashboard' }).click();
+  const dlg = page.getByRole('dialog', { name: 'Edit dashboard' });
   await dlg.getByRole('tab', { name: 'Background' }).click();
   return dlg.getByRole('tabpanel', { name: 'Background' });
 }
@@ -101,9 +101,9 @@ const REDUCED_NOTE = /on this device, because it asks for reduced motion/;
 /** The full set of slideshow motion controls is (shown = true) or is not on screen. */
 async function expectMotion(scope: ReturnType<Page['getByRole']>, shown: boolean) {
   const n = shown ? 1 : 0;
-  await expect(scope.getByRole('group', { name: 'Transition Effect' })).toHaveCount(n);
-  await expect(scope.getByLabel(/^Rotation Interval/)).toHaveCount(n);
-  await expect(scope.getByLabel(/^Transition Duration/)).toHaveCount(n);
+  await expect(scope.getByRole('group', { name: 'Transition effect' })).toHaveCount(n);
+  await expect(scope.getByLabel(/^Rotation interval/)).toHaveCount(n);
+  await expect(scope.getByLabel(/^Transition duration/)).toHaveCount(n);
   await expect(scope.getByRole('button', { name: 'Ken Burns' })).toHaveCount(n);
 }
 
@@ -114,13 +114,13 @@ test.describe('background dialog driven by the capability table', () => {
     await enterEdit(page);
     const { picker } = await openFolderPicker(page, f.id('f'));
     await expect(picker.getByText(FOLDER_NOTE)).toBeVisible();
-    await expect(picker.getByRole('button', { name: 'Open Dashboard settings' })).toBeVisible();
+    await expect(picker.getByRole('button', { name: 'Open dashboard settings' })).toBeVisible();
     await expect(picker.getByText(/kept as they are/)).toBeVisible();
     await expectMotion(picker, false);
     // What does apply is still offered.
     await expect(picker.getByRole('group', { name: /Picture type/ }).getByRole('button')).toHaveText(['Image', 'Slideshow']);
     await expect(picker.getByLabel(/^Picture opacity/)).toBeVisible();
-    await expect(picker.getByText(/^Overlay Darkness/)).toHaveCount(0);
+    await expect(picker.getByText(/^Overlay darkness/)).toHaveCount(0);
   });
 
   test('the note opens THE Dashboard dialog on Settings; turning the setting on shows the controls (live)', async ({ page, context }) => {
@@ -128,9 +128,9 @@ test.describe('background dialog driven by the capability table', () => {
     await page.goto(f.path);
     await enterEdit(page);
     const { dlg, picker } = await openFolderPicker(page, f.id('f'));
-    await picker.getByRole('button', { name: 'Open Dashboard settings' }).click();
+    await picker.getByRole('button', { name: 'Open dashboard settings' }).click();
     // The one Dashboard dialog (no separate settings dialog), opened at its Settings section.
-    const dash = page.getByRole('dialog', { name: 'Edit Dashboard' });
+    const dash = page.getByRole('dialog', { name: 'Edit dashboard' });
     await expect(dash).toBeVisible();
     await expect(page.getByRole('dialog', { name: 'Dashboard settings' })).toHaveCount(0);
     await expect(dash.getByRole('tab', { name: 'Settings' })).toHaveAttribute('aria-selected', 'true');
@@ -153,7 +153,7 @@ test.describe('background dialog driven by the capability table', () => {
     await expect(dlg).toBeVisible();
     await expect(picker.getByText(FOLDER_NOTE)).toHaveCount(0);
     await expectMotion(picker, true);
-    await expect(picker.getByRole('group', { name: 'Transition Effect' }).getByRole('button', { name: 'Flip' })).toHaveClass(/active/);
+    await expect(picker.getByRole('group', { name: 'Transition effect' }).getByRole('button', { name: 'Flip' })).toHaveClass(/active/);
     // The untouched header and background did not make the draft dirty.
     await expect(page.getByRole('toolbar', { name: 'Editing' }).getByRole('button', { name: /^Save/ })).toBeDisabled();
     // Saved on the server.
@@ -167,12 +167,12 @@ test.describe('background dialog driven by the capability table', () => {
     await enterEdit(page);
     // Opened at Settings from a folder first, then closed: the toolbar opens it as before.
     const { dlg, picker } = await openFolderPicker(page, f.id('f'));
-    await picker.getByRole('button', { name: 'Open Dashboard settings' }).click();
-    await page.getByRole('dialog', { name: 'Edit Dashboard' }).getByRole('button', { name: 'Cancel' }).click();
+    await picker.getByRole('button', { name: 'Open dashboard settings' }).click();
+    await page.getByRole('dialog', { name: 'Edit dashboard' }).getByRole('button', { name: 'Cancel' }).click();
     await picker.getByRole('button', { name: 'Cancel' }).click();
     await dlg.getByRole('button', { name: 'Cancel' }).click();
-    await page.getByRole('button', { name: 'Edit Dashboard' }).click();
-    await expect(page.getByRole('dialog', { name: 'Edit Dashboard' }).getByRole('tab', { name: 'Header' })).toHaveAttribute('aria-selected', 'true');
+    await page.getByRole('button', { name: 'Edit dashboard' }).click();
+    await expect(page.getByRole('dialog', { name: 'Edit dashboard' }).getByRole('tab', { name: 'Header' })).toHaveAttribute('aria-selected', 'true');
   });
 
   test('tab: a see-through tab shows the note in place of darkness and blur, live with the slider', async ({ page, context }) => {
@@ -181,16 +181,16 @@ test.describe('background dialog driven by the capability table', () => {
     await enterEdit(page);
     const tab = await openTabPicker(page);
     const note = tab.getByText("A see-through tab uses the dashboard's darkness and blur.");
-    await expect(tab.getByText(/^Overlay Darkness/)).toBeVisible();
+    await expect(tab.getByText(/^Overlay darkness/)).toBeVisible();
     await expect(note).toHaveCount(0);
     const slider = tab.getByLabel(/^Background opacity/);
     await slider.fill('0.5');
     await expect(note).toBeVisible();
-    await expect(tab.getByText(/^Overlay Darkness/)).toHaveCount(0);
-    await expect(tab.getByText(/^Overlay Blur/)).toHaveCount(0);
+    await expect(tab.getByText(/^Overlay darkness/)).toHaveCount(0);
+    await expect(tab.getByText(/^Overlay blur/)).toHaveCount(0);
     await slider.fill('1');
     await expect(note).toHaveCount(0);
-    await expect(tab.getByText(/^Overlay Darkness/)).toBeVisible();
+    await expect(tab.getByText(/^Overlay darkness/)).toBeVisible();
   });
 
   test('folder, folder animations on: the controls, no note', async ({ page, context }) => {
@@ -200,7 +200,7 @@ test.describe('background dialog driven by the capability table', () => {
     const { picker } = await openFolderPicker(page, f.id('f'));
     await expectMotion(picker, true);
     await expect(picker.getByText(FOLDER_NOTE)).toHaveCount(0);
-    await expect(picker.getByRole('button', { name: 'Open Dashboard settings' })).toHaveCount(0);
+    await expect(picker.getByRole('button', { name: 'Open dashboard settings' })).toHaveCount(0);
   });
 
   test('the dashboard and tab pickers are unchanged (folder animations off has no say there)', async ({ page, context }) => {
@@ -208,20 +208,20 @@ test.describe('background dialog driven by the capability table', () => {
     await page.goto(f.path);
     await enterEdit(page);
     const tab = await openTabPicker(page);
-    await expect(tab.getByRole('group', { name: /Background Type/ }).getByRole('button')).toHaveText(['None', 'Colour', 'Image', 'Slideshow']);
+    await expect(tab.getByRole('group', { name: /Background type/ }).getByRole('button')).toHaveText(['None', 'Colour', 'Image', 'Slideshow']);
     await expectMotion(tab, true);
-    await expect(tab.getByText(/^Overlay Darkness/)).toBeVisible();
-    await expect(tab.getByText(/^Overlay Blur/)).toBeVisible();
+    await expect(tab.getByText(/^Overlay darkness/)).toBeVisible();
+    await expect(tab.getByText(/^Overlay blur/)).toBeVisible();
     await expect(tab.getByLabel(/^Background opacity/)).toBeVisible();
     await expect(tab.locator('[data-motion-notes]')).toHaveCount(0);
     await tab.getByRole('button', { name: 'Cancel' }).click();
-    await page.getByRole('dialog', { name: 'Edit Tab' }).getByRole('button', { name: 'Cancel' }).click();
+    await page.getByRole('dialog', { name: 'Edit tab' }).getByRole('button', { name: 'Cancel' }).click();
 
     const dash = await openDashboardBackground(page);
     await expect(dash.getByRole('switch', { name: 'Show background picture' })).toBeChecked();
-    await expect(dash.getByRole('group', { name: /Background Type/ }).getByRole('button')).toHaveText(['None', 'Colour', 'Image', 'Slideshow']);
+    await expect(dash.getByRole('group', { name: /Background type/ }).getByRole('button')).toHaveText(['None', 'Colour', 'Image', 'Slideshow']);
     await expectMotion(dash, true);
-    await expect(dash.getByText(/^Overlay Darkness/)).toBeVisible();
+    await expect(dash.getByText(/^Overlay darkness/)).toBeVisible();
     await expect(dash.locator('[data-motion-notes]')).toHaveCount(0);
   });
 
@@ -240,7 +240,7 @@ test.describe('background dialog driven by the capability table', () => {
     const tab = await openTabPicker(page);
     await expect(tab.getByText(REDUCED_NOTE)).toBeVisible();
     await expectMotion(tab, false);
-    await expect(tab.getByText(/^Overlay Darkness/)).toBeVisible(); // still has an effect
+    await expect(tab.getByText(/^Overlay darkness/)).toBeVisible(); // still has an effect
   });
 
   test('Save with the motion controls hidden keeps the stored timing exactly', async ({ page, context }) => {

@@ -275,7 +275,7 @@ and [Rolling back from 3.x to 2.2.1](DEPLOY.md#rolling-back-from-3x-to-221).
 ### Tiles
 - **Link** (opens a URL), **SSH** (opens your SSH app) and **Note** (text
   only) tile types
-- Open modes: New Tab, Same Tab, iFrame Modal, Popup Modal
+- Open modes: New tab, Same tab, iFrame modal, Popup modal
 - **Address** and optional **Away address**, with a per-browser Home / Away
   switch
 - Status badge with response time; tiles On / Off; dashboard, tab, folder and global gates

@@ -115,7 +115,7 @@ test.describe('backgrounds in a real browser', () => {
     await expect(page.locator(`[data-node-id="${f.id('anchor')}"]`)).toBeVisible();
     // View mode: no badge.
     await expect(page.locator('[data-bg-failed]')).toHaveCount(0);
-    await page.locator('[aria-label="Enter Edit Mode"]').click();
+    await page.locator('[aria-label="Enter edit mode"]').click();
     await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
 
     const node = (k: string) => `[data-node-id="${f.id(k)}"]`;
@@ -156,7 +156,7 @@ test.describe('backgrounds in a real browser', () => {
   });
 
   async function enterEdit(page: Page) {
-    await page.locator('[aria-label="Enter Edit Mode"]').click();
+    await page.locator('[aria-label="Enter edit mode"]').click();
     await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
   }
   async function saveDraft(page: Page) {
@@ -175,7 +175,7 @@ test.describe('backgrounds in a real browser', () => {
   /** Edit mode → double-click the folder → Background… → the folder-level picker. */
   async function openFolderPicker(page: Page, folderSel: string) {
     await page.locator(folderSel).dblclick({ position: { x: 20, y: 20 } });
-    const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    const dlg = page.getByRole('dialog', { name: 'Edit folder' });
     await expect(dlg).toBeVisible();
     await dlg.getByRole('button', { name: /^Background/ }).click();
     const picker = page.getByRole('dialog', { name: 'Folder background' });
@@ -209,8 +209,8 @@ test.describe('backgrounds in a real browser', () => {
     // Folder level: no overlay or blur of its own ; pictures only.
     await picker.getByRole('radio', { name: 'Its own picture' }).check();
     await picker.getByRole('button', { name: /^Image$/ }).click();
-    await expect(picker.getByText(/Overlay Darkness/i)).toHaveCount(0);
-    await expect(picker.getByText(/Overlay Blur/i)).toHaveCount(0);
+    await expect(picker.getByText(/Overlay darkness/i)).toHaveCount(0);
+    await expect(picker.getByText(/Overlay blur/i)).toHaveCount(0);
     await picker.locator(`.image-card img[src="${PRESET}"]`).first().click();
     await picker.getByLabel(/^Picture opacity/).fill('0.5');
     await picker.getByRole('button', { name: 'Save', exact: true }).click();

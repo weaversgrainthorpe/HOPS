@@ -233,7 +233,7 @@ async function sizesInEdit(page: Page, context: BrowserContext) {
   await page.goto(s.path);
   await page.getByRole('tab', { name: 'Switch to Sizes tab', exact: true }).click();
   await expect(node(page, s.id('sc-big'))).toBeVisible();
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
   return { ...s, errors };
 }
@@ -279,7 +279,7 @@ test.describe('merge works the same inside folders', () => {
     await expect(page.locator('.drag-layer .cue')).toHaveText(/^\s*Make a folder\s*$/i);
     await expect(page.locator('.drag-layer .reason')).toHaveCount(0);
     await page.mouse.up();
-    const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    const dlg = page.getByRole('dialog', { name: 'Edit folder' });
     await expect(dlg).toBeVisible();
     await dlg.getByRole('button', { name: 'Cancel', exact: true }).click(); // keeps "New folder"
     await expect(dlg).toBeHidden();
@@ -316,7 +316,7 @@ test.describe('merge works the same inside folders', () => {
     await page.waitForTimeout(700);
     await expect(page.locator('.drag-layer .cue')).toHaveText(/^\s*Make a folder\s*$/i);
     await page.mouse.up();
-    const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    const dlg = page.getByRole('dialog', { name: 'Edit folder' });
     await dlg.getByRole('button', { name: /^Save/ }).click();
     await saveDraft(page);
     const sizes = (await savedTabs(page, s.dashId)).find((t) => t.name === 'Sizes')!.root.children;
@@ -331,7 +331,7 @@ test.describe('merge works the same inside folders', () => {
     await dragGhostOnto(page, node(page, s.id('sc-big')), node(page, s.id('sc-ff-2')));
     await expect(page.locator('.drag-layer .marker')).toBeVisible();
     await page.mouse.up();
-    await expect(page.getByRole('dialog', { name: 'Edit Folder' })).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'Edit folder' })).toHaveCount(0);
     await saveDraft(page);
     const sizes = (await savedTabs(page, s.dashId)).find((t) => t.name === 'Sizes')!.root.children;
     const ids = find(sizes, s.id('sc-ff'))!.content!.children.map((n) => n.id);
@@ -358,7 +358,7 @@ test.describe('merge works the same inside folders', () => {
     await page.waitForTimeout(700);
     await expect(page.locator('.drag-layer .cue')).toHaveText(/^\s*Make a folder\s*$/i);
     await page.mouse.up();
-    const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    const dlg = page.getByRole('dialog', { name: 'Edit folder' });
     await dlg.getByRole('button', { name: /^Save/ }).click();
     await saveDraft(page);
     const sizes = (await savedTabs(page, s.dashId)).find((t) => t.name === 'Sizes')!.root.children;

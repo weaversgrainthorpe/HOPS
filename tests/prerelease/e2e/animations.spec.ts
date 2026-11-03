@@ -196,7 +196,7 @@ async function openEditing(page: Page, path: string, first: string): Promise<str
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(path);
   await expect(node(page, first)).toBeVisible();
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
   return errors;
 }
@@ -230,7 +230,7 @@ async function dropThenMerge(page: Page, f: { id: (s: string) => string }) {
   await page.waitForTimeout(700);
   await expect(page.locator('.drag-layer .cue')).toHaveText(/^\s*Make a folder\s*$/i);
   await page.mouse.up();
-  const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+  const dlg = page.getByRole('dialog', { name: 'Edit folder' });
   await expect(dlg).toBeVisible();
   await page.waitForTimeout(500);
   await dlg.getByRole('button', { name: /^Save/ }).click();
@@ -312,7 +312,7 @@ test.describe('drop and merge animations', () => {
     expect(m.declared, 'and about 500 ms in all').toBeLessThanOrEqual(700);
     await expect(page.locator('[data-testid="drop-anim"]')).toHaveCount(0);
     await expect(page.locator('[data-drop-pop]')).toHaveCount(0);
-    const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    const dlg = page.getByRole('dialog', { name: 'Edit folder' });
     await expect(dlg).toBeVisible();
     await dlg.getByRole('button', { name: 'Cancel' }).click();
     expect(errors).toEqual([]);
@@ -331,7 +331,7 @@ test.describe('drop and merge animations', () => {
     await expect(page.locator('.drag-layer .cue')).toHaveText(/^\s*Make a folder\s*$/i);
     await clearLog(page);
     await page.mouse.up();
-    const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    const dlg = page.getByRole('dialog', { name: 'Edit folder' });
     await expect(dlg).toBeVisible();
     // Visible, so nothing from the animation is left on screen with it.
     await expect(page.locator('[data-testid="drop-anim"]')).toHaveCount(0);
@@ -368,7 +368,7 @@ test.describe('drop and merge animations', () => {
       await page.waitForTimeout(700);
       await clearLog(page);
       await page.mouse.up();
-      await expect(page.getByRole('dialog', { name: 'Edit Folder' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Edit folder' })).toBeVisible();
       await expect.poll(async () => (await animLog(page)).some((e) => e.what === 'task-after-pointerup')).toBe(true);
       const log = await animLog(page);
       expect(anim(log)).toEqual([]);
@@ -513,7 +513,7 @@ test.describe('drop and merge animations', () => {
     await expect(cue).toHaveText(/^\s*Make a folder\s*$/i);
     await page.mouse.up();
     await check('merge inside a folder', ['merge', 'merge'], 'pop');
-    const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    const dlg = page.getByRole('dialog', { name: 'Edit folder' });
     await expect(dlg).toBeVisible();
     await dlg.getByRole('button', { name: 'Cancel' }).click();
 

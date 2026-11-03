@@ -608,7 +608,7 @@
       {inheritOn ? caps.inherit.inheritHint : caps.inherit.ownHint}
     </p>
   {:else if caps.inherit.kind === 'picture-or-behind'}
-    <!-- Pictures only. The folder's colour and opacity are set in Edit Folder. -->
+    <!-- Pictures only. The folder's colour and opacity are set in Edit folder. -->
     <div class="inherit-radios" role="radiogroup" aria-label={caps.inherit.groupLabel}>
       {#if legacyColour}
         <label class="inherit-radio">
@@ -630,7 +630,7 @@
         <span class="legacy-swatch" style:background-color={legacyColourUse?.ok ? legacyColourUse.color : undefined} aria-hidden="true"></span>
         <p class="radio-hint-text">
           This folder has a colour background ({background?.value ?? 'no value'}){background?.inherit ? ', switched off' : ''}.
-          Folders take their colour from Edit Folder now; it keeps showing until you change it.
+          Folders take their colour from Edit folder now; it keeps showing until you change it.
         </p>
         {#if legacyColourUse && !legacyColourUse.ok}
           <p class="radio-hint-text">{legacyColourUse.problem}</p>
@@ -662,7 +662,7 @@
 </div>
 
 {#if showPictureControls}
-<!-- Background Type Selection -->
+<!-- Background type Selection -->
 <div class="form-group">
   <!-- svelte-ignore a11y_label_has_associated_control -->
   <label id="bg-type-label">{caps.typeLabel} {#if inheritOn}<span class="label-hint">(kept, not shown while inheriting)</span>{/if}</label>
@@ -687,11 +687,11 @@
   </div>
 {/if}
 
-<!-- Image Fit Option -->
+<!-- Image fit Option -->
 {#if caps.fit && (backgroundType === 'image' || backgroundType === 'slideshow')}
   <div class="form-group">
     <!-- svelte-ignore a11y_label_has_associated_control -->
-    <label id="image-fit-label">Image Fit</label>
+    <label id="image-fit-label">Image fit</label>
     <div class="fit-buttons" role="group" aria-labelledby="image-fit-label">
       <button class="fit-btn" class:active={backgroundFit === 'cover'} onclick={() => backgroundFit = 'cover'} title="Cover - Image covers entire area (may crop)">
         <Icon icon="mdi:arrow-expand-all" width="20" />
@@ -738,7 +738,7 @@
   <div class="form-group">
     <div class="slider-header">
       <!-- svelte-ignore a11y_label_has_associated_control -->
-      <label>Overlay Darkness: {Math.round(overlayOpacity * 100)}%</label>
+      <label>Overlay darkness: {Math.round(overlayOpacity * 100)}%</label>
       <button type="button" class="reset-link" onclick={() => overlayOpacity = 0.7}><Icon icon={ACTIONS.reset.icon} width="14" />{ACTIONS.reset.label}</button>
     </div>
     <input type="range" min="0" max="1" step="0.05" bind:value={overlayOpacity} />
@@ -751,7 +751,7 @@
   <div class="form-group">
     <div class="slider-header">
       <!-- svelte-ignore a11y_label_has_associated_control -->
-      <label>Overlay Blur: {overlayBlur}px</label>
+      <label>Overlay blur: {overlayBlur}px</label>
       <button type="button" class="reset-link" onclick={() => overlayBlur = 10}><Icon icon={ACTIONS.reset.icon} width="14" />{ACTIONS.reset.label}</button>
     </div>
     <input type="range" min="0" max="20" step="1" bind:value={overlayBlur} />
@@ -762,7 +762,7 @@
   </div>
 {/if}
 
-<!-- Single Image URL -->
+<!-- Single image URL -->
 {#if backgroundType === 'image'}
   <div class="form-group">
     <label for="imageUrl">Image URL</label>
@@ -804,7 +804,7 @@
         {#if note === 'folderAnimationsOff' && onOpenDashboardSettings}
           <button type="button" class="open-settings-btn" onclick={() => onOpenDashboardSettings?.()}>
             <Icon icon="mdi:cog-outline" width="16" />
-            Open Dashboard settings
+            Open dashboard settings
           </button>
         {/if}
       {/each}
@@ -813,7 +813,7 @@
   {/if}
   {#if caps.interval}
   <div class="form-group">
-    <label for="interval">Rotation Interval (seconds, {INTERVAL_MIN}–{INTERVAL_MAX})</label>
+    <label for="interval">Rotation interval (seconds, {INTERVAL_MIN}–{INTERVAL_MAX})</label>
     <input
       id="interval"
       class="bg-field"
@@ -835,35 +835,35 @@
   {#if caps.transitionPicker}
   <div class="form-group">
     <!-- svelte-ignore a11y_label_has_associated_control -->
-    <label id="transition-effect-label">Transition Effect</label>
+    <label id="transition-effect-label">Transition effect</label>
     <div class="transition-buttons" role="group" aria-labelledby="transition-effect-label">
       <button class="transition-btn" class:active={transitionEffect === 'crossfade'} onclick={() => transitionEffect = 'crossfade'} title="Crossfade">
         <Icon icon="mdi:blur" width="20" />
         <span>Crossfade</span>
       </button>
-      <button class="transition-btn" class:active={transitionEffect === 'slide'} onclick={() => transitionEffect = 'slide'} title="Slide Right">
+      <button class="transition-btn" class:active={transitionEffect === 'slide'} onclick={() => transitionEffect = 'slide'} title="Slide right">
         <Icon icon="mdi:arrow-right-bold" width="20" />
         <span>Slide</span>
       </button>
-      <button class="transition-btn" class:active={transitionEffect === 'slide-up'} onclick={() => transitionEffect = 'slide-up'} title="Slide Up">
+      <button class="transition-btn" class:active={transitionEffect === 'slide-up'} onclick={() => transitionEffect = 'slide-up'} title="Slide up">
         <Icon icon="mdi:arrow-up-bold" width="20" />
-        <span>Slide Up</span>
+        <span>Slide up</span>
       </button>
-      <button class="transition-btn" class:active={transitionEffect === 'slide-down'} onclick={() => transitionEffect = 'slide-down'} title="Slide Down">
+      <button class="transition-btn" class:active={transitionEffect === 'slide-down'} onclick={() => transitionEffect = 'slide-down'} title="Slide down">
         <Icon icon="mdi:arrow-down-bold" width="20" />
-        <span>Slide Down</span>
+        <span>Slide down</span>
       </button>
-      <button class="transition-btn" class:active={transitionEffect === 'zoom'} onclick={() => transitionEffect = 'zoom'} title="Zoom In">
+      <button class="transition-btn" class:active={transitionEffect === 'zoom'} onclick={() => transitionEffect = 'zoom'} title="Zoom in">
         <Icon icon="mdi:magnify-plus" width="20" />
-        <span>Zoom In</span>
+        <span>Zoom in</span>
       </button>
-      <button class="transition-btn" class:active={transitionEffect === 'zoom-out'} onclick={() => transitionEffect = 'zoom-out'} title="Zoom Out">
+      <button class="transition-btn" class:active={transitionEffect === 'zoom-out'} onclick={() => transitionEffect = 'zoom-out'} title="Zoom out">
         <Icon icon="mdi:magnify-minus" width="20" />
-        <span>Zoom Out</span>
+        <span>Zoom out</span>
       </button>
-      <button class="transition-btn" class:active={transitionEffect === 'fade-black'} onclick={() => transitionEffect = 'fade-black'} title="Fade to Black">
+      <button class="transition-btn" class:active={transitionEffect === 'fade-black'} onclick={() => transitionEffect = 'fade-black'} title="Fade to black">
         <Icon icon="mdi:circle" width="20" />
-        <span>Fade Black</span>
+        <span>Fade black</span>
       </button>
       <button class="transition-btn" class:active={transitionEffect === 'blur'} onclick={() => transitionEffect = 'blur'} title="Blur">
         <Icon icon="mdi:blur-radial" width="20" />
@@ -885,11 +885,11 @@
         <Icon icon="mdi:curtains" width="20" />
         <span>Curtain</span>
       </button>
-      <button class="transition-btn" class:active={transitionEffect === 'circle'} onclick={() => transitionEffect = 'circle'} title="Circle Reveal">
+      <button class="transition-btn" class:active={transitionEffect === 'circle'} onclick={() => transitionEffect = 'circle'} title="Circle reveal">
         <Icon icon="mdi:circle-outline" width="20" />
         <span>Circle</span>
       </button>
-      <button class="transition-btn" class:active={transitionEffect === 'diamond'} onclick={() => transitionEffect = 'diamond'} title="Diamond Reveal">
+      <button class="transition-btn" class:active={transitionEffect === 'diamond'} onclick={() => transitionEffect = 'diamond'} title="Diamond reveal">
         <Icon icon="mdi:rhombus-outline" width="20" />
         <span>Diamond</span>
       </button>
@@ -930,7 +930,7 @@
 
   {#if caps.duration}
   <div class="form-group">
-    <label for="transitionDuration">Transition Duration ({transitionDuration}s)</label>
+    <label for="transitionDuration">Transition duration ({transitionDuration}s)</label>
     <input id="transitionDuration" type="range" bind:value={transitionDuration} min={DURATION_MIN} max={DURATION_MAX} step="0.5" class="range-input" disabled={transitionEffect === 'none'} />
     <div class="range-labels">
       <span>{DURATION_MIN}s</span>
@@ -944,10 +944,10 @@
   </div>
   {/if}
 
-  <!-- Transition Preview - positioned right after effect selection -->
+  <!-- Transition preview - positioned right after effect selection -->
   {#if caps.transitionPicker && slideshowImages.length > 1}
     <div class="transition-preview">
-      <label><Icon icon="mdi:eye" width="16" /> Transition Preview ({transitionEffect}{transitionEffect === 'random' ? ` → ${effectiveTransition}` : ''})</label>
+      <label><Icon icon="mdi:eye" width="16" /> Transition preview ({transitionEffect}{transitionEffect === 'random' ? ` → ${effectiveTransition}` : ''})</label>
       <div class="preview-container">
         <div
           class="preview-layer layer-1 transition-{effectiveTransition}"
@@ -991,7 +991,7 @@
 
   <div class="form-group">
     <!-- svelte-ignore a11y_label_has_associated_control -->
-    <label id="selected-images-label">Selected Images ({slideshowImages.length})</label>
+    <label id="selected-images-label">Selected images ({slideshowImages.length})</label>
     {#if slideshowImages.length > 0}
       <div class="selected-images" aria-labelledby="selected-images-label">
         {#each slideshowImages as imageUrl, index}
@@ -1021,7 +1021,7 @@
 
   <!-- Custom URL Input -->
   <div class="form-group">
-    <label for="custom-image-url">Add Custom Image URL</label>
+    <label for="custom-image-url">Add custom image URL</label>
     <div class="url-input-group">
       <input
         id="custom-image-url"
@@ -1045,11 +1045,11 @@
   </div>
 {/if}
 
-<!-- Image Gallery (for image and slideshow) -->
+<!-- Image gallery (for image and slideshow) -->
 {#if backgroundType === 'image' || backgroundType === 'slideshow'}
   <div class="gallery-section">
     <div class="gallery-header">
-      <h3>Image Gallery</h3>
+      <h3>Image gallery</h3>
       <!-- Upload Button -->
       <div class="upload-inline">
         <input
@@ -1471,7 +1471,7 @@
   :global(:root) {
     --bgsec-field-bg: var(--bg-primary);
     --bgsec-field-text: var(--text-primary);
-    --bgsec-field-placeholder: var(--text-secondary); /* as in Edit Folder: >= 4.5:1 */
+    --bgsec-field-placeholder: var(--text-secondary); /* as in Edit folder: >= 4.5:1 */
     --bgsec-field-border: color-mix(in srgb, var(--text-secondary) 70%, transparent);
     --bgsec-field-focus: var(--accent-solid);
     --bgsec-error-text: var(--color-error-text);

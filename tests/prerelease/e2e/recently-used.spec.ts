@@ -3,7 +3,7 @@ import { getCsrfToken } from '../helpers';
 
 // "Recently used": an optional per-browser row of the tiles this viewer opens most, above the tabs.
 // Kept in localStorage only (no accounts, nothing sent to the server). Off until turned on in
-// Theme Settings (or hidden again from the row's own menu). A slim one-line strip of chips; in edit
+// Theme settings (or hidden again from the row's own menu). A slim one-line strip of chips; in edit
 // mode it stays (dimmed, inert) so nothing below it moves.
 
 const madeIds: string[] = [];
@@ -76,12 +76,12 @@ async function open(page: Page, target: ReturnType<Page['locator']>): Promise<st
 const openTile = (page: Page, name: string) => open(page, tileNamed(page, name).locator('button.entry'));
 
 async function setShowRecent(page: Page, on: boolean) {
-  await page.getByRole('button', { name: 'Theme Settings' }).click();
-  const dlg = page.getByRole('dialog', { name: 'Theme Settings' });
+  await page.getByRole('button', { name: 'Theme settings' }).click();
+  const dlg = page.getByRole('dialog', { name: 'Theme settings' });
   const box = dlg.getByRole('checkbox', { name: 'Show recently used' });
   if (on) await box.check();
   else await box.uncheck();
-  await dlg.getByRole('button', { name: 'Apply Theme' }).click();
+  await dlg.getByRole('button', { name: 'Apply theme' }).click();
   await expect(dlg).toHaveCount(0);
 }
 
@@ -121,7 +121,7 @@ test('off by default (nothing recorded); on: shows opened tiles by frecency, ope
   await expect.poll(() => rowNames(page)).toEqual(['Bravo', 'Echo', 'Charlie', 'Alpha']);
 });
 
-test('Clear history empties the row; the toggle persists across reloads (Theme Settings and the row menu)', async ({ page, context }) => {
+test('Clear history empties the row; the toggle persists across reloads (Theme settings and the row menu)', async ({ page, context }) => {
   await fakeHosts(context);
   const f = await importDash(page, context);
   await page.goto(f.path);
@@ -149,10 +149,10 @@ test('Clear history empties the row; the toggle persists across reloads (Theme S
   await page.reload();
   await expect(tileNamed(page, 'Alpha')).toBeVisible();
   await expect(row(page)).toHaveCount(0);
-  await page.getByRole('button', { name: 'Theme Settings' }).click();
+  await page.getByRole('button', { name: 'Theme settings' }).click();
   await expect(page.getByRole('checkbox', { name: 'Show recently used' })).not.toBeChecked();
-  // Theme Settings' Clear history works too.
-  await page.getByRole('dialog', { name: 'Theme Settings' }).getByRole('button', { name: 'Clear history' }).click();
+  // Theme settings' Clear history works too.
+  await page.getByRole('dialog', { name: 'Theme settings' }).getByRole('button', { name: 'Clear history' }).click();
   await page.keyboard.press('Escape');
   await setShowRecent(page, true);
   await expect(row(page)).toHaveCount(0);
@@ -171,7 +171,7 @@ test('edit mode: the row stays (dimmed, inert, not in the layout) and nothing be
   await expect(row(page)).toBeVisible();
   const tabSel = '[data-dashboard-tabs] [role=tab]';
   const before = { tab: await topOf(page, tabSel), rowBox: await row(page).boundingBox() };
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
   await expect(row(page)).toBeVisible();
   await expect(row(page)).toHaveAttribute('data-recent-editing', '');
@@ -186,8 +186,8 @@ test('edit mode: the row stays (dimmed, inert, not in the layout) and nothing be
   expect(Math.abs(during.rowBox!.height - before.rowBox!.height)).toBeLessThanOrEqual(1);
   // The canvas top (the editing canvas vs the view canvas) is where it was.
   const canvasTop = await page.evaluate(() => document.querySelector('.canvas-panel')!.getBoundingClientRect().top);
-  await page.locator('[aria-label="Exit Edit Mode"]').click();
-  await expect(page.locator('[aria-label="Enter Edit Mode"]')).toBeVisible();
+  await page.locator('[aria-label="Exit edit mode"]').click();
+  await expect(page.locator('[aria-label="Enter edit mode"]')).toBeVisible();
   await expect(row(page)).toBeVisible();
   await expect(row(page)).not.toHaveAttribute('data-recent-editing', '');
   const after = { tab: await topOf(page, tabSel), canvas: await topOf(page, '.canvas-panel') };

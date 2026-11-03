@@ -226,7 +226,7 @@ test.describe('one Folder component', () => {
       near(view.inFolder.height, view.tab.height, 'view: in-folder height');
       near(view.minimised.width, view.tab.width, 'view: minimised width');
       near(view.minimised.height, view.tab.height, 'view: minimised height');
-      await page.locator('[aria-label="Enter Edit Mode"]').click();
+      await page.locator('[aria-label="Enter edit mode"]').click();
       await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
       const edit = await measure();
       for (const k of ['tab', 'inFolder', 'minimised'] as const) {
@@ -259,7 +259,7 @@ test.describe('one Folder component', () => {
     while (await next.isEnabled()) await next.click();
     const last = await pageAttr();
     expect(last).toBeGreaterThan(0);
-    await page.locator('[aria-label="Enter Edit Mode"]').click();
+    await page.locator('[aria-label="Enter edit mode"]').click();
     await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
     expect(await pageAttr()).toBe(last); // the page is remembered while editing too
     // Delete every item on the last page: the folder now shows the new last page, never an empty one.
@@ -288,7 +288,7 @@ test.describe('one Folder component', () => {
       folder(id('f'), 'Shut', { x: 0, y: 0, w: 8, h: 6 }, [kid(id('a'), 'First'), kid(id('needle'), 'Editneedle')], { display: 'collapsed' })
     ]);
     await page.goto(f.path);
-    await page.locator('[aria-label="Enter Edit Mode"]').click();
+    await page.locator('[aria-label="Enter edit mode"]').click();
     const bar = page.getByRole('toolbar', { name: 'Editing' });
     await expect(bar).toBeVisible();
     await expect(node(page, f.id('f'))).toHaveClass(/collapsed/);
@@ -309,7 +309,7 @@ test.describe('one Folder component', () => {
     await page.goto(f.path);
     const g = node(page, f.id('f'));
     const perBefore = Number(await g.locator('[data-folder-page]').getAttribute('data-folder-per-page'));
-    await page.locator('[aria-label="Enter Edit Mode"]').click();
+    await page.locator('[aria-label="Enter edit mode"]').click();
     await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
     // Select it (its bar) and grow it with Shift+Arrow (the keyboard resize of the selection).
     await g.locator('.folder-header').click({ position: { x: 5, y: 5 } });

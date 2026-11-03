@@ -42,7 +42,7 @@
 </script>
 
 <div class="section">
-  <h3>Left Section</h3>
+  <h3>Left section</h3>
   <div class="form-group checkbox-group">
     <label>
       <input type="checkbox" bind:checked={showLeft} />
@@ -51,7 +51,7 @@
   </div>
   {#if showLeft}
     <div class="form-group">
-      <label for="leftText">Custom Text (optional)</label>
+      <label for="leftText">Custom text (optional)</label>
       <input
         id="leftText"
         type="text"
@@ -64,7 +64,7 @@
 </div>
 
 <div class="section">
-  <h3>Center Section</h3>
+  <h3>Centre section</h3>
   <div class="form-group checkbox-group">
     <label>
       <input type="checkbox" bind:checked={showCenter} />
@@ -73,7 +73,7 @@
   </div>
   {#if showCenter}
     <div class="form-group">
-      <label for="centerTitle">Custom Title (optional)</label>
+      <label for="centerTitle">Custom title (optional)</label>
       <input
         id="centerTitle"
         type="text"
@@ -88,7 +88,7 @@
 <div class="info-box">
   <Icon icon="mdi:information" width="20" />
   <div>
-    <strong>Right Section (Fixed)</strong>
+    <strong>Right section (fixed)</strong>
     <p>Text size controls, theme toggle, edit mode, help, about, and admin link always visible</p>
   </div>
 </div>

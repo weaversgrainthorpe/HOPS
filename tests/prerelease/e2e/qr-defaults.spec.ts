@@ -50,7 +50,7 @@ test.describe('QR code with the HOPS bunny', () => {
 		expect(dash, 'the test server has a dashboard').toBeTruthy();
 		await openSettings(page);
 		await page.getByRole('button', { name: `Show QR code for ${dash.name}`, exact: true }).click();
-		const dlg = page.getByRole('dialog', { name: 'QR Code' });
+		const dlg = page.getByRole('dialog', { name: 'QR code' });
 		// The dashboard name labels the code, so it is large (>= 22px) and full-contrast text.
 		const nameEl = dlg.locator('.dashboard-name');
 		await expect(nameEl).toHaveText(dash.name);
@@ -163,12 +163,12 @@ c.commit()
 		await dlg.getByLabel('Username').fill(ADMIN_USERNAME);
 		await dlg.getByLabel('Password', { exact: true }).fill(ADMIN_INITIAL_PASSWORD);
 		await dlg.getByLabel('Password', { exact: true }).press('Enter');
-		await expect(page.getByRole('heading', { name: 'Set a New Password' })).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByRole('heading', { name: 'Set a new password' })).toBeVisible({ timeout: 10_000 });
 		await page.fill('input#current-password', ADMIN_INITIAL_PASSWORD);
 		await page.fill('input#new-password', ADMIN_TEST_PASSWORD);
 		await page.fill('input#confirm-password', ADMIN_TEST_PASSWORD);
-		await page.click('button:has-text("Set Password")');
-		await expect(page.getByRole('heading', { name: 'Set a New Password' })).toHaveCount(0, { timeout: 15_000 });
+		await page.click('button:has-text("Set password")');
+		await expect(page.getByRole('heading', { name: 'Set a new password' })).toHaveCount(0, { timeout: 15_000 });
 		await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('link', { name: 'Global settings', exact: true }).click();
 		await expect(page).toHaveURL(/\/settings\/global$/);
 		return { ctx, page };

@@ -14,10 +14,10 @@ beforeEach(() => {
 });
 
 describe('/settings/dashboards', () => {
-	it('shows the dashboard list with New Dashboard', () => {
+	it('shows the dashboard list with New dashboard', () => {
 		render(Page);
 		expect(screen.getByRole('heading', { name: 'Dashboards', level: 2 })).toBeTruthy();
-		expect(screen.getByRole('button', { name: /New Dashboard/ })).toBeTruthy();
+		expect(screen.getByRole('button', { name: /New dashboard/ })).toBeTruthy();
 		expect(screen.getByRole('heading', { name: 'Home', level: 3 })).toBeTruthy();
 	});
 
@@ -27,12 +27,12 @@ describe('/settings/dashboards', () => {
 		render(Page);
 		expect(screen.getByRole('heading', { name: 'Dashboards', level: 2 })).toBeTruthy();
 		expect(screen.getByText(/can't be shown until the configuration is restored/)).toBeTruthy();
-		expect(screen.queryByRole('button', { name: /New Dashboard/ })).toBeNull();
+		expect(screen.queryByRole('button', { name: /New dashboard/ })).toBeNull();
 	});
 
 	it('holds only the dashboards: no global settings, backups or factory reset here', () => {
 		render(Page);
-		expect(screen.queryByRole('button', { name: /Factory Reset/ })).toBeNull();
+		expect(screen.queryByRole('button', { name: /Factory reset/ })).toBeNull();
 		expect(screen.queryByRole('heading', { name: 'Global settings' })).toBeNull();
 	});
 });

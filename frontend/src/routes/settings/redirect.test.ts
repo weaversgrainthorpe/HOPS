@@ -3,7 +3,7 @@ import { isRedirect } from '@sveltejs/kit';
 import { load } from './+page';
 
 // /settings is not a page of its own any more: it goes to its first section, so the gear,
-// old bookmarks and every "Open Settings" link keep working.
+// old bookmarks and every "Open settings" link keep working.
 describe('/settings', () => {
 	it('redirects to /settings/dashboards', () => {
 		let thrown: unknown;

@@ -94,7 +94,7 @@ describe('backgroundCapabilities', () => {
       inheritLabel: "No picture of its own — show what's behind", ownLabel: 'Its own picture'
     });
     expect(backgroundCapabilities('folder', r).typeLabel).toBe('Picture type');
-    expect(backgroundCapabilities('tab', r).typeLabel).toBe('Background Type');
+    expect(backgroundCapabilities('tab', r).typeLabel).toBe('Background type');
   });
 
   it('is pure: the same input gives an equal answer and the result is frozen', () => {

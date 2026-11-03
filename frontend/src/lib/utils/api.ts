@@ -1220,7 +1220,7 @@ export const CATEGORY_LIST: { slug: DiscoveryCategory; label: string; icon: stri
   { slug: 'notifications',  label: 'Notifications',  icon: 'mdi:bell' },
   { slug: 'other',          label: 'Other',          icon: 'mdi:application' },
   { slug: 'photos',         label: 'Photos',         icon: 'mdi:image-multiple' },
-  { slug: 'automation',     label: 'Smart Home',     icon: 'mdi:home-automation' },
+  { slug: 'automation',     label: 'Smart home',     icon: 'mdi:home-automation' },
   { slug: 'storage',        label: 'Storage',        icon: 'mdi:nas' },
   { slug: 'surveillance',   label: 'Surveillance',   icon: 'mdi:cctv' },
   { slug: 'virtualization', label: 'Virtualization', icon: 'mdi:server' },

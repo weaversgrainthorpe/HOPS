@@ -27,7 +27,7 @@ const ABOUT_FEATURES = [
   'CSRF + bcrypt security',
   'Text size controls',
   'Folders (nested, paged)',
-  'Network Discovery',
+  'Network discovery',
   'Add to HOPS from any web page',
   'Home & away addresses',
   'SSH and note tiles',

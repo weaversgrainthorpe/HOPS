@@ -78,13 +78,13 @@ describe('Navbar pencil when logged out', () => {
 
 	it('is visible on a dashboard page', () => {
 		render(Navbar, {});
-		expect(screen.getByRole('button', { name: 'Enter Edit Mode' })).toBeTruthy();
+		expect(screen.getByRole('button', { name: 'Enter edit mode' })).toBeTruthy();
 	});
 
 	it('opens the sign-in dialog in place; a wrong password shows the error and stays open', async () => {
 		apiLogin.mockRejectedValue(new LoginError('unauthorized', 'Sign-in failed — check your username and password.'));
 		render(Navbar, {});
-		await fireEvent.click(screen.getByRole('button', { name: 'Enter Edit Mode' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Enter edit mode' }));
 		expect(screen.getByRole('dialog', { name: 'Sign in' })).toBeTruthy();
 		await signInWith('wrong');
 		expect((await screen.findByRole('alert')).textContent).toContain('check your username and password');
@@ -96,29 +96,29 @@ describe('Navbar pencil when logged out', () => {
 	it('a successful sign-in starts editing on this dashboard', async () => {
 		apiLogin.mockResolvedValue({ mustChangePassword: false });
 		render(Navbar, {});
-		await fireEvent.click(screen.getByRole('button', { name: 'Enter Edit Mode' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Enter edit mode' }));
 		await signInWith('right');
 		await waitFor(() => expect(get(editMode)).toBe(true));
 		expect(get(session)?.dashboardId).toBe('d');
 		expect(screen.queryByRole('dialog', { name: 'Sign in' })).toBeNull();
-		expect(screen.getByRole('button', { name: 'Exit Edit Mode' })).toBeTruthy();
+		expect(screen.getByRole('button', { name: 'Exit edit mode' })).toBeTruthy();
 	});
 
 	it('Cancel changes nothing', async () => {
 		render(Navbar, {});
-		await fireEvent.click(screen.getByRole('button', { name: 'Enter Edit Mode' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Enter edit mode' }));
 		await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 		expect(screen.queryByRole('dialog', { name: 'Sign in' })).toBeNull();
 		expect(apiLogin).not.toHaveBeenCalled();
 		expect(get(isAuthenticated)).toBe(false);
 		expect(get(editMode)).toBe(false);
 		expect(get(session)).toBeNull();
-		expect(screen.getByRole('button', { name: 'Enter Edit Mode' })).toBeTruthy();
+		expect(screen.getByRole('button', { name: 'Enter edit mode' })).toBeTruthy();
 	});
 
 	it('navigating away (Back, or to /settings) closes the sign-in dialog', async () => {
 		render(Navbar, {});
-		await fireEvent.click(screen.getByRole('button', { name: 'Enter Edit Mode' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Enter edit mode' }));
 		expect(screen.getByRole('dialog', { name: 'Sign in' })).toBeTruthy();
 		navigateTo('/settings');
 		await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Sign in' })).toBeNull());
@@ -130,7 +130,7 @@ describe('Navbar pencil when logged out', () => {
 
 	it('navigating to another dashboard closes it too: a later sign-in never edits the wrong one', async () => {
 		render(Navbar, {});
-		await fireEvent.click(screen.getByRole('button', { name: 'Enter Edit Mode' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Enter edit mode' }));
 		navigateTo('/e');
 		await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Sign in' })).toBeNull());
 		expect(apiLogin).not.toHaveBeenCalled();
@@ -142,7 +142,7 @@ describe('Navbar pencil when logged out', () => {
 		editEntry.set({ dashboardId: 'd', busy: true });
 		try {
 			render(Navbar, {});
-			const pencil = screen.getByRole('button', { name: 'Enter Edit Mode' }) as HTMLButtonElement;
+			const pencil = screen.getByRole('button', { name: 'Enter edit mode' }) as HTMLButtonElement;
 			pencil.focus();
 			expect(document.activeElement).toBe(pencil);
 			expect(pencil.disabled).toBe(false);
@@ -162,7 +162,7 @@ describe('Navbar pencil when logged out', () => {
 	it('logged in, the pencil enters edit mode directly (no dialog)', async () => {
 		isAuthenticated.set(true);
 		render(Navbar, {});
-		await fireEvent.click(screen.getByRole('button', { name: 'Enter Edit Mode' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Enter edit mode' }));
 		expect(screen.queryByRole('dialog', { name: 'Sign in' })).toBeNull();
 		await waitFor(() => expect(get(editMode)).toBe(true));
 		expect(get(session)?.dashboardId).toBe('d');
@@ -183,7 +183,7 @@ describe('Navbar after a sign-in that must change the password', () => {
 	it('editing waits until the forced password change is done (the change dialog can\'t be dismissed)', async () => {
 		apiLogin.mockResolvedValue({ mustChangePassword: true });
 		render(Navbar, {});
-		await fireEvent.click(screen.getByRole('button', { name: 'Enter Edit Mode' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Enter edit mode' }));
 		await signInWith('admin');
 		await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Sign in' })).toBeNull());
 		await new Promise((r) => setTimeout(r, 0));
@@ -197,7 +197,7 @@ describe('Navbar after a sign-in that must change the password', () => {
 	it('a session that ends before the password is changed never starts editing', async () => {
 		apiLogin.mockResolvedValue({ mustChangePassword: true });
 		render(Navbar, {});
-		await fireEvent.click(screen.getByRole('button', { name: 'Enter Edit Mode' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Enter edit mode' }));
 		await signInWith('admin');
 		await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Sign in' })).toBeNull());
 		isAuthenticated.set(false);
@@ -250,7 +250,7 @@ describe('Navbar gear and Log out', () => {
 
 // "Show the edit and Settings buttons when signed out" switched off.
 describe('Navbar with the signed-out buttons off', () => {
-	const pencil = () => screen.queryByRole('button', { name: 'Enter Edit Mode' });
+	const pencil = () => screen.queryByRole('button', { name: 'Enter edit mode' });
 	const gear = () => screen.queryByRole('link', { name: 'Settings' });
 
 	beforeEach(() => {
@@ -271,7 +271,7 @@ describe('Navbar with the signed-out buttons off', () => {
 		expect(gear()).toBeNull();
 		// The rest of the bar stays.
 		expect(screen.getByRole('button', { name: 'Search' })).toBeTruthy();
-		expect(screen.getByRole('button', { name: 'Theme Settings' })).toBeTruthy();
+		expect(screen.getByRole('button', { name: 'Theme settings' })).toBeTruthy();
 	});
 
 	it('signed in, both show, and signing out hides them again', async () => {
@@ -331,6 +331,6 @@ describe('Navbar with the signed-out buttons off', () => {
 	it('a session that ended mid-edit keeps the way out of edit mode', async () => {
 		editMode.set(true);
 		render(Navbar, {});
-		expect(screen.getByRole('button', { name: 'Exit Edit Mode' })).toBeTruthy();
+		expect(screen.getByRole('button', { name: 'Exit edit mode' })).toBeTruthy();
 	});
 });

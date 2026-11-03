@@ -76,7 +76,7 @@ async function openEditing(page: Page, path: string, first: string): Promise<str
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(path);
   await expect(node(page, first)).toBeVisible();
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
   return errors;
 }

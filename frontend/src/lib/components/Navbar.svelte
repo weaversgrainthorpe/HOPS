@@ -541,12 +541,12 @@
             aria-label="Text size"
             aria-expanded={textSizeOpen}
             aria-controls={textSizeOpen ? 'nav-text-size' : undefined}
-            title="Text Size: {textSizeConfigs[$textSize].label}"
+            title="Text size: {textSizeConfigs[$textSize].label}"
             onclick={() => void toggleTextSize()}
           >
             <Icon icon="mdi:format-size" width="26" height="26" />
           </button>
-          <div class="text-size-controls" id="nav-text-size" title="Text Size: {textSizeConfigs[$textSize].label}">
+          <div class="text-size-controls" id="nav-text-size" title="Text size: {textSizeConfigs[$textSize].label}">
             <button
               onclick={decreaseTextSize}
               class="text-size-btn"
@@ -570,7 +570,7 @@
           </div>
         </div>
 
-        <button onclick={() => showThemePicker = true} class="theme-toggle" title="Theme Settings" aria-label="Theme Settings">
+        <button onclick={() => showThemePicker = true} class="theme-toggle" title="Theme settings" aria-label="Theme settings">
           <span class="icon-wrapper">
             <Icon icon={themeIcon} width="32" height="32" />
           </span>
@@ -578,7 +578,7 @@
       {/if}
 
       {#if $editMode && isDashboardPage}
-        <button onclick={() => showExport = true} class="export-btn" title="Export Dashboard" aria-label="Export Dashboard">
+        <button onclick={() => showExport = true} class="export-btn" title="Export dashboard" aria-label="Export dashboard">
           <span class="icon-wrapper">
             <Icon icon="mdi:tray-arrow-up" width="32" height="32" />
           </span>
@@ -592,8 +592,8 @@
           class:active={$editMode}
           aria-disabled={$editEntry?.busy === true}
           aria-busy={$editEntry?.busy === true}
-          title={$editEntry?.busy ? "Loading the other dashboards…" : $editMode ? "Exit Edit Mode" : $isAuthenticated ? "Enter Edit Mode" : "Sign in to edit this dashboard"}
-          aria-label={$editMode ? "Exit Edit Mode" : "Enter Edit Mode"}
+          title={$editEntry?.busy ? "Loading the other dashboards…" : $editMode ? "Exit edit mode" : $isAuthenticated ? "Enter edit mode" : "Sign in to edit this dashboard"}
+          aria-label={$editMode ? "Exit edit mode" : "Enter edit mode"}
         >
           {#if $editEntry?.busy}
             <Icon icon="mdi:loading" width="32" height="32" class="spin" />

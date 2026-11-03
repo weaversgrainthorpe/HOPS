@@ -217,7 +217,7 @@ async function buttonsWork(page: Page, label: string, o: { whole: boolean }) {
 async function enterEdit(page: Page) {
   // Phones hide the pencil: start editing wide, then narrow.
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.getByRole('button', { name: 'Enter Edit Mode' }).click();
+  await page.getByRole('button', { name: 'Enter edit mode' }).click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
 }
 
@@ -330,7 +330,7 @@ test.describe('the text-size buttons on phones', () => {
     await page.keyboard.press('Tab');
     await expect(more(page), 'tabbing out closes it').toHaveAttribute('aria-expanded', 'false');
     await expect(up(page)).toBeHidden();
-    await expect(page.getByRole('button', { name: 'Theme Settings' }), 'focus moved on to the next control').toBeFocused();
+    await expect(page.getByRole('button', { name: 'Theme settings' }), 'focus moved on to the next control').toBeFocused();
     await page.setViewportSize({ width: 360, height: 800 });
     await expect(more(page), 'unfolded at 360').toBeHidden();
     await expect(up(page)).toBeVisible();

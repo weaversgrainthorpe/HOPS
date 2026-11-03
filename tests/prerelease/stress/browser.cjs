@@ -71,7 +71,7 @@ const stats = (a) => { const s = [...a].sort((x, y) => x - y); return `median ${
   await page.locator(TILES).first().waitFor({ timeout: 60000 });
   await page.getByRole('tab').nth(3).click();
   t = performance.now();
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   const bar = page.getByRole('toolbar', { name: 'Editing' });
   await bar.waitFor({ timeout: 60000 });
   console.log(`Enter edit mode: ${ms(t)} ms; heap ${await heap()} MB`);
@@ -93,7 +93,7 @@ const stats = (a) => { const s = [...a].sort((x, y) => x - y); return `median ${
   await save.click();
   const r = await resp;
   console.log(`Save: HTTP ${r.status()} after ${ms(t)} ms`);
-  await page.getByRole('button', { name: 'Exit Edit Mode' }).click().catch(() => {});
+  await page.getByRole('button', { name: 'Exit edit mode' }).click().catch(() => {});
   await page.waitForTimeout(500);
   console.log(`Tabs after save: ${await page.getByRole('tab').count()}; heap ${await heap()} MB`);
 

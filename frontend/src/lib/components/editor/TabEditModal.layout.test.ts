@@ -30,7 +30,7 @@ describe('TabEditModal background', () => {
 
   it('always offers the background picker (no per-tab switch any more)', () => {
     render(TabEditModal, { tabName: 'Media', onSave: vi.fn(), onCancel: vi.fn() });
-    expect(screen.getByRole('button', { name: /Configure Tab Background/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Configure tab background/ })).toBeInTheDocument();
     expect(screen.queryByText(/Individual backgrounds per tab/)).toBeNull();
   });
   it('says when a kept picture is switched off (inherit form)', () => {
@@ -44,7 +44,7 @@ describe('TabEditModal background', () => {
     const onSave = vi.fn();
     const onCancel = vi.fn();
     render(TabEditModal, { tabName: 'Media', onSave, onCancel });
-    await fireEvent.click(screen.getByRole('button', { name: /Configure Tab Background/ }));
+    await fireEvent.click(screen.getByRole('button', { name: /Configure tab background/ }));
     await fireEvent.click(screen.getByRole('button', { name: /^Colour$/ }));
     await fireEvent.click(within(screen.getByRole('dialog', { name: /background$/i })).getByRole('button', { name: 'Save' }));
     expect(onSave).not.toHaveBeenCalled();
@@ -60,7 +60,7 @@ describe('TabEditModal background', () => {
     unmount();
     const onSave2 = vi.fn();
     render(TabEditModal, { tabName: 'Media', tabBackground: { type: 'color', value: '#000000' }, onSave: onSave2, onCancel: vi.fn() });
-    await fireEvent.click(screen.getByRole('button', { name: /Configure Tab Background/ }));
+    await fireEvent.click(screen.getByRole('button', { name: /Configure tab background/ }));
     await fireEvent.click(screen.getByRole('button', { name: /^None$/ }));
     await fireEvent.click(within(screen.getByRole('dialog', { name: /background$/i })).getByRole('button', { name: 'Save' }));
     await fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));

@@ -562,7 +562,7 @@
 </script>
 
 <svelte:head>
-  <title>Discovery Draft — HOPS</title>
+  <title>Discovery draft — HOPS</title>
 </svelte:head>
 
 <div class="page">

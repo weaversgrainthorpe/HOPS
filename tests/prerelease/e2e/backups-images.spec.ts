@@ -83,7 +83,7 @@ test.describe('backups keep their images', () => {
 	async function openBackups(waitForItems = true) {
 		await page.goto('/settings/backups');
 		if (waitForItems) await expect(backupsDialog().locator('.backup-item').first()).toBeVisible();
-		else await expect(backupsDialog().getByRole('button', { name: 'Create Backup' })).toBeEnabled();
+		else await expect(backupsDialog().getByRole('button', { name: 'Create backup' })).toBeEnabled();
 	}
 
 	/** Restore through the dialog; HOPS starts itself again (same process, no service manager). */
@@ -134,12 +134,12 @@ c.commit()
 		await signIn.getByLabel('Username').fill(ADMIN_USERNAME);
 		await signIn.getByLabel('Password', { exact: true }).fill(ADMIN_INITIAL_PASSWORD);
 		await signIn.getByLabel('Password', { exact: true }).press('Enter');
-		await expect(page.getByRole('heading', { name: 'Set a New Password' })).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByRole('heading', { name: 'Set a new password' })).toBeVisible({ timeout: 10_000 });
 		await page.fill('input#current-password', ADMIN_INITIAL_PASSWORD);
 		await page.fill('input#new-password', ADMIN_TEST_PASSWORD);
 		await page.fill('input#confirm-password', ADMIN_TEST_PASSWORD);
-		await page.click('button:has-text("Set Password")');
-		await expect(page.getByRole('heading', { name: 'Set a New Password' })).toHaveCount(0, { timeout: 15_000 });
+		await page.click('button:has-text("Set password")');
+		await expect(page.getByRole('heading', { name: 'Set a new password' })).toHaveCount(0, { timeout: 15_000 });
 
 		// A fresh install has no attic yet: that is an empty attic, never the false
 		// "the attic index can't be read" error (pentest 2026-10-27 Info).
@@ -187,7 +187,7 @@ c.commit()
 	test('delete an icon, restore a backup from before the delete, and the image displays', async () => {
 		// The backup from before the delete.
 		await openBackups();
-		await backupsDialog().getByRole('button', { name: 'Create Backup' }).click();
+		await backupsDialog().getByRole('button', { name: 'Create backup' }).click();
 		await expect(page.locator('.toast', { hasText: 'Backup created' })).toBeVisible();
 		beforeDelete = (await list()).backups.find((b) => b.name.endsWith('_manual.db'))!.name;
 
@@ -377,7 +377,7 @@ with zipfile.ZipFile(src) as zin, zipfile.ZipFile(dst, "w") as zout:
 		fs.rmSync(path.join(dataDir, 'attic', 'index.json'), { force: true });
 
 		await openBackups();
-		await backupsDialog().getByRole('button', { name: 'Create Backup' }).click(); // its cleanup rebuilds the index
+		await backupsDialog().getByRole('button', { name: 'Create backup' }).click(); // its cleanup rebuilds the index
 		await expect(page.locator('.toast', { hasText: 'Backup created' })).toBeVisible();
 		expect(fs.existsSync(file), 'kept while a dashboard image is missing').toBe(true);
 		const notice = backupsDialog().locator('.problem', { hasText: 'rebuilt it from the backups' });

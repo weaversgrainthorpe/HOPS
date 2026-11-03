@@ -151,7 +151,7 @@ test.describe('oversize uploads are refused with a message naming the limit and 
 		made = id('dash');
 		await page.goto(`/${p}`);
 		await expect(page.locator(`[data-node-id="${id('anchor')}"]`)).toBeVisible();
-		await page.locator('[aria-label="Enter Edit Mode"]').click();
+		await page.locator('[aria-label="Enter edit mode"]').click();
 		await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
 		return id;
 	}
@@ -160,7 +160,7 @@ test.describe('oversize uploads are refused with a message naming the limit and 
 		await limitTo1MB(page, KEYS.background);
 		const id = await seedDash(page, context);
 		await page.locator(`[data-node-id="${id('f')}"]`).dblclick({ position: { x: 20, y: 20 } });
-		const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+		const dlg = page.getByRole('dialog', { name: 'Edit folder' });
 		await dlg.getByRole('button', { name: /^Background/ }).click();
 		const picker = page.getByRole('dialog', { name: 'Folder background' });
 		await picker.getByRole('radio', { name: 'Its own picture' }).check();
@@ -173,7 +173,7 @@ test.describe('oversize uploads are refused with a message naming the limit and 
 		await limitTo1MB(page, KEYS.icon);
 		const id = await seedDash(page, context);
 		await page.locator(`[data-node-id="${id('anchor')}"]`).dblclick();
-		const dlg = page.getByRole('dialog', { name: 'Edit Tile' });
+		const dlg = page.getByRole('dialog', { name: 'Edit tile' });
 		await expect(dlg).toBeVisible();
 		await dlg.getByRole('button', { name: 'Edit icon' }).click();
 		await page.getByLabel('Upload custom icon image').setInputFiles(big('huge.png', 'image/png'));
@@ -225,12 +225,12 @@ c.commit()
 			await signIn.getByLabel('Username').fill(ADMIN_USERNAME);
 			await signIn.getByLabel('Password', { exact: true }).fill(ADMIN_INITIAL_PASSWORD);
 			await signIn.getByLabel('Password', { exact: true }).press('Enter');
-			await expect(page.getByRole('heading', { name: 'Set a New Password' })).toBeVisible({ timeout: 10_000 });
+			await expect(page.getByRole('heading', { name: 'Set a new password' })).toBeVisible({ timeout: 10_000 });
 			await page.fill('input#current-password', ADMIN_INITIAL_PASSWORD);
 			await page.fill('input#new-password', ADMIN_TEST_PASSWORD);
 			await page.fill('input#confirm-password', ADMIN_TEST_PASSWORD);
-			await page.click('button:has-text("Set Password")');
-			await expect(page.getByRole('heading', { name: 'Set a New Password' })).toHaveCount(0, { timeout: 15_000 });
+			await page.click('button:has-text("Set password")');
+			await expect(page.getByRole('heading', { name: 'Set a new password' })).toHaveCount(0, { timeout: 15_000 });
 			await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('link', { name: 'Global settings', exact: true }).click();
 			await expect(page).toHaveURL(/\/settings\/global$/);
 

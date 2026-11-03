@@ -56,9 +56,9 @@
   <Dashboard dashboard={resolved} />
 {:else}
   <div class="not-found">
-    <h1>Dashboard Not Found</h1>
+    <h1>Dashboard not found</h1>
     <p>The dashboard "/{$page.params.dashboard}" doesn't exist.</p>
-    <a href="/">Go Home</a>
+    <a href="/">Go home</a>
   </div>
 {/if}
 

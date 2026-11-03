@@ -70,7 +70,7 @@ describe('/ (the home page)', () => {
 		render(Page);
 		expect(screen.getByRole('heading', { name: 'No dashboards yet' })).toBeTruthy();
 		expect(gotoMock).not.toHaveBeenCalled();
-		await fireEvent.click(screen.getByRole('button', { name: /Open Settings/ }));
+		await fireEvent.click(screen.getByRole('button', { name: /Open settings/ }));
 		expect(gotoMock).toHaveBeenCalledWith('/settings');
 	});
 

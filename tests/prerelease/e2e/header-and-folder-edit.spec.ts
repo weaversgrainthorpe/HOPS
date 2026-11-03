@@ -154,7 +154,7 @@ async function allNames(page: Page) {
 }
 
 async function desktopControls(page: Page, editing: boolean) {
-  await page.getByRole('button', { name: editing ? 'Exit Edit Mode' : 'Enter Edit Mode' }).click({ trial: true, timeout: 3000 });
+  await page.getByRole('button', { name: editing ? 'Exit edit mode' : 'Enter edit mode' }).click({ trial: true, timeout: 3000 });
   await page.getByRole('link', { name: 'Settings' }).click({ trial: true, timeout: 3000 });
   await page.getByRole('button', { name: 'Log out' }).click({ trial: true, timeout: 3000 });
 }
@@ -169,7 +169,7 @@ test.describe('the header', () => {
       await expect(page.locator('.tab-canvas [data-node-id]').first()).toBeVisible();
       for (const editing of [false, true]) {
         if (editing) {
-          await page.getByRole('button', { name: 'Enter Edit Mode' }).click();
+          await page.getByRole('button', { name: 'Enter edit mode' }).click();
           await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
         }
         for (const width of [1280, 1416, 1920]) {
@@ -193,7 +193,7 @@ test.describe('the header', () => {
     await expect(page.locator('.navbar .logo')).toBeVisible();
     await headerHolds(page, all); // phones too: the switcher, no link row
     await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Enter Edit Mode' })).toBeHidden(); // phones: no editing (existing rule)
+    await expect(page.getByRole('button', { name: 'Enter edit mode' })).toBeHidden(); // phones: no editing (existing rule)
     // Every text size (the A buttons scale the whole page), view and edit mode.
     for (const size of ['default', 'largest']) {
       if (size === 'largest') {
@@ -204,18 +204,18 @@ test.describe('the header', () => {
       for (const editing of [false, true]) {
         await page.setViewportSize({ width: 1100, height: 800 });
         if (editing) {
-          await page.getByRole('button', { name: 'Enter Edit Mode' }).click();
+          await page.getByRole('button', { name: 'Enter edit mode' }).click();
           await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
         }
         for (let width = 1100; width >= 481; width -= 41) {
           await page.setViewportSize({ width, height: 800 });
           await headerHolds(page, all);
           await expect(page.getByRole('link', { name: 'Settings' }), `gear at ${width}`).toBeVisible();
-          await expect(page.getByRole('button', { name: editing ? 'Exit Edit Mode' : 'Enter Edit Mode' }), `pencil at ${width}`).toBeVisible();
+          await expect(page.getByRole('button', { name: editing ? 'Exit edit mode' : 'Enter edit mode' }), `pencil at ${width}`).toBeVisible();
           await expect(page.getByRole('button', { name: 'Log out' }), `Log out at ${width}`).toBeVisible();
         }
         if (editing) {
-          await page.getByRole('button', { name: 'Exit Edit Mode' }).click();
+          await page.getByRole('button', { name: 'Exit edit mode' }).click();
           await expect(page.getByRole('toolbar', { name: 'Editing' })).toHaveCount(0);
         }
       }
@@ -255,7 +255,7 @@ test.describe('opening a folder in edit mode', () => {
     await page.setViewportSize({ width: 1416, height: 900 });
     await page.goto(sc.path);
     await page.getByRole('tab', { name: 'Switch to Sizes tab', exact: true }).click();
-    await page.getByRole('button', { name: 'Enter Edit Mode' }).click();
+    await page.getByRole('button', { name: 'Enter edit mode' }).click();
     const toolbar = page.getByRole('toolbar', { name: 'Editing' });
     await expect(toolbar).toBeVisible();
     // Big tile into the Medium contents folder (its empty lower right).
@@ -291,7 +291,7 @@ test.describe('opening a folder in edit mode', () => {
       await isMinimised(fid);
       // 5. A double-click edits it, and never also opens it.
       await face(page, id(fid)).dblclick({ position: { x: 8, y: b.height - 8 } });
-      const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+      const dlg = page.getByRole('dialog', { name: 'Edit folder' });
       await expect(dlg).toBeVisible();
       await dlg.getByRole('button', { name: 'Cancel', exact: true }).click();
       await expect(dlg).toHaveCount(0);

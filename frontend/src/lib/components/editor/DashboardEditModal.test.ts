@@ -89,7 +89,7 @@ function globalIs(v: string) {
 describe('DashboardEditModal: one dialog, one Save, one Cancel', () => {
 	it('has three sections: Header, Background and Settings', async () => {
 		open();
-		const dlg = screen.getByRole('dialog', { name: 'Edit Dashboard' });
+		const dlg = screen.getByRole('dialog', { name: 'Edit dashboard' });
 		expect(within(dlg).getAllByRole('tab').map((t) => t.textContent?.trim())).toEqual(['Header', 'Background', 'Settings']);
 		expect(screen.getByRole('tab', { name: 'Header' })).toHaveAttribute('aria-selected', 'true');
 		await section('Settings');
@@ -99,7 +99,7 @@ describe('DashboardEditModal: one dialog, one Save, one Cancel', () => {
 	it('one Save applies the header and background to the draft as ONE undo step', async () => {
 		open();
 		await screen.findByText('Check timeout (seconds)');
-		await fireEvent.input(screen.getByLabelText(/Custom Title/), { target: { value: 'New title' } });
+		await fireEvent.input(screen.getByLabelText(/Custom title/), { target: { value: 'New title' } });
 		await section('Background');
 		await fireEvent.input(screen.getByLabelText('Colour'), { target: { value: '#445566' } });
 		const before = undoDepth();
@@ -133,7 +133,7 @@ describe('DashboardEditModal: one dialog, one Save, one Cancel', () => {
 		const onClose = vi.fn();
 		open(onClose);
 		await screen.findByText('Check timeout (seconds)');
-		await fireEvent.input(screen.getByLabelText(/Custom Title/), { target: { value: 'Both' } });
+		await fireEvent.input(screen.getByLabelText(/Custom title/), { target: { value: 'Both' } });
 		await section('Settings');
 		await fireEvent.click(screen.getByLabelText('Override for this dashboard: Edit mode idle timeout (minutes)'));
 		await fireEvent.input(screen.getByLabelText('Edit mode idle timeout (minutes)'), { target: { value: '30' } });
@@ -149,7 +149,7 @@ describe('DashboardEditModal: one dialog, one Save, one Cancel', () => {
 		const onClose = vi.fn();
 		open(onClose);
 		await screen.findByText('Check timeout (seconds)');
-		await fireEvent.input(screen.getByLabelText(/Custom Title/), { target: { value: 'Not applied' } });
+		await fireEvent.input(screen.getByLabelText(/Custom title/), { target: { value: 'Not applied' } });
 		await section('Settings');
 		await fireEvent.click(screen.getByLabelText('Override for this dashboard: Edit mode idle timeout (minutes)'));
 		await section('Header'); // the error must come into view by itself
@@ -168,7 +168,7 @@ describe('DashboardEditModal: one dialog, one Save, one Cancel', () => {
 		open(onClose);
 		await screen.findByText('Check timeout (seconds)');
 		const before = draft();
-		await fireEvent.input(screen.getByLabelText(/Custom Title/), { target: { value: 'Gone' } });
+		await fireEvent.input(screen.getByLabelText(/Custom title/), { target: { value: 'Gone' } });
 		await section('Settings');
 		await fireEvent.click(screen.getByLabelText('Override for this dashboard: Edit mode idle timeout (minutes)'));
 		await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
@@ -203,7 +203,7 @@ describe('DashboardEditModal: one dialog, one Save, one Cancel', () => {
 		open(onClose);
 		try {
 			await screen.findByText('Check timeout (seconds)');
-			await fireEvent.input(screen.getByLabelText(/Custom Title/), { target: { value: 'During' } });
+			await fireEvent.input(screen.getByLabelText(/Custom title/), { target: { value: 'During' } });
 			await section('Settings');
 			await fireEvent.click(screen.getByLabelText('Override for this dashboard: Edit mode idle timeout (minutes)'));
 			await save();
@@ -229,7 +229,7 @@ describe('DashboardEditModal: one dialog, one Save, one Cancel', () => {
 		const onClose = vi.fn();
 		open(onClose);
 		await screen.findByText('Check timeout (seconds)');
-		const title = screen.getByLabelText(/Custom Title/);
+		const title = screen.getByLabelText(/Custom title/);
 		await fireEvent.input(title, { target: { value: 'By Enter' } });
 		await fireEvent.keyDown(title, { key: 'Enter' });
 		await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
@@ -240,7 +240,7 @@ describe('DashboardEditModal: one dialog, one Save, one Cancel', () => {
 		const onClose = vi.fn();
 		open(onClose);
 		await screen.findByText('Check timeout (seconds)');
-		await fireEvent.input(screen.getByLabelText(/Custom Title/), { target: { value: 'By Ctrl' } });
+		await fireEvent.input(screen.getByLabelText(/Custom title/), { target: { value: 'By Ctrl' } });
 		await section('Settings');
 		await fireEvent.keyDown(screen.getByLabelText('Override for this dashboard: Check timeout (seconds)'), { key: 'Enter', ctrlKey: true });
 		await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
@@ -251,8 +251,8 @@ describe('DashboardEditModal: one dialog, one Save, one Cancel', () => {
 		const onClose = vi.fn();
 		open(onClose);
 		await screen.findByText('Check timeout (seconds)');
-		await fireEvent.input(screen.getByLabelText(/Custom Title/), { target: { value: 'Gone' } });
-		await fireEvent.keyDown(screen.getByLabelText(/Custom Title/), { key: 'Escape' });
+		await fireEvent.input(screen.getByLabelText(/Custom title/), { target: { value: 'Gone' } });
+		await fireEvent.keyDown(screen.getByLabelText(/Custom title/), { key: 'Escape' });
 		expect(onClose).toHaveBeenCalled();
 		expect(undoDepth()).toBe(0);
 	});

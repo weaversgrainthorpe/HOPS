@@ -111,7 +111,7 @@ async function laidOutWithin(page: Page, ids: string[]) {
   }, ids), 'canvas re-planned for the new width').toBe('ok');
 }
 async function enterEdit(page: Page) {
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
 }
 async function saveAndExit(page: Page) {
@@ -121,7 +121,7 @@ async function saveAndExit(page: Page) {
   await save.click();
   const r = await saved;
   expect(r.status(), await r.text()).toBe(200);
-  await page.locator('[aria-label="Exit Edit Mode"]').click();
+  await page.locator('[aria-label="Exit edit mode"]').click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toHaveCount(0);
 }
 async function drilled(page: Page, dash: string, folderId: string, path: string[]) {
@@ -382,7 +382,7 @@ test.describe('tab position and the dialog', () => {
     await enterEdit(page);
     const before = await box(node(page, f.id('o')));
     await node(page, f.id('o')).dblclick({ position: { x: 10, y: 20 } });
-    const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    const dlg = page.getByRole('dialog', { name: 'Edit folder' });
     await expect(dlg).toBeVisible();
     const looks = dlg.getByRole('radiogroup', { name: 'Look' });
     await expect(looks.getByRole('radio')).toHaveCount(7);
@@ -431,7 +431,7 @@ test.describe('tab position and the dialog', () => {
     expect(tabColour).toBe('rgb(0, 0, 0)');
     await enterEdit(page);
     await node(page, f.id('o')).dblclick({ position: { x: 10, y: 40 } });
-    const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    const dlg = page.getByRole('dialog', { name: 'Edit folder' });
     await expect(dlg.locator('[data-contrast-warning]')).toHaveCount(0);
     await dlg.getByRole('radio', { name: 'Light' }).check();
     await expect(dlg.locator('[data-contrast-warning]')).toContainText(/hard to read/i);
@@ -515,7 +515,7 @@ for (const [width, height] of [[1280, 1000], [1920, 1080]] as const) {
       const editTop = await measure(top);
       for (const k of Object.keys(viewTop)) sameBox(editTop[k], viewTop[k], `edit vs view, open: ${k}`);
       asTabTile(editTop, tab, 'edit, open');
-      await page.locator('[aria-label="Exit Edit Mode"]').click();
+      await page.locator('[aria-label="Exit edit mode"]').click();
       await expect(page.getByRole('toolbar', { name: 'Editing' })).toHaveCount(0);
 
       // One level in: this browser is drilled into every sub-folder (each drawn as its parent's shape).
@@ -599,7 +599,7 @@ test.describe('the Showcase Shapes tab', () => {
       await expect(mini).toHaveAccessibleName(/Minimised Small cartoon/);
     }
     // Nested looks 2 deep: Flat > Paper > Open flap, each drawn in its own look with its tab.
-    await page.locator('[aria-label="Exit Edit Mode"]').click();
+    await page.locator('[aria-label="Exit edit mode"]').click();
     await page.evaluate((d) => {
       localStorage.setItem(`hops.folderNav.${d.dash}`, JSON.stringify({ page: {}, drill: { [d.f]: d.path } }));
     }, { dash: dash.id, f: id('sc-sh-nest'), path: [id('sc-sh-nest-a'), id('sc-sh-nest-b')] });

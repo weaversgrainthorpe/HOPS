@@ -95,7 +95,7 @@ test('edit mode: the warning names the sizes; "Make it big enough" fixes it, und
   await storedTooSmall(page, id('media'));
   await page.goto(path);
   await expect(page.locator(`.tab-canvas [data-node-id="${id('media')}"]`).first()).toBeVisible();
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   const bar = page.getByRole('toolbar', { name: 'Editing' });
   await expect(bar).toBeVisible();
 

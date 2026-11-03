@@ -1,4 +1,4 @@
-// Reported: deleting a tile from its Edit Tile dialog asked twice (the dialog's own confirm, with
+// Reported: deleting a tile from its Edit tile dialog asked twice (the dialog's own confirm, with
 // stale "undo only by re-creating it" wording, then the editor's), while right-click › Delete asked
 // once. Every delete now asks exactly once, with the same words, and is undoable until saved.
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
@@ -42,17 +42,17 @@ async function seedDash(page: Page, context: BrowserContext) {
 	made = id('dash');
 	await page.goto(`/${p}`);
 	await expect(page.locator(`[data-node-id="${id('a')}"]`)).toBeVisible();
-	await page.locator('[aria-label="Enter Edit Mode"]').click();
+	await page.locator('[aria-label="Enter edit mode"]').click();
 	await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
 	return id;
 }
 
 const confirmDialog = (page: Page) => page.getByRole('alertdialog').or(page.getByRole('dialog', { name: /^Delete / }));
 
-test('Edit Tile › Delete asks once, with the undo wording, and deletes', async ({ page, context }) => {
+test('Edit tile › Delete asks once, with the undo wording, and deletes', async ({ page, context }) => {
 	const id = await seedDash(page, context);
 	await page.locator(`[data-node-id="${id('a')}"]`).dblclick();
-	const dlg = page.getByRole('dialog', { name: 'Edit Tile' });
+	const dlg = page.getByRole('dialog', { name: 'Edit tile' });
 	await dlg.getByRole('button', { name: /Delete/ }).click();
 	const ask = confirmDialog(page);
 	await expect(ask).toHaveCount(1);

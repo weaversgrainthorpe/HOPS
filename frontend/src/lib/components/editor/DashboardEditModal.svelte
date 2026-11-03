@@ -136,7 +136,7 @@
      didn't discard would be a lie, since the save then goes on to apply the draft. -->
 <Modal
   id="dashboard-edit"
-  title="Edit Dashboard"
+  title="Edit dashboard"
   titleIcon="mdi:view-dashboard-edit-outline"
   {onClose}
   onBeforeClose={() => !saving}

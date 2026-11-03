@@ -257,7 +257,7 @@
     use:focusTrap
   >
     <div class="modal-header">
-      <h2 id="theme-settings-title">Theme Settings</h2>
+      <h2 id="theme-settings-title">Theme settings</h2>
       <button class="close-btn" onclick={onClose} aria-label="Close">
         <Icon icon="mdi:close" width="24" />
       </button>
@@ -265,7 +265,7 @@
 
     <div class="modal-body">
       <section class="section">
-        <h3 id="mode-label">Brightness Mode</h3>
+        <h3 id="mode-label">Brightness mode</h3>
         <div
           class="mode-grid"
           role="radiogroup"
@@ -296,7 +296,7 @@
       </section>
 
       <section class="section">
-        <h3 id="preset-label">Theme Preset</h3>
+        <h3 id="preset-label">Theme preset</h3>
         <div
           class="preset-grid"
           role="radiogroup"
@@ -368,7 +368,7 @@
       <ActionButton action="cancel" onclick={onClose} />
       <button class="btn-primary" onclick={handleApply}>
         <Icon icon="mdi:check" width="20" />
-        Apply Theme
+        Apply theme
       </button>
     </div>
   </div>

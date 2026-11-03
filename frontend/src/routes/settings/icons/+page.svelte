@@ -42,7 +42,7 @@
   import PackagedIcons from '$lib/components/admin/PackagedIcons.svelte';
   import { packagedCounts, type PackagedInfo } from '$lib/icons/packagedIcons';
 
-  // Settings › Icons: the user's uploaded icons (the picker's "My Uploads", read from the same
+  // Settings › Icons: the user's uploaded icons (the picker's "My uploads", read from the same
   // shared library) and their own categories, then the packaged icons (read-only, searchable). Each icon says where it is used, computed by the
   // server from the stored dashboards; deleting one that is in use lists those places first.
   // Every failure is shown on the page; names are text only.
@@ -358,7 +358,7 @@
   <h2 class="section-title">Icons</h2>
 </header>
 <p class="lede">
-  The icons you have uploaded, and your own categories for them. They appear under "My Uploads" in the icon picker. Each icon
+  The icons you have uploaded, and your own categories for them. They appear under "My uploads" in the icon picker. Each icon
   shows where it is used, so deleting one never breaks an image without warning. Below them, search the icons that come with HOPS.
 </p>
 

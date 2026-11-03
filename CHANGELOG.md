@@ -73,7 +73,8 @@ After upgrading, a few things look or behave differently. Details are below.
   section like the tile and folder dialogs ("Name", "Icon", "Background
   opacity"), the colour picker is called Colour (UK spelling) in every
   dialog, and the top-bar export dialog is "Export dashboards", saying what
-  an export holds and that settings and the theme are in Backups.
+  an export holds and that settings and the theme are in Backups. Titles,
+  buttons and labels are now in sentence case throughout.
 - **One hover popup for tiles and folders.** Hovering a tile or folder, or
   moving to it with the keyboard, shows its name in larger text, then its
   description, then any notes such as the away address. Before, tiles showed

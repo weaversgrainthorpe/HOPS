@@ -99,7 +99,7 @@
         <li><Icon icon="mdi:shield-key" width="18" /> CSRF + bcrypt security</li>
         <li><Icon icon="mdi:format-size" width="18" /> Text size controls</li>
         <li><Icon icon="mdi:folder-multiple" width="18" /> Folders (nested, paged)</li>
-        <li><Icon icon="mdi:radar" width="18" /> Network Discovery</li>
+        <li><Icon icon="mdi:radar" width="18" /> Network discovery</li>
         <li><Icon icon="mdi:bookmark-plus-outline" width="18" /> Add to HOPS from any web page</li>
         <li><Icon icon="mdi:home-export-outline" width="18" /> Home & away addresses</li>
         <li><Icon icon="mdi:console" width="18" /> SSH and note tiles</li>
@@ -118,7 +118,7 @@
       </a>
       <a href="https://github.com/weaversgrainthorpe/HOPS/issues" target="_blank" rel="noopener noreferrer" class="link-btn">
         <Icon icon="mdi:bug" width="20" />
-        Report Issue
+        Report issue
       </a>
     </div>
 

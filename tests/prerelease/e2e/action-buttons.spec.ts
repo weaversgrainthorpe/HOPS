@@ -68,7 +68,7 @@ test('Undo, Discard and Save look the same on Tab order, a Global settings row a
 
   // The edit toolbar is the reference.
   await page.goto(`/${d.p}`);
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   const bar = page.getByRole('toolbar', { name: 'Editing' });
   await expect(bar).toBeVisible();
   const ref = {
@@ -81,10 +81,10 @@ test('Undo, Discard and Save look the same on Tab order, a Global settings row a
   // Enabled: a secondary toolbar button (Add tile, always enabled) and the primary Save, once a change exists.
   const barSecondary = await enabledLook(bar.getByRole('button', { name: 'Add tile', exact: true }));
   // Every button on the bar is the same secondary button, the Dashboard pencil included.
-  expect(await enabledLook(bar.getByRole('button', { name: 'Edit Dashboard', exact: true }))).toEqual(barSecondary);
+  expect(await enabledLook(bar.getByRole('button', { name: 'Edit dashboard', exact: true }))).toEqual(barSecondary);
   expect(barDisabled.opacity, 'a disabled toolbar button is not faded').toBe('1');
   expect(barDisabled.outline).toBe('dashed');
-  await page.locator('[aria-label="Exit Edit Mode"]').click();
+  await page.locator('[aria-label="Exit edit mode"]').click();
 
   // Tab order: the same three, the same icons and words.
   await page.goto('/settings/dashboards');
@@ -126,10 +126,10 @@ test('Undo, Discard and Save look the same on Tab order, a Global settings row a
 test('the tile and folder dialogs: Delete and Duplicate on the left, Cancel then Save on the right, each with its icon', async ({ page, context }) => {
   const d = await seed(page, context);
   await page.goto(`/${d.p}`);
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
   const footers: Record<string, { word: string; icon: string }[]> = {};
-  for (const [id, name] of [[`${d.p}-a`, 'Edit Tile'], [`${d.p}-f`, 'Edit Folder']] as const) {
+  for (const [id, name] of [[`${d.p}-a`, 'Edit tile'], [`${d.p}-f`, 'Edit folder']] as const) {
     await page.locator(`.tab-canvas [data-node-id="${id}"]`).first().click({ button: 'right', position: { x: 12, y: 12 } });
     await page.getByRole('menuitem', { name: 'Edit' }).click();
     const dlg = page.getByRole('dialog', { name });
@@ -143,14 +143,14 @@ test('the tile and folder dialogs: Delete and Duplicate on the left, Cancel then
     await dlg.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(dlg).toHaveCount(0);
   }
-  expect(footers['Edit Folder']).toEqual(footers['Edit Tile']);
+  expect(footers['Edit folder']).toEqual(footers['Edit tile']);
 
   // Delete is drawn one way everywhere: the Dashboards list row's bin is the dialog's red Delete.
   await page.locator(`.tab-canvas [data-node-id="${d.p}-a"]`).first().click({ button: 'right', position: { x: 12, y: 12 } });
   await page.getByRole('menuitem', { name: 'Edit' }).click();
-  const dialogDelete = await enabledLook(page.getByRole('dialog', { name: 'Edit Tile' }).getByRole('button', { name: 'Delete', exact: true }));
+  const dialogDelete = await enabledLook(page.getByRole('dialog', { name: 'Edit tile' }).getByRole('button', { name: 'Delete', exact: true }));
   await page.keyboard.press('Escape');
-  await page.locator('[aria-label="Exit Edit Mode"]').click();
+  await page.locator('[aria-label="Exit edit mode"]').click();
   await page.goto('/settings/dashboards');
   const rowDelete = await enabledLook(page.getByRole('button', { name: `Delete ${d.name}`, exact: true }));
   expect(rowDelete.bg).toBe(dialogDelete.bg);

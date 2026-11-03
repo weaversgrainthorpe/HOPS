@@ -3,7 +3,7 @@
  * table, so the one BackgroundSection component shows a control only where it has an effect.
  *
  * Why each row is what it is (the renderers are the source of truth):
- * - Folders are pictures only: Edit Folder owns the folder's colour, so no Color / None.
+ * - Folders are pictures only: Edit folder owns the folder's colour, so no Color / None.
  * - Folders have no overlay darkness or blur of their own: the canvas has one overlay.
  * - Slideshow motion (interval, transition, duration, Ken Burns) only plays when the layer animates:
  *   BackgroundLayer with animate=false shows the current (first) image still, with no timer. That is
@@ -146,7 +146,7 @@ export function backgroundCapabilities(
   const motion = notes.length === 0;
   return Object.freeze({
     pictureTypes: isFolder ? PICTURES_ONLY : ALL_TYPES,
-    typeLabel: isFolder ? 'Picture type' : 'Background Type',
+    typeLabel: isFolder ? 'Picture type' : 'Background type',
     inherit: INHERIT[level],
     fit: true,
     opacity: true,

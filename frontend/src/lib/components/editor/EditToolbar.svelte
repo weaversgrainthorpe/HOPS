@@ -178,7 +178,7 @@
     {#if onEditDashboard}
       <div class="group">
         <!-- The dashboard's own edit button: a pencil and "Dashboard", the same button as its neighbours. -->
-        <button type="button" class="tb btn-secondary btn-sm" onclick={onEditDashboard} aria-label="Edit Dashboard" title="Edit Dashboard">
+        <button type="button" class="tb btn-secondary btn-sm" onclick={onEditDashboard} aria-label="Edit dashboard" title="Edit dashboard">
           <Icon icon="mdi:pencil" width="16" /> Dashboard
         </button>
       </div>

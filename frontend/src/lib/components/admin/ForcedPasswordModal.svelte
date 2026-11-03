@@ -8,6 +8,6 @@
   let done = $state(false);
 </script>
 
-<Modal id="change-password" title="Set a New Password" titleIcon="mdi:key" {onClose} onBeforeClose={() => done} showCloseButton={false} maxWidth="400px">
+<Modal id="change-password" title="Set a new password" titleIcon="mdi:key" {onClose} onBeforeClose={() => done} showCloseButton={false} maxWidth="400px">
   <ChangePasswordForm forced onDone={() => { done = true; onClose(); }} />
 </Modal>

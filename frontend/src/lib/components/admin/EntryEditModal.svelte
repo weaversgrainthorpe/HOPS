@@ -236,7 +236,7 @@
 
 <Modal
   id="entry-edit"
-  title={entry.id ? 'Edit Tile' : 'New Tile'}
+  title={entry.id ? 'Edit tile' : 'New tile'}
   onClose={onCancel}
   onBeforeClose={handleBeforeClose}
 >
@@ -490,10 +490,10 @@
               <small id="openMode-ssh">SSH opens your computer's SSH app, so the iFrame and Popup modes aren't available.</small>
             {:else}
               <select id="openMode" bind:value={editedEntry.openMode}>
-                <option value="newtab">New Tab</option>
-                <option value="sametab">Same Tab</option>
-                <option value="iframe">iFrame Modal</option>
-                <option value="popup">Popup Modal</option>
+                <option value="newtab">New tab</option>
+                <option value="sametab">Same tab</option>
+                <option value="iframe">iFrame modal</option>
+                <option value="popup">Popup modal</option>
               </select>
             {/if}
           </div>

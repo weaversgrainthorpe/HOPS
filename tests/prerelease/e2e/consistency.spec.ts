@@ -90,7 +90,7 @@ function sameBox(a: Box, b: Box, what: string) {
 }
 
 async function enterEdit(page: Page) {
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
 }
 
@@ -102,7 +102,7 @@ async function saveAndExit(page: Page) {
   const r = await saved;
   expect(r.status(), await r.text()).toBe(200);
   await expect(page.getByRole('status').filter({ hasText: 'Unsaved changes' })).toHaveCount(0);
-  await page.locator('[aria-label="Exit Edit Mode"]').click();
+  await page.locator('[aria-label="Exit edit mode"]').click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toHaveCount(0);
 }
 

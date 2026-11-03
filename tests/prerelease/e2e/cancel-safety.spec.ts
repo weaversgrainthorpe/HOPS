@@ -43,7 +43,7 @@ test('cancel-safe: editing a tile name and cancelling discards the change', asyn
 
   // Add the tile (Create puts it in the draft; the toolbar Save stores it).
   await toolbar(page).getByRole('button', { name: 'Add tile' }).click();
-  const newDlg = page.getByRole('dialog', { name: 'New Tile' });
+  const newDlg = page.getByRole('dialog', { name: 'New tile' });
   await newDlg.locator('input#name').fill(original);
   await newDlg.locator('input#url').fill('https://example.com/plex');
   await newDlg.getByRole('button', { name: 'Create' }).click();
@@ -52,7 +52,7 @@ test('cancel-safe: editing a tile name and cancelling discards the change', asyn
 
   // Open the editor, change the name, then CANCEL instead of Save.
   await tileNamed(page, original).dblclick();
-  const dlg = page.getByRole('dialog', { name: 'Edit Tile' });
+  const dlg = page.getByRole('dialog', { name: 'Edit tile' });
   await dlg.locator('input#name').fill(typed);
   await dlg.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(dlg).toHaveCount(0);
@@ -76,7 +76,7 @@ test('cancel-safe: cancelling "Add tile" creates nothing', async ({ page }) => {
 
   // Fill the Add tile form, then CANCEL instead of Create.
   await toolbar(page).getByRole('button', { name: 'Add tile' }).click();
-  const dlg = page.getByRole('dialog', { name: 'New Tile' });
+  const dlg = page.getByRole('dialog', { name: 'New tile' });
   await dlg.locator('input#name').fill(ghost);
   await dlg.locator('input#url').fill('https://example.com/ghost');
   await dlg.getByRole('button', { name: 'Cancel', exact: true }).click();

@@ -235,7 +235,7 @@ test('every Settings page and dialog is readable on every preset × mode; hover 
   await sweep('Global settings');
   await visit('/settings/discovery', /Discovery/);
   await sweep('Discovery scan');
-  await visit('/settings/discovery/new', /Discovery/);
+  await visit('/settings/discovery/new', /Discovery/i);
   await sweep('Discovery new scan');
   await visit('/settings/discovery/diagnostics', /Discovery|Diagnostics/);
   await expect(page.getByRole('button', { name: /Create detector/ }).first()).toBeVisible();
@@ -257,7 +257,7 @@ test('every Settings page and dialog is readable on every preset × mode; hover 
   await createDashboardViaUI(page, uniqueName('Contrast'), undefined, made);
   await noMotion();
   await page.getByRole('toolbar', { name: 'Editing' }).getByRole('button', { name: 'Add tile' }).click();
-  const dlg = page.getByRole('dialog', { name: 'New Tile' });
+  const dlg = page.getByRole('dialog', { name: 'New tile' });
   await expect(dlg).toBeVisible();
   await sweep('Tile dialog', '[role="dialog"]');
   await dlg.locator('#entry-type').selectOption('ssh');

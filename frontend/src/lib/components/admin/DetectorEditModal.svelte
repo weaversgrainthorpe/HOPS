@@ -202,7 +202,7 @@
   <div class="form">
     <div class="row">
       <label for="d-name">Name <span class="req">*</span></label>
-      <input id="d-name" type="text" bind:value={name} placeholder="e.g. My Self-Hosted App" />
+      <input id="d-name" type="text" bind:value={name} placeholder="e.g. My self-hosted app" />
     </div>
 
     <div class="row">

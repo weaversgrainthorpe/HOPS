@@ -180,7 +180,7 @@ describe('the Showcase (free layout) is editable like every dashboard', () => {
     expect(container.querySelector('[data-dashboard-tabs] button:not([data-edit-handle])')).toBeNull();
     expect(container.querySelector('.header-actions, .bg-failed-row, .add-tab-btn, .editor-shell')).toBeNull();
     // One labelled "Dashboard" pencil replaces Background, Header and Settings.
-    expect(within(bar).getByRole('button', { name: 'Edit Dashboard' })).toHaveTextContent('Dashboard');
+    expect(within(bar).getByRole('button', { name: 'Edit dashboard' })).toHaveTextContent('Dashboard');
     for (const t of ['Configure Background', 'Configure Header', 'Dashboard settings']) expect(screen.queryByTitle(t)).toBeNull();
   });
 
@@ -189,7 +189,7 @@ describe('the Showcase (free layout) is editable like every dashboard', () => {
     await tick();
     expect(screen.getByText('FancyTile')).toBeInTheDocument();
     expect(screen.queryByText(/view-only/i)).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Edit Dashboard' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Edit dashboard' })).toBeNull();
   });
 });
 
@@ -391,28 +391,28 @@ describe('Dashboard edit mode (the editor shell)', () => {
     render(Dashboard, { dashboard: legacy });
     enterEdit();
     await tick();
-    await fireEvent.click(screen.getByRole('button', { name: 'Edit Dashboard' }));
-    expect(screen.getByRole('dialog', { name: 'Edit Dashboard' })).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit dashboard' }));
+    expect(screen.getByRole('dialog', { name: 'Edit dashboard' })).toBeInTheDocument();
     editMode.set(false);
     resetEditSessionForTests();
     await tick();
-    expect(screen.queryByRole('dialog', { name: 'Edit Dashboard' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Edit dashboard' })).toBeNull();
     enterEdit();
     await tick();
     await tick();
-    expect(screen.queryByRole('dialog', { name: 'Edit Dashboard' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Edit dashboard' })).toBeNull();
   });
 
   it('the Dashboard dialog edits the draft only (header and background); its settings read is the only request', async () => {
     render(Dashboard, { dashboard: legacy });
     enterEdit();
     await tick();
-    await fireEvent.click(screen.getByRole('button', { name: 'Edit Dashboard' }));
-    const dlg = screen.getByRole('dialog', { name: 'Edit Dashboard' });
-    await fireEvent.input(within(dlg).getByLabelText(/Custom Title/), { target: { value: 'Draft title' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit dashboard' }));
+    const dlg = screen.getByRole('dialog', { name: 'Edit dashboard' });
+    await fireEvent.input(within(dlg).getByLabelText(/Custom title/), { target: { value: 'Draft title' } });
     await fireEvent.click(within(dlg).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect((draft().header as { centerTitle?: string }).centerTitle).toBe('Draft title'));
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Edit Dashboard' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Edit dashboard' })).toBeNull());
     noRequestsButSettingsRead(fetchSpy);
   });
 });

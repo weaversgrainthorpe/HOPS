@@ -44,7 +44,7 @@ test.use({ viewport: { width: 1280, height: 700 } });
 test('dragging a tile to the bottom edge scrolls the page down by itself, and back up at the top edge', async ({ page, context }) => {
   const f = await seed(page, context);
   await page.goto(f.path);
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, 0));
   const alpha = page.locator(`[data-node-id="${f.alpha}"]`);

@@ -153,7 +153,7 @@ describe('EditToolbar', () => {
     const onEditDashboard = vi.fn();
     render(EditToolbar, { tabId: 't1', onAddTab: vi.fn(), onEditDashboard });
     const bar = screen.getByRole('toolbar', { name: 'Editing' });
-    const handle = within(bar).getByRole('button', { name: 'Edit Dashboard' });
+    const handle = within(bar).getByRole('button', { name: 'Edit dashboard' });
     expect(handle).toHaveTextContent('Dashboard');
     // The same button as its neighbours (Add tile…), not an edit handle.
     expect(handle).toHaveClass('btn-secondary', 'btn-sm');

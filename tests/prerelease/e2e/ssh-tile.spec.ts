@@ -36,7 +36,7 @@ test('SSH preset: dialog builds the URL, errors are visible, modes are unavailab
   const dashName = uniqueName('SSH');
   await createDashboardViaUI(page, dashName, undefined, made);
   await toolbar(page).getByRole('button', { name: 'Add tile' }).click();
-  const dlg = page.getByRole('dialog', { name: 'New Tile' });
+  const dlg = page.getByRole('dialog', { name: 'New tile' });
   await dlg.locator('#entry-type').selectOption('ssh');
   await expect(dlg.getByText("Opens your computer's SSH app. On Windows you may need to set one up first (e.g. PuTTY or Windows Terminal).")).toBeVisible();
   await expect(dlg.locator('input#url')).toHaveCount(0);
@@ -72,7 +72,7 @@ test('SSH preset: dialog builds the URL, errors are visible, modes are unavailab
 
   // Editing reopens the SSH fields; port 22 is left out of the URL.
   await tileNamed(page, 'Pi').dblclick();
-  const edit = page.getByRole('dialog', { name: 'Edit Tile' });
+  const edit = page.getByRole('dialog', { name: 'Edit tile' });
   await expect(edit.locator('#entry-type')).toHaveValue('ssh');
   await expect(edit.locator('#ssh-host')).toHaveValue('10.0.0.5');
   await expect(edit.locator('#ssh-port')).toHaveValue('2222');

@@ -19,7 +19,7 @@ test('GET /api/config → PUT /api/dashboards/{id} round-trip preserves the dash
   // Create a known dashboard (from Settings, the admin home) so there's something distinctive
   const dashName = uniqueName('Roundtrip');
   await openSettings(page);
-  await page.click('button:has-text("New Dashboard")');
+  await page.click('button:has-text("New dashboard")');
   await page.fill('input#new-name', dashName);
   await page.click('.new-dashboard-form button.btn-primary:has-text("Save")');
   await expect(page.getByRole('heading', { name: dashName, level: 3 })).toBeVisible();

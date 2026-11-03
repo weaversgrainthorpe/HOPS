@@ -230,7 +230,7 @@
         <div class="offline-banner" role="alert">
           <Icon icon="mdi:cloud-off-outline" width="24" />
           <div class="offline-content">
-            <strong>{$backendStatus.status === 'error' ? 'Backend answering with errors' : 'Backend Offline'}</strong>
+            <strong>{$backendStatus.status === 'error' ? 'Backend answering with errors' : 'Backend offline'}</strong>
             <span>All admin functions are disabled until the backend is available.</span>
           </div>
           <button class="retry-btn" onclick={() => backendStatus.check()}>
@@ -473,7 +473,7 @@
   }
 
   /* A section's header: its title with the section's own actions on the same row (Dashboards'
-     Import / New Dashboard, Discovery's Diagnostics / Manage detectors / New Scan). */
+     Import / New dashboard, Discovery's Diagnostics / Manage detectors / New Scan). */
   .settings-content :global(.section-header) {
     display: flex;
     align-items: center;

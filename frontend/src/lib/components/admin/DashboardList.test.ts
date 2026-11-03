@@ -73,7 +73,7 @@ describe('DashboardList create (POST /api/dashboards)', () => {
     await fireEvent.click(screen.getByRole('button', { name: /new dashboard/i }));
     await tick();
     await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Media' } });
-    await fireEvent.input(screen.getByLabelText(/URL Path/), { target: { value: '/media' } });
+    await fireEvent.input(screen.getByLabelText(/URL path/), { target: { value: '/media' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await vi.waitFor(() => expect(api.createDashboard).toHaveBeenCalledWith('Media', '/media'));
     await vi.waitFor(() => expect(screen.getByText('Media')).toBeInTheDocument());
@@ -86,7 +86,7 @@ describe('DashboardList create (POST /api/dashboards)', () => {
     await fireEvent.click(screen.getByRole('button', { name: /new dashboard/i }));
     await tick();
     await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Dup' } });
-    await fireEvent.input(screen.getByLabelText(/URL Path/), { target: { value: '/home' } });
+    await fireEvent.input(screen.getByLabelText(/URL path/), { target: { value: '/home' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await vi.waitFor(() => expect(api.createDashboard).toHaveBeenCalled());
     await tick();
@@ -104,7 +104,7 @@ describe('DashboardList rename (PUT schema 3 at the stored revision)', () => {
     await fireEvent.click(row('Fancy').getByRole('button', { name: 'Rename Fancy' }));
     await tick();
     await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Fancier' } });
-    await fireEvent.input(screen.getByLabelText('URL Path'), { target: { value: '/fancier' } });
+    await fireEvent.input(screen.getByLabelText('URL path'), { target: { value: '/fancier' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await vi.waitFor(() =>
       expect(api.saveDashboardV3).toHaveBeenCalledWith('v3d', { ...showcase(), name: 'Fancier', path: '/fancier' }, 6)

@@ -20,11 +20,11 @@ setup('authenticate and save state', async ({ page }) => {
   await expect(dlg).toHaveCount(0);
 
   // Forced password change modal
-  await expect(page.getByRole('heading', { name: 'Set a New Password' })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('heading', { name: 'Set a new password' })).toBeVisible({ timeout: 10_000 });
   await page.fill('input#current-password', ADMIN_INITIAL_PASSWORD);
   await page.fill('input#new-password', ADMIN_TEST_PASSWORD);
   await page.fill('input#confirm-password', ADMIN_TEST_PASSWORD);
-  await page.click('button:has-text("Set Password")');
+  await page.click('button:has-text("Set password")');
 
   // Modal auto-dismisses ~1.5s after success. Don't race the success-message
   // animation — just wait for Settings to show its first page (it waits for the change).

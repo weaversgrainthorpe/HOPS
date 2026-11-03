@@ -23,56 +23,56 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   // Network themed
   {
     id: 'network-1',
-    name: 'Network Grid',
+    name: 'Network grid',
     category: 'network',
     url: '/presets/network-grid.jpg',
     source: 'preset'
   },
   {
     id: 'network-2',
-    name: 'Data Center',
+    name: 'Data center',
     category: 'network',
     url: '/presets/data-center.jpg',
     source: 'preset'
   },
   {
     id: 'network-3',
-    name: 'Fiber Optics',
+    name: 'Fiber optics',
     category: 'network',
     url: '/presets/fiber-optics.jpg',
     source: 'preset'
   },
   {
     id: 'network-4',
-    name: 'Network Cables',
+    name: 'Network cables',
     category: 'network',
     url: '/presets/network-cables.jpg',
     source: 'preset'
   },
   {
     id: 'network-5',
-    name: 'Switch Panel',
+    name: 'Switch panel',
     category: 'network',
     url: '/presets/switch-panel.jpg',
     source: 'preset'
   },
   {
     id: 'network-6',
-    name: 'Blue Cables',
+    name: 'Blue cables',
     category: 'network',
     url: '/presets/blue-cables.jpg',
     source: 'preset'
   },
   {
     id: 'network-7',
-    name: 'Abstract Network',
+    name: 'Abstract network',
     category: 'network',
     url: '/presets/abstract-network.jpg',
     source: 'preset'
   },
   {
     id: 'network-8',
-    name: 'Tech Lines',
+    name: 'Tech lines',
     category: 'network',
     url: '/presets/tech-lines.jpg',
     source: 'preset'
@@ -81,56 +81,56 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   // Server / Infrastructure themed
   {
     id: 'server-1',
-    name: 'Server Room',
+    name: 'Server room',
     category: 'servers',
     url: '/presets/network-grid.jpg',
     source: 'preset'
   },
   {
     id: 'server-2',
-    name: 'Data Center Aisle',
+    name: 'Data center aisle',
     category: 'servers',
     url: '/presets/data-center-aisle.jpg',
     source: 'preset'
   },
   {
     id: 'server-3',
-    name: 'Cloud Infrastructure',
+    name: 'Cloud infrastructure',
     category: 'servers',
     url: '/presets/fiber-optics.jpg',
     source: 'preset'
   },
   {
     id: 'server-4',
-    name: 'Rack Servers',
+    name: 'Rack servers',
     category: 'servers',
     url: '/presets/rack-servers.jpg',
     source: 'preset'
   },
   {
     id: 'server-5',
-    name: 'Server Hardware',
+    name: 'Server hardware',
     category: 'servers',
     url: '/presets/server-hardware.jpg',
     source: 'preset'
   },
   {
     id: 'server-6',
-    name: 'Blue Server Lights',
+    name: 'Blue server lights',
     category: 'servers',
     url: '/presets/data-center.jpg',
     source: 'preset'
   },
   {
     id: 'server-7',
-    name: 'Modern Data Center',
+    name: 'Modern data center',
     category: 'servers',
     url: '/presets/circuit-board.jpg',
     source: 'preset'
   },
   {
     id: 'server-8',
-    name: 'Server Closeup',
+    name: 'Server closeup',
     category: 'servers',
     url: '/presets/server-closeup.jpg',
     source: 'preset'
@@ -139,56 +139,56 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   // Docker / Containers
   {
     id: 'docker-1',
-    name: 'Container Ship',
+    name: 'Container ship',
     category: 'docker',
     url: '/presets/container-ship.jpg',
     source: 'preset'
   },
   {
     id: 'docker-2',
-    name: 'Shipping Containers',
+    name: 'Shipping containers',
     category: 'docker',
     url: '/presets/shipping-containers.jpg',
     source: 'preset'
   },
   {
     id: 'docker-3',
-    name: 'Container Stack',
+    name: 'Container stack',
     category: 'docker',
     url: '/presets/container-stack.jpg',
     source: 'preset'
   },
   {
     id: 'docker-4',
-    name: 'Blue Containers',
+    name: 'Blue containers',
     category: 'docker',
     url: '/presets/blue-containers.jpg',
     source: 'preset'
   },
   {
     id: 'docker-5',
-    name: 'Container Port',
+    name: 'Container port',
     category: 'docker',
     url: '/presets/container-port.jpg',
     source: 'preset'
   },
   {
     id: 'docker-6',
-    name: 'Red Containers',
+    name: 'Red containers',
     category: 'docker',
     url: '/presets/red-containers.jpg',
     source: 'preset'
   },
   {
     id: 'docker-7',
-    name: 'Container Yard',
+    name: 'Container yard',
     category: 'docker',
     url: '/presets/container-yard.jpg',
     source: 'preset'
   },
   {
     id: 'docker-8',
-    name: 'Ship Deck',
+    name: 'Ship deck',
     category: 'docker',
     url: '/presets/ship-deck.jpg',
     source: 'preset'
@@ -197,114 +197,114 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   // Homelab
   {
     id: 'homelab-1',
-    name: 'Home Server Rack',
+    name: 'Home server rack',
     category: 'homelab',
     url: '/presets/network-grid.jpg',
     source: 'preset'
   },
   {
     id: 'homelab-2',
-    name: 'Raspberry Pi Cluster',
+    name: 'Raspberry Pi cluster',
     category: 'homelab',
     url: '/presets/raspberry-pi.jpg',
     source: 'preset'
   },
   {
     id: 'homelab-3',
-    name: 'Electronics Workbench',
+    name: 'Electronics workbench',
     category: 'homelab',
     url: '/presets/electronics-workbench.jpg',
     source: 'preset'
   },
   {
     id: 'homelab-4',
-    name: 'Tech Desk Setup',
+    name: 'Tech desk setup',
     category: 'homelab',
     url: '/presets/tech-desk.jpg',
     source: 'preset'
   },
   {
     id: 'homelab-5',
-    name: 'PC Hardware',
+    name: 'PC hardware',
     category: 'homelab',
     url: '/presets/pc-hardware.jpg',
     source: 'preset'
   },
   {
     id: 'homelab-6',
-    name: 'LED Gaming Setup',
+    name: 'LED gaming setup',
     category: 'homelab',
     url: '/presets/led-gaming.jpg',
     source: 'preset'
   },
   {
     id: 'homelab-7',
-    name: 'Network Equipment',
+    name: 'Network equipment',
     category: 'homelab',
     url: '/presets/network-equipment.jpg',
     source: 'preset'
   },
   {
     id: 'homelab-8',
-    name: 'Home Office Tech',
+    name: 'Home office tech',
     category: 'homelab',
     url: '/presets/home-office.jpg',
     source: 'preset'
   },
 
-  // Smart Home themed
+  // Smart home themed
   {
     id: 'smarthome-1',
-    name: 'Modern Smart Home',
+    name: 'Modern smart home',
     category: 'smarthome',
     url: '/presets/data-center-aisle.jpg',
     source: 'preset'
   },
   {
     id: 'smarthome-2',
-    name: 'Home Automation',
+    name: 'Home automation',
     category: 'smarthome',
     url: '/presets/home-automation.jpg',
     source: 'preset'
   },
   {
     id: 'smarthome-3',
-    name: 'Connected Living',
+    name: 'Connected living',
     category: 'smarthome',
     url: '/presets/connected-living.jpg',
     source: 'preset'
   },
   {
     id: 'smarthome-4',
-    name: 'Smart Lighting',
+    name: 'Smart lighting',
     category: 'smarthome',
     url: '/presets/smart-lighting.jpg',
     source: 'preset'
   },
   {
     id: 'smarthome-5',
-    name: 'Modern Interior',
+    name: 'Modern interior',
     category: 'smarthome',
     url: '/presets/modern-interior.jpg',
     source: 'preset'
   },
   {
     id: 'smarthome-6',
-    name: 'Cozy Tech Home',
+    name: 'Cozy tech home',
     category: 'smarthome',
     url: '/presets/cozy-home.jpg',
     source: 'preset'
   },
   {
     id: 'smarthome-7',
-    name: 'Smart Device',
+    name: 'Smart device',
     category: 'smarthome',
     url: '/presets/smart-device.jpg',
     source: 'preset'
   },
   {
     id: 'smarthome-8',
-    name: 'Voice Assistant',
+    name: 'Voice assistant',
     category: 'smarthome',
     url: '/presets/voice-assistant.jpg',
     source: 'preset'
@@ -313,42 +313,42 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   // Tech / Abstract themed
   {
     id: 'tech-1',
-    name: 'Circuit Board',
+    name: 'Circuit board',
     category: 'tech',
     url: '/presets/circuit-board.jpg',
     source: 'preset'
   },
   {
     id: 'tech-2',
-    name: 'Digital Matrix',
+    name: 'Digital matrix',
     category: 'tech',
     url: '/presets/digital-matrix.jpg',
     source: 'preset'
   },
   {
     id: 'tech-3',
-    name: 'Code Background',
+    name: 'Code background',
     category: 'tech',
     url: '/presets/code-background.jpg',
     source: 'preset'
   },
   {
     id: 'tech-4',
-    name: 'Green Circuit',
+    name: 'Green circuit',
     category: 'tech',
     url: '/presets/green-circuit.jpg',
     source: 'preset'
   },
   {
     id: 'tech-5',
-    name: 'Digital Code',
+    name: 'Digital code',
     category: 'tech',
     url: '/presets/digital-code.jpg',
     source: 'preset'
   },
   {
     id: 'tech-6',
-    name: 'Binary Code',
+    name: 'Binary code',
     category: 'tech',
     url: '/presets/binary-code.jpg',
     source: 'preset'
@@ -362,7 +362,7 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   },
   {
     id: 'tech-8',
-    name: 'Tech Abstract',
+    name: 'Tech abstract',
     category: 'tech',
     url: '/presets/tech-abstract.jpg',
     source: 'preset'
@@ -399,28 +399,28 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   },
   {
     id: 'space-5',
-    name: 'Purple Nebula',
+    name: 'Purple nebula',
     category: 'space',
     url: '/presets/purple-nebula.jpg',
     source: 'preset'
   },
   {
     id: 'space-6',
-    name: 'Earth from Space',
+    name: 'Earth from space',
     category: 'space',
     url: '/presets/earth-from-space.jpg',
     source: 'preset'
   },
   {
     id: 'space-7',
-    name: 'Cosmic Clouds',
+    name: 'Cosmic clouds',
     category: 'space',
     url: '/presets/cosmic-clouds.jpg',
     source: 'preset'
   },
   {
     id: 'space-8',
-    name: 'Deep Space',
+    name: 'Deep space',
     category: 'space',
     url: '/presets/deep-space.jpg',
     source: 'preset'
@@ -429,56 +429,56 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   // Minimal / Clean themed
   {
     id: 'minimal-1',
-    name: 'Dark Gradient',
+    name: 'Dark gradient',
     category: 'minimal',
     url: '/presets/dark-gradient.jpg',
     source: 'preset'
   },
   {
     id: 'minimal-2',
-    name: 'Blue Abstract',
+    name: 'Blue abstract',
     category: 'minimal',
     url: '/presets/blue-abstract.jpg',
     source: 'preset'
   },
   {
     id: 'minimal-3',
-    name: 'Purple Waves',
+    name: 'Purple waves',
     category: 'minimal',
     url: '/presets/purple-waves.jpg',
     source: 'preset'
   },
   {
     id: 'minimal-4',
-    name: 'Soft Gradient',
+    name: 'Soft gradient',
     category: 'minimal',
     url: '/presets/soft-gradient.jpg',
     source: 'preset'
   },
   {
     id: 'minimal-5',
-    name: 'Pink Gradient',
+    name: 'Pink gradient',
     category: 'minimal',
     url: '/presets/pink-gradient.jpg',
     source: 'preset'
   },
   {
     id: 'minimal-6',
-    name: 'Teal Flow',
+    name: 'Teal flow',
     category: 'minimal',
     url: '/presets/teal-flow.jpg',
     source: 'preset'
   },
   {
     id: 'minimal-7',
-    name: 'Orange Glow',
+    name: 'Orange glow',
     category: 'minimal',
     url: '/presets/orange-glow.jpg',
     source: 'preset'
   },
   {
     id: 'minimal-8',
-    name: 'Smooth Blue',
+    name: 'Smooth blue',
     category: 'minimal',
     url: '/presets/smooth-blue.jpg',
     source: 'preset'
@@ -487,14 +487,14 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   // Applications / Services themed
   {
     id: 'apps-1',
-    name: 'Cloud Services',
+    name: 'Cloud services',
     category: 'apps',
     url: '/presets/apps-cloud-services.jpg',
     source: 'preset'
   },
   {
     id: 'apps-2',
-    name: 'Mobile Apps',
+    name: 'Mobile apps',
     category: 'apps',
     url: '/presets/apps-mobile.jpg',
     source: 'preset'
@@ -515,7 +515,7 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   },
   {
     id: 'apps-5',
-    name: 'API Services',
+    name: 'API services',
     category: 'apps',
     url: '/presets/apps-api.jpg',
     source: 'preset'
@@ -545,7 +545,7 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   // Multimedia themed
   {
     id: 'media-1',
-    name: 'Vinyl Records',
+    name: 'Vinyl records',
     category: 'multimedia',
     url: '/presets/media-vinyl.jpg',
     source: 'preset'
@@ -580,7 +580,7 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   },
   {
     id: 'media-6',
-    name: 'Audio Waves',
+    name: 'Audio waves',
     category: 'multimedia',
     url: '/presets/media-audio-waves.jpg',
     source: 'preset'
@@ -594,7 +594,7 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   },
   {
     id: 'media-8',
-    name: 'TV Screen',
+    name: 'TV screen',
     category: 'multimedia',
     url: '/presets/media-tv.jpg',
     source: 'preset'
@@ -661,7 +661,7 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   // Storage themed
   {
     id: 'storage-1',
-    name: 'Hard Drives',
+    name: 'Hard drives',
     category: 'storage',
     url: '/presets/storage-hard-drives.jpg',
     source: 'preset'
@@ -675,14 +675,14 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   },
   {
     id: 'storage-3',
-    name: 'Server Rack',
+    name: 'Server rack',
     category: 'storage',
     url: '/presets/storage-server-rack.jpg',
     source: 'preset'
   },
   {
     id: 'storage-4',
-    name: 'Data Center',
+    name: 'Data center',
     category: 'storage',
     url: '/presets/storage-data-center.jpg',
     source: 'preset'
@@ -696,21 +696,21 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   },
   {
     id: 'storage-6',
-    name: 'Cloud Storage',
+    name: 'Cloud storage',
     category: 'storage',
     url: '/presets/storage-cloud.jpg',
     source: 'preset'
   },
   {
     id: 'storage-7',
-    name: 'Storage Cables',
+    name: 'Storage cables',
     category: 'storage',
     url: '/presets/storage-cables.jpg',
     source: 'preset'
   },
   {
     id: 'storage-8',
-    name: 'Backup Systems',
+    name: 'Backup systems',
     category: 'storage',
     url: '/presets/storage-backup.jpg',
     source: 'preset'
@@ -722,7 +722,7 @@ export const BACKGROUND_CATEGORIES = [
   { id: 'servers', name: 'Servers', icon: 'mdi:server' },
   { id: 'docker', name: 'Docker', icon: 'mdi:docker' },
   { id: 'homelab', name: 'Homelab', icon: 'mdi:raspberry-pi' },
-  { id: 'smarthome', name: 'Smart Home', icon: 'mdi:home-automation' },
+  { id: 'smarthome', name: 'Smart home', icon: 'mdi:home-automation' },
   { id: 'apps', name: 'Applications', icon: 'mdi:application' },
   { id: 'multimedia', name: 'Multimedia', icon: 'mdi:multimedia' },
   { id: 'weather', name: 'Weather', icon: 'mdi:weather-partly-cloudy' },

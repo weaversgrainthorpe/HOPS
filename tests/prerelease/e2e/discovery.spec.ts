@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { getCsrfToken, openDiscovery, startScan } from '../helpers';
 
-// Network Discovery — the 2.0 headline feature. We don't run an actual
+// Network discovery — the 2.0 headline feature. We don't run an actual
 // scan against the LAN (slow, and the test instance has no LAN
 // peers). Instead we exercise the surfaces that don't need real hosts:
 //   - the scan-list page loads

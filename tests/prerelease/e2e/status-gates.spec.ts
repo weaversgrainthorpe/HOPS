@@ -76,7 +76,7 @@ async function dashboardOf(page: Page, dashId: string) {
 }
 
 async function editMode(page: Page) {
-  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await page.locator('[aria-label="Enter edit mode"]').click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
 }
 
@@ -161,8 +161,8 @@ test.describe('status checks: tiles On / Off, gates above', () => {
     await withFixture(page, context, async (f) => {
       await page.goto(f.path);
       await editMode(page);
-      await page.getByRole('button', { name: 'Edit Dashboard' }).click();
-      const dlg = page.getByRole('dialog', { name: 'Edit Dashboard' });
+      await page.getByRole('button', { name: 'Edit dashboard' }).click();
+      const dlg = page.getByRole('dialog', { name: 'Edit dashboard' });
       await dlg.getByRole('tab', { name: 'Settings' }).click();
       const group = dlg.getByRole('group', { name: 'Status checks for tiles in this dashboard' });
       await expect(group.getByRole('radio', { name: 'Enabled' })).toBeChecked();
@@ -174,7 +174,7 @@ test.describe('status checks: tiles On / Off, gates above', () => {
       expect(s.overrides.statusChecksEnabled).toBe(false);
 
       await page.getByRole('tab', { name: 'Switch to Main tab' }).dblclick();
-      const tabDlg = page.getByRole('dialog', { name: 'Edit Tab' });
+      const tabDlg = page.getByRole('dialog', { name: 'Edit tab' });
       await expect(tabDlg.getByRole('group', { name: 'Status checks for tiles in this tab' }))
         .toContainText(`Status monitoring is disabled on dashboard ${f.name}, so this setting has no effect`);
     });

@@ -277,14 +277,14 @@
 </script>
 
 <svelte:head>
-  <title>New Discovery Scan — HOPS</title>
+  <title>New discovery scan — HOPS</title>
 </svelte:head>
 
 <div class="page">
   <!-- The way back to the Discovery list, at the top. -->
   <a class="back-link" href="/settings/discovery"><span class="chevron" aria-hidden="true">‹</span> Discovery</a>
   <header class="section-header">
-    <h2 class="section-title">New Discovery Scan</h2>
+    <h2 class="section-title">New discovery scan</h2>
   </header>
 
   <form onsubmit={submit} class="form">

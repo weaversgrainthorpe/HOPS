@@ -94,14 +94,14 @@ test.describe('viewer loads only the open dashboard', () => {
     await clientNavigate(page, f.b.path);
     await one;
     await expect(node(page, f.b.tabs[0].root.children[0].id)).toBeVisible();
-    await expect(page.getByText('Dashboard Not Found')).toHaveCount(0);
+    await expect(page.getByText('Dashboard not found')).toHaveCount(0);
   });
 
   test('an unknown path is "not found" as before; search across dashboards finds a tile once the rest has loaded', async ({ page, context }) => {
     const f = await setup(page, context);
     await page.goto(`/${f.p}-nope`);
-    await expect(page.getByRole('heading', { name: 'Dashboard Not Found' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Go Home' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dashboard not found' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Go home' })).toBeVisible();
     const input = await openSearch(page);
     await input.fill(`Tileb${f.p}`);
     const hit = page.getByRole('button', { name: new RegExp(`Tileb${f.p}`) });
@@ -131,7 +131,7 @@ test.describe('viewer loads only the open dashboard', () => {
     let fail = true;
     await page.route((u) => isWholeConfig(u.toString()), (route) => (fail ? route.abort() : route.continue()));
     await page.goto(`/${f.p}-nope`);
-    await expect(page.getByRole('heading', { name: 'Dashboard Not Found' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dashboard not found' })).toBeVisible();
     const input = await openSearch(page);
     await input.fill(`Tileb${f.p}`);
     const failed = page.locator('.search-panel').getByRole('alert').filter({ hasText: "Couldn't load the other dashboards" });
@@ -153,10 +153,10 @@ test.describe('viewer loads only the open dashboard', () => {
     await page.waitForURL('**/settings/dashboards'); // the dashboard page's own bar has gone
     const failed = page.getByRole('alert').filter({ hasText: "Couldn't load the other dashboards" });
     await expect(failed).toBeVisible();
-    await expect(page.getByRole('button', { name: 'New Dashboard' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'New dashboard' })).toHaveCount(0);
     fail = false;
     await failed.getByRole('button', { name: 'Retry' }).click();
-    await expect(page.getByRole('button', { name: 'New Dashboard' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'New dashboard' })).toBeVisible();
     await expect(failed).toHaveCount(0);
   });
 
@@ -170,7 +170,7 @@ test.describe('viewer loads only the open dashboard', () => {
     });
     await page.goto(f.a.path);
     await expect(node(page, f.a.tabs[0].root.children[0].id)).toBeVisible();
-    const pencil = page.locator('[aria-label="Enter Edit Mode"]');
+    const pencil = page.locator('[aria-label="Enter edit mode"]');
     await pencil.click();
     await expect(pencil).toBeDisabled();
     await expect(page.getByRole('status').filter({ hasText: 'Loading the other dashboards…' })).toBeVisible();
@@ -187,7 +187,7 @@ test.describe('viewer loads only the open dashboard', () => {
     await failed.getByRole('button', { name: 'Retry' }).click();
     await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
     await expect(failed).toHaveCount(0);
-    await expect(page.locator('[aria-label="Exit Edit Mode"]')).toBeEnabled();
+    await expect(page.locator('[aria-label="Exit edit mode"]')).toBeEnabled();
   });
 
   test('Add to HOPS opened from a dashboard loads every dashboard before its form', async ({ page, context }) => {
@@ -210,13 +210,13 @@ test.describe('viewer loads only the open dashboard', () => {
     const f = await setup(page, context);
     await page.goto(f.a.path);
     await expect(node(page, f.a.tabs[0].root.children[0].id)).toBeVisible();
-    await page.locator('[aria-label="Enter Edit Mode"]').click();
+    await page.locator('[aria-label="Enter edit mode"]').click();
     const toolbar = page.getByRole('toolbar', { name: 'Editing' });
     await expect(toolbar).toBeVisible();
 
     const addTab = async (name: string) => {
       await toolbar.getByRole('button', { name: 'Add tab' }).click();
-      const dlg = page.getByRole('dialog', { name: 'New Tab' });
+      const dlg = page.getByRole('dialog', { name: 'New tab' });
       await dlg.locator('input#name').fill(name);
       await dlg.getByRole('button', { name: 'Create' }).click();
       await expect(page.getByRole('tab', { name: `Switch to ${name} tab` })).toBeVisible();
