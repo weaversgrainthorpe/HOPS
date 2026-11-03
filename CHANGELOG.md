@@ -44,6 +44,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   says what was added, replaced, renamed and skipped.
 
 ### Changed
+- **One hover popup for tiles and folders.** Hovering a tile or folder, or
+  moving to it with the keyboard, shows its name in larger text, then its
+  description, then any notes such as the away address. Before, tiles showed
+  the browser's small tooltip (the description instead of the name) and
+  folders showed nothing.
 - **One text colour rule everywhere.** On a coloured tile, folder or tab,
   Auto now picks whichever of white or black is easier to read. Before, tiles
   and tabs always used white and folders used another rule, so the same colour
