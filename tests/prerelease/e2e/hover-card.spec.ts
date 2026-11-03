@@ -7,7 +7,7 @@ import { getCsrfToken } from '../helpers';
 
 const made: string[] = [];
 
-async function importDash(page: Page, context: BrowserContext) {
+async function importDash(page: Page, context: BrowserContext, more: (id: (s: string) => string) => Record<string, unknown>[] = () => []) {
   const p = `hc${Date.now().toString(36)}`;
   const id = (s: string) => `${p}-${s}`;
   const kid = (k: string, name: string): Record<string, unknown> => ({
@@ -30,7 +30,8 @@ async function importDash(page: Page, context: BrowserContext) {
             id: id('media'), kind: 'folder', name: 'Media', description: 'Films and music', display: 'collapsed', shape: 'rounded',
             size: 'medium', contentSize: 'medium', placement: { x: 4, y: 0, w: 8, h: 4 },
             content: { children: [kid('jelly', 'Jelly'), kid('sonar', 'Sonar')] }
-          }
+          },
+          ...more(id)
         ]
       }
     }]
@@ -175,4 +176,53 @@ test('both themes: the popup on a tile and on a minimised folder uses the theme 
       await expect(card(page)).toHaveCount(0);
     }
   }
+});
+
+test('Tab onto a tile below the fold: the page scrolls it into view and its popup stays, on screen', async ({ page, context }) => {
+  const f = await importDash(page, context, (id) => [
+    { id: id('far'), kind: 'tile', type: 'link', name: 'Far', description: 'Down below', url: 'https://far.example.lan/', icon: 'mdi:lan',
+      openMode: 'newtab', size: 'medium', order: 0, placement: { x: 0, y: 40, w: 2, h: 2 } }
+  ]);
+  await page.goto(f.path);
+  const far = node(page, f.id('far')).locator('button.entry');
+  const media = node(page, f.id('media')).locator('.folder-collapsed-tile');
+  await expect(media).toBeVisible();
+  const vp = page.viewportSize()!;
+  expect((await far.boundingBox())!.y, 'the tile starts below the fold').toBeGreaterThan(vp.height);
+  await media.focus();
+  await page.keyboard.press('Tab');
+  await expect(far).toBeFocused();
+  await expect.poll(async () => (await far.boundingBox())!.y, 'scrolled into view').toBeLessThan(vp.height);
+  await page.waitForTimeout(300); // any scroll from the focus has happened
+  await expect(card(page).locator('.hc-name')).toHaveText('Far');
+  await onScreenBeside(page, (await far.boundingBox())!);
+  await page.keyboard.press('Escape');
+  await expect(card(page)).toHaveCount(0);
+});
+
+test('no popup at any time during an editor drag, even held over another tile', async ({ page, context }) => {
+  const f = await importDash(page, context);
+  await page.goto(f.path);
+  const nas = node(page, f.id('nas')).locator('button.entry');
+  const plain = node(page, f.id('plain')).locator('button.entry');
+  await expect(nas).toBeVisible();
+  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
+  const a = (await nas.boundingBox())!;
+  const b = (await plain.boundingBox())!;
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+  await page.mouse.down();
+  for (let i = 1; i <= 20; i++) {
+    await page.mouse.move(a.x + a.width / 2 + ((b.x - a.x) * i) / 20, a.y + a.height / 2 + 4 * i / 20);
+    await page.waitForTimeout(16);
+  }
+  await expect(page.locator('.drag-layer')).toHaveCount(1); // the drag is on
+  await page.waitForTimeout(900); // held well past the hover delay over Plain
+  await expect(card(page)).toHaveCount(0);
+  await page.keyboard.press('Escape'); // cancels the drag
+  await page.mouse.up();
+  // After the drag, hovering works again.
+  await page.mouse.move(2, 400);
+  await plain.hover();
+  await expect(card(page).locator('.hc-name')).toHaveText('Plain');
 });

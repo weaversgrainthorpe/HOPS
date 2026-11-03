@@ -129,6 +129,16 @@
   // for it still has it for screen readers (and in its hover popup).
   const descId = $props.id();
 
+  // The popup's notes for screen readers too (the popup is hidden from them): the away address and an
+  // address problem. In the editor the address problem is already a visible note on the tile.
+  const srNotes = $derived(
+    (hover.lines ?? []).filter((l) => !(inEditor && urlProblem && l === urlProblemText)).join('. ')
+  );
+  const notesId = $derived(`${descId}-notes`);
+  const describedBy = $derived(
+    [!isNote && entry.description ? descId : '', srNotes ? notesId : ''].filter(Boolean).join(' ') || undefined
+  );
+
   // The text on a coloured tile: THE one rule (textColourOn; folders use the same Auto choice). No
   // colour, or one that can't be read, is the theme's surface and text; an unreadable one says so in
   // edit mode (never a silent guess).
@@ -147,11 +157,14 @@
     onclick={handleClick}
     use:hoverCard={hover}
     aria-label={`Open ${entry.name}${usingAway ? ' (away address)' : ''}`}
-    aria-describedby={entry.description ? descId : undefined}
+    aria-describedby={describedBy}
   >
     {#if entry.description}
       <!-- Its description for screen readers, as the tile's (the hover popup is hidden from them). -->
       <span id={descId} class="sr-only">{entry.description}</span>
+    {/if}
+    {#if srNotes}
+      <span id={notesId} class="sr-only">{srNotes}</span>
     {/if}
     <span class="chip-icon" aria-hidden="true">
       {#if entry.iconUrl}
@@ -184,8 +197,11 @@
     use:hoverCard={hover}
     aria-label={inEditor || isNote ? entry.name : `Open ${entry.name}${usingAway ? ' (away address)' : ''}`}
     aria-pressed={inEditor ? editorSelected : undefined}
-    aria-describedby={!isNote && entry.description ? descId : undefined}
+    aria-describedby={describedBy}
   >
+    {#if srNotes}
+      <span id={notesId} class="sr-only">{srNotes}</span>
+    {/if}
     <span class="entry-bg" aria-hidden="true" style:background-color={coloured ? entry.color : undefined} style:opacity={bgOpacity}></span>
     {#if inEditor && text.invalid}
       <span class="url-problem colour-problem" data-testid="tile-colour-unreadable" role="note">Colour can't be read — theme colour shown</span>

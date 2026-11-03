@@ -893,4 +893,36 @@ describe('the hover popup (one for tiles and folders): the name, then the descri
     expect(card()?.querySelector('.hc-name')?.textContent).toBe('s');
     expect(card()?.querySelector('.hc-desc')?.textContent).toBe('Inner');
   });
+
+  const describedText = (n: Element) =>
+    (n.getAttribute('aria-describedby') ?? '').split(' ').filter(Boolean).map((id) => document.getElementById(id)?.textContent ?? `(missing #${id})`);
+
+  it('an open folder is described by its description (an element that exists while it is open)', async () => {
+    const { container } = await renderTab([folder('f', kids(2), { name: 'Outer', description: 'The box' })]);
+    const group = el(container, 'f');
+    expect(group.getAttribute('role')).toBe('group');
+    expect(describedText(group)).toEqual(['The box']);
+  });
+
+  it('an inset (nested) box is a group named for its folder and described by its description', async () => {
+    const { container } = await renderTab([folder('f', [sub('s', kids(2), { name: 'Inner', description: 'Inside' })], { name: 'Outer' })]);
+    setFolderDrill('d1', 'f', ['s']);
+    await tick();
+    const box = container.querySelector('[data-nested-folder="s"]') as HTMLElement;
+    expect(box.getAttribute('role')).toBe('group');
+    expect(box.getAttribute('aria-label')).toBe('Inner folder');
+    expect(describedText(box)).toEqual(['Inside']);
+  });
+
+  it('a Rounded untitled folder drilled in: "Back to Untitled folder", as its first line says', async () => {
+    const { container } = await renderTab([folder('f', [sub('s', kids(2))], { name: '' })]);
+    setFolderDrill('d1', 'f', ['s']);
+    await tick();
+    const h3 = el(container, 'f').querySelector('.folder-header h3');
+    expect(h3).not.toBeNull();
+    const up = h3!.querySelector('.title-button') as HTMLElement;
+    await keyboardFocus(up);
+    expect(card()?.querySelector('.hc-name')?.textContent).toBe('Untitled folder');
+    expect(Array.from(card()!.querySelectorAll('.hc-line')).map((l) => l.textContent)).toEqual(['Back to Untitled folder']);
+  });
 });

@@ -371,6 +371,23 @@ describe('the hover popup (no native title): the name, then the description, the
     expect(lines()).toEqual(['No address: this tile will not open']);
   });
 
+  const describedText = (n: Element) =>
+    (n.getAttribute('aria-describedby') ?? '').split(' ').filter(Boolean).map((id) => document.getElementById(id)?.textContent ?? `(missing #${id})`);
+
+  it('screen readers keep the notes (away address, an address problem), with or without a description', async () => {
+    awayMode.set(true);
+    const away = render(Entry, { entry: { ...entry, awayUrl: 'https://away.example' } as EntryType });
+    expect(describedText(away.container.querySelector('button.entry')!)).toEqual(['Opens away address: https://away.example']);
+    away.unmount();
+    awayMode.set(false);
+    const blank = render(Entry, { entry: { ...entry, url: '', description: 'Desc' } });
+    expect(describedText(blank.container.querySelector('button.entry')!)).toEqual(['Desc', 'No address: this tile will not open']);
+    blank.unmount();
+    // In the editor the address problem is already a visible note on the tile: not said twice.
+    const ed = render(Entry, { entry: { ...entry, url: '' }, editorSelected: false });
+    expect(describedText(ed.container.querySelector('button.entry')!)).toEqual([]);
+  });
+
   it('the Recently used chip has the same popup and no native title', async () => {
     const { container } = render(Entry, { entry: { ...entry, description: 'D' }, chip: true });
     const chip = container.querySelector('.recent-chip') as HTMLElement;

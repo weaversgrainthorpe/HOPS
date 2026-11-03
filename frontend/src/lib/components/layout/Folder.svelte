@@ -606,12 +606,18 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="nested-box"
+    role="group"
+    aria-label="{shownName} folder"
+    aria-describedby={sub.description?.trim() ? `${descId}-${sub.id}` : undefined}
     class:tabbed={subTabbed}
     class:dragging={editing && ($drag?.ids.includes(sub.id) ?? false)}
     data-nested-folder={sub.id}
     style:color={lookText(sub)}
     ondblclick={editing ? (e) => editSub(e, sub.id) : undefined}
   >
+    {#if sub.description?.trim()}
+      <span id="{descId}-{sub.id}" class="sr-only">{sub.description}</span>
+    {/if}
     {#if subTabbed || ownLook}
       <FolderShape look={sub} variant="nested" dashboardId={dashboard.id} tabRect={subTab} />
     {/if}
@@ -883,7 +889,7 @@
         <span class="title-space"></span>
       {:else if showTitle}
         {@render headerIcon(folder, false)}
-        <h3 use:hoverCard={folderHoverContent(folder, levels > 0 ? [`Back to ${folder.name}`] : [])}>
+        <h3 use:hoverCard={folderHoverContent(folder, levels > 0 ? [`Back to ${boxName}`] : [])}>
           {#if levels > 0}
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <button type="button" class="title-button" onclick={(e) => goUp(e, 0)} ondblclick={own}
@@ -933,6 +939,10 @@
     {#if editing && plan.kind !== 'stacked' && folder.placement}
       <!-- Handles on the rendered (open) box on a tab; a minimised folder has none. -->
       <ResizeHandles id={folder.id} name={folder.name} metrics={parent} />
+    {/if}
+    {#if hasDesc}
+      <!-- Its description for screen readers (the group's aria-describedby; the hover popup is hidden from them). -->
+      <span id={descId} class="sr-only">{folder.description}</span>
     {/if}
     {@render minNote()}
   </div>
