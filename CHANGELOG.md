@@ -125,6 +125,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   comparison with the last scan mixed them up. Each name is now compared
   with itself. The filter is called **New or changed**, and results already
   on offer in the last scan are no longer ticked for you.
+- **Discovery's filter buttons look like buttons.** On a re-scan (New or
+  changed / All / Gone) and on Detectors (All / Bundled / User), the chosen
+  one is filled and the others are outlined.
+- **Every result shows while a scan runs.** A service found in the same
+  second as the one before it could be missing from the list until you
+  reopened the page.
 - **An outlined folder no longer offers settings it can't use.** It is
   see-through, so its colour draws only the outline: Opacity and Text colour
   are hidden for it, with a line saying why, and an opacity saved under
