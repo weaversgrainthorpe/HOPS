@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { render, screen, fireEvent, within } from '@testing-library/svelte';
 
 vi.mock('$lib/utils/api', () => ({ importConfig: vi.fn(), previewImport: vi.fn() }));
 vi.mock('$lib/stores/toast', () => ({
@@ -102,5 +102,26 @@ describe('ImportModal', () => {
     await fireEvent.click(screen.getByRole('button', { name: /^Next$/ }));
     expect(await screen.findByTestId('import-error')).toHaveTextContent('HOPS backup');
     expect(api.importConfig).not.toHaveBeenCalled();
+  });
+
+  it('a new dashboard can be skipped too, and skipping all of them imports nothing', async () => {
+    vi.mocked(api.importConfig).mockResolvedValue({ success: true, message: 'ok', assetsFailed: [] });
+    render(ImportModal, { props: { onClose: vi.fn() } });
+    await toChoices();
+    const garage = screen.getAllByTestId('import-row')[1];
+    const add = within(garage).getByRole('radio', { name: /^Add/ });
+    expect(add).toBeChecked(); // Add is the default for a new name
+    await fireEvent.click(within(garage).getByRole('radio', { name: /^Skip/ }));
+    const go = screen.getByRole('button', { name: /^Import$/ });
+    await fireEvent.click(within(screen.getAllByTestId('import-row')[0]).getByRole('radio', { name: /^Skip/ }));
+    expect(go).toBeDisabled();
+    expect(screen.getByTestId('import-nothing')).toHaveTextContent('Nothing would be imported');
+
+    await fireEvent.click(within(screen.getAllByTestId('import-row')[0]).getByRole('radio', { name: /^Replace/ }));
+    expect(go).toBeEnabled();
+    expect(screen.queryByTestId('import-nothing')).not.toBeInTheDocument();
+    await fireEvent.click(go);
+    await screen.findByTestId('import-success');
+    expect(vi.mocked(api.importConfig).mock.calls[0][1]).toMatchObject({ choices: ['replace', 'skip'] });
   });
 });

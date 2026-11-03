@@ -3,7 +3,7 @@
   import Modal from '$lib/components/shared/Modal.svelte';
   import { importConfig, previewImport } from '$lib/utils/api';
   import {
-    importProblems, initialChoices, choicesReady, summaryLines,
+    importProblems, initialChoices, choicesReady, allSkipped, summaryLines,
     type ImportChoice, type ImportPreview
   } from '$lib/utils/importResult';
   import { toast } from '$lib/stores/toast';
@@ -31,6 +31,7 @@
   let autoMatchIcons = $state(true);
 
   const ready = $derived(preview ? choicesReady(preview.dashboards, choices) : false);
+  const nothing = $derived(allSkipped(choices));
   const clashes = $derived(preview ? preview.dashboards.filter((d) => d.clash).length : 0);
 
   function handleFileChange(e: Event) {
@@ -158,7 +159,7 @@
       {#if clashes > 0}
         {clashes === 1 ? 'One has' : `${clashes} have`} the same name as a dashboard you already have. Choose what to do with {clashes === 1 ? 'it' : 'each'}.
       {/if}
-      Nothing changes until you click Import.
+      Choose Skip for any you don't want. Nothing changes until you click Import.
     </p>
     <ul class="import-rows" data-testid="import-rows">
       {#each preview.dashboards as row, i (row.index)}
@@ -184,11 +185,24 @@
               </label>
             </fieldset>
           {:else}
-            <span class="row-add">Add</span>
+            <fieldset class="row-choice">
+              <legend>New here: no dashboard has this name.</legend>
+              <label>
+                <input type="radio" name="choice-{i}" value="add" bind:group={choices[i]} />
+                Add <span class="hint">import this one</span>
+              </label>
+              <label>
+                <input type="radio" name="choice-{i}" value="skip" bind:group={choices[i]} />
+                Skip <span class="hint">don't import this one</span>
+              </label>
+            </fieldset>
           {/if}
         </li>
       {/each}
     </ul>
+    {#if nothing}
+      <p class="nothing-note" role="status" data-testid="import-nothing">Nothing would be imported: every dashboard is set to Skip.</p>
+    {/if}
     {#if preview.notCarried?.length}
       <p class="description">Some things in this file can't be brought across. They are listed after the import.</p>
     {/if}
@@ -399,10 +413,10 @@
     color: var(--text-secondary);
   }
 
-  .row-add {
+  .nothing-note {
+    margin: 0 0 1rem;
     font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--color-success-text);
+    color: var(--text-secondary);
   }
 
   .row-choice {

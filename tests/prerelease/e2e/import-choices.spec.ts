@@ -45,11 +45,12 @@ function idsIn(d: unknown): Set<string> {
   return out;
 }
 
-test('Export all, then import it back with one Replace, one Keep both and one Skip', async ({ page, context }) => {
-  const [a, b, c] = [uniqueName('Replace me'), uniqueName('Keep me'), uniqueName('Skip me')];
+test('Export all, then import it back with one Replace, one Keep both and Skips', async ({ page, context }) => {
+  const [a, b, c, gone] = [uniqueName('Replace me'), uniqueName('Keep me'), uniqueName('Skip me'), uniqueName('Gone since')];
   const aId = await create(page, context, a);
   await create(page, context, b);
   await create(page, context, c);
+  const goneId = await create(page, context, gone);
 
   await page.goto('/settings/dashboards');
   await expect(page.getByTestId('export-all-note')).toContainText('It is not a backup');
@@ -74,24 +75,39 @@ test('Export all, then import it back with one Replace, one Keep both and one Sk
   });
   expect(put.ok(), await put.text()).toBeTruthy();
   const bIds = idsIn(env.config.dashboards.find((d: Dash) => d.name === b));
+  // Delete one after the export: in the file it no longer clashes, so it is offered as Add, or Skip.
+  const goneNow = before.dashboards.find((d) => d.id === goneId)!;
+  const del = await page.request.delete(`/api/dashboards/${encodeURIComponent(goneId)}?revision=${goneNow.revision}`, {
+    headers: { 'X-CSRF-Token': await getCsrfToken(context) }
+  });
+  expect(del.ok(), await del.text()).toBeTruthy();
+  made.splice(made.indexOf(gone), 1);
 
   await page.getByRole('button', { name: 'Import', exact: true }).click();
   await page.getByTestId('import-file').setInputFiles(file);
   await page.getByRole('button', { name: 'Next' }).click();
   const rows = page.getByTestId('import-row');
-  await expect(rows).toHaveCount(before.dashboards.length); // every one is listed, each a clash
+  await expect(rows).toHaveCount(before.dashboards.length); // every one is listed
   const confirm = page.getByTestId('import-confirm');
   await expect(confirm).toBeDisabled(); // a choice is needed for each clash
 
   const row = (name: string) => page.locator(`[data-testid="import-row"][data-name="${name}"]`);
+  // The one with no clash starts as Add, and can be skipped like any other.
+  await expect(row(gone).getByRole('radio', { name: /^Add/ })).toBeChecked();
+  await expect(row(gone).getByRole('radio', { name: /^Replace/ })).toHaveCount(0);
+  // Skip everything: the Import button stays off and says nothing would be imported.
+  for (const r of await rows.all()) await r.getByRole('radio', { name: /^Skip/ }).check();
+  await expect(page.getByTestId('import-nothing')).toContainText('Nothing would be imported');
+  await expect(confirm).toBeDisabled();
   await row(a).getByRole('radio', { name: /^Replace/ }).check();
   await row(b).getByRole('radio', { name: /^Keep both/ }).check();
   for (const r of await rows.all()) {
     const n = await r.getAttribute('data-name');
     if (n !== a && n !== b) await r.getByRole('radio', { name: /^Skip/ }).check();
   }
-  // Nothing has been written while choosing.
-  expect((await config(page)).dashboards.length).toBe(before.dashboards.length);
+  // Nothing has been written while choosing (the deleted one is still gone).
+  expect((await config(page)).dashboards.length).toBe(before.dashboards.length - 1);
+  await expect(page.getByTestId('import-nothing')).toHaveCount(0);
   await expect(confirm).toBeEnabled();
   await confirm.click();
 
@@ -102,7 +118,9 @@ test('Export all, then import it back with one Replace, one Keep both and one Sk
   made.push(`${b} (2)`);
 
   const after = await config(page);
-  expect(after.dashboards.length).toBe(before.dashboards.length + 1);
+  expect(after.dashboards.length).toBe(before.dashboards.length); // -1 deleted, +1 kept both
+  expect(after.dashboards.find((d) => d.name === gone), 'the skipped new one is not imported').toBeFalsy();
+  await expect(summary).toContainText(gone);
   const aAfter = after.dashboards.find((d) => d.id === aId)!;
   expect(aAfter.tabs[0].name).toBe(tabName); // replaced, same id
   const kept = after.dashboards.find((d) => d.name === `${b} (2)`)!;

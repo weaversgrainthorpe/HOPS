@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { importProblems, initialChoices, choicesReady, summaryLines, type ImportPreviewRow } from './importResult';
+import { importProblems, initialChoices, choicesReady, allSkipped, summaryLines, type ImportPreviewRow } from './importResult';
 
 describe('importProblems', () => {
   it('is empty for a clean import', () => {
@@ -51,6 +51,13 @@ describe('import choices', () => {
     expect(choicesReady(rows, [null, 'add'])).toBe(false);
     expect(choicesReady(rows, ['keep', 'add'])).toBe(true);
     expect(choicesReady([], [])).toBe(false);
+  });
+
+  it('is not ready when every dashboard is skipped, and says so', () => {
+    expect(choicesReady(rows, ['skip', 'skip'])).toBe(false);
+    expect(allSkipped(['skip', 'skip'])).toBe(true);
+    expect(allSkipped(['skip', 'add'])).toBe(false);
+    expect(allSkipped([null, 'skip'])).toBe(false); // a choice still to make is not "nothing"
   });
 
   it('turns the summary into lines the admin reads', () => {

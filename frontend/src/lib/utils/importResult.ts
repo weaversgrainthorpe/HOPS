@@ -56,9 +56,14 @@ export function initialChoices(rows: ImportPreviewRow[]): (ImportChoice | null)[
   return rows.map((r) => (r.clash ? null : 'add'));
 }
 
-/** True when there is something to import and every dashboard has a choice. */
+/** True when every dashboard has a choice and at least one is not Skip. */
 export function choicesReady(rows: ImportPreviewRow[], choices: (ImportChoice | null)[]): boolean {
-  return rows.length > 0 && rows.every((_, i) => choices[i] != null);
+  return rows.length > 0 && rows.every((_, i) => choices[i] != null) && !allSkipped(choices);
+}
+
+/** True when every dashboard has been set to Skip, so nothing would be imported. */
+export function allSkipped(choices: (ImportChoice | null)[]): boolean {
+  return choices.length > 0 && choices.every((c) => c === 'skip');
 }
 
 /** The summary as one line per kind of change (none when nothing changed). */

@@ -610,8 +610,9 @@ choose what to do with it:
 - **Keep both**: the new one is added with a number, like "Home (2)".
 - **Skip**: it is left out.
 
-A dashboard with a new name is listed as **Add**. Click **Import** when each
-one has a choice. A summary then says what was added, replaced, renamed and
+A dashboard with a new name is set to **Add**; choose **Skip** to leave it
+out, so you can take only part of an Export all file. Click **Import** when
+each one has a choice (if every one is Skip, there is nothing to import). A summary then says what was added, replaced, renamed and
 skipped. If any dashboard in the file is broken, nothing is imported and HOPS
 says which one and why. If the path is taken, the new one gets a suffix
 (`/home` becomes `/home-1`). Anything HOPS can't bring across (an icon it
