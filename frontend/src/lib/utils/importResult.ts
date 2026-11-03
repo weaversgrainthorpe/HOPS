@@ -14,6 +14,66 @@ export interface ImportResult {
   warning?: string;
   /** What another dashboard's file had that HOPS couldn't bring in (one line per kind). */
   notCarried?: string[] | null;
+  /** What was added, replaced, kept alongside (renamed) and skipped. */
+  summary?: ImportSummary;
+}
+
+/** The stored dashboard an imported one has the same name as. */
+export interface ImportClash {
+  id: string;
+  name: string;
+  path: string;
+}
+
+/** One dashboard of the file, from POST /api/config/import with preview=true. */
+export interface ImportPreviewRow {
+  index: number;
+  name: string;
+  path: string;
+  tabs: number;
+  clash: ImportClash | null;
+}
+
+export interface ImportPreview {
+  preview: true;
+  format: string;
+  dashboards: ImportPreviewRow[];
+  notCarried?: string[] | null;
+}
+
+/** add for a new name; replace, keep (both) or skip for a name already used. */
+export type ImportChoice = 'add' | 'replace' | 'keep' | 'skip';
+
+export interface ImportSummary {
+  added: string[];
+  replaced: string[];
+  renamed: { from: string; to: string }[];
+  skipped: string[];
+}
+
+/** A new name starts as Add; a clash starts with no choice, so the admin picks one. */
+export function initialChoices(rows: ImportPreviewRow[]): (ImportChoice | null)[] {
+  return rows.map((r) => (r.clash ? null : 'add'));
+}
+
+/** True when every dashboard has a choice and at least one is not Skip. */
+export function choicesReady(rows: ImportPreviewRow[], choices: (ImportChoice | null)[]): boolean {
+  return rows.length > 0 && rows.every((_, i) => choices[i] != null) && !allSkipped(choices);
+}
+
+/** True when every dashboard has been set to Skip, so nothing would be imported. */
+export function allSkipped(choices: (ImportChoice | null)[]): boolean {
+  return choices.length > 0 && choices.every((c) => c === 'skip');
+}
+
+/** The summary as one line per kind of change (none when nothing changed). */
+export function summaryLines(s: ImportSummary): string[] {
+  const out: string[] = [];
+  if (s.added.length) out.push(`Added: ${s.added.join(', ')}`);
+  if (s.replaced.length) out.push(`Replaced: ${s.replaced.join(', ')}`);
+  for (const r of s.renamed) out.push(`Kept both: ${r.from}, the new one is "${r.to}"`);
+  if (s.skipped.length) out.push(`Skipped: ${s.skipped.join(', ')}`);
+  return out;
 }
 
 /**

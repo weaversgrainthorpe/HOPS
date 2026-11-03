@@ -23,6 +23,7 @@
   let editPath = $state('');
   let showImport = $state(false);
   let exportingId = $state<string | null>(null);
+  let exportingAll = $state(false);
   let qrDashboard = $state<LayoutDashboard | null>(null);
   let creatingNew = $state(false);
   let newName = $state('');
@@ -140,20 +141,41 @@
     await goto(dashboardHref(dashboard.path));
   }
 
+  /** Every dashboard in one file (dashboards only: not a backup), which Import reads back. */
+  async function handleExportAll() {
+    exportingAll = true;
+    try {
+      const { blob, missing, importWarning } = await exportConfig('json', 'all-dashboards');
+      download(blob, `hops-all-dashboards-${new Date().toISOString().split('T')[0]}.json`);
+      const warning = missingAssetsWarning(missing);
+      if (warning) toast.warning(warning, 0);
+      if (importWarning) toast.warning(importWarning, 0);
+      if (!warning && !importWarning) toast.success('All dashboards exported');
+    } catch (err) {
+      toast.error(err instanceof Error && err.message ? `Export failed: ${err.message}` : 'Export failed');
+    } finally {
+      exportingAll = false;
+    }
+  }
+
+  function download(blob: Blob, filename: string) {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  }
+
   async function handleExport(dashboard: LayoutDashboard) {
     exportingId = dashboard.id;
     try {
       // Export only this specific dashboard
       const { blob, missing, importWarning } = await exportConfig('json', dashboard.id);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
       const safeName = dashboard.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-      a.download = `hops-${safeName}-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      download(blob, `hops-${safeName}-${new Date().toISOString().split('T')[0]}.json`);
       // Pictures left out are said, and stay on screen until dismissed.
       const warning = missingAssetsWarning(missing);
       if (warning) toast.warning(warning, 0);
@@ -175,12 +197,21 @@
         <Icon icon="mdi:tray-arrow-down" width="20" />
         Import
       </button>
+      <button onclick={handleExportAll} class="btn-secondary" disabled={exportingAll || $dashboards.length === 0}>
+        <Icon icon={exportingAll ? 'mdi:loading' : 'mdi:tray-arrow-up'} width="20" class={exportingAll ? 'spin' : ''} />
+        Export all
+      </button>
       <button onclick={handleNew} class="btn-primary">
         <Icon icon="mdi:plus" width="20" />
         New Dashboard
       </button>
     </div>
   </div>
+
+  <p class="export-note" data-testid="export-all-note">
+    <strong>Export all</strong> saves every dashboard in one file, which Import reads back. It is not a backup:
+    a backup is the whole app (settings, icons and so on), in <a href="/settings/backups">Backups</a>.
+  </p>
 
   {#if creatingNew}
     <div class="dashboard-item card new-dashboard-form">
@@ -331,6 +362,16 @@
   h2 {
     margin: 0;
     font-size: 1.5rem;
+  }
+
+  .export-note {
+    margin: -0.75rem 0 1.5rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+  }
+
+  .export-note a {
+    color: var(--accent-text);
   }
 
   .header-actions {

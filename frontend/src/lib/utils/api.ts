@@ -1,6 +1,6 @@
 import type { Config, DashboardSettings } from '$lib/types';
 import type { LayoutDoc, LayoutDashboard } from '$lib/types/layout';
-import type { ImportResult } from './importResult';
+import type { ImportResult, ImportPreview, ImportChoice } from './importResult';
 import { LAYOUT_VERSION } from '$lib/layout/geometry';
 import { checkUploadSize, uploadErrorMessage, sendUpload } from './uploadLimits';
 import { parseLogsResponse, type LogsResponse, type LogLevel, type LineLimit } from '$lib/logs/logView';
@@ -645,12 +645,18 @@ export async function saveDashboardSettings(
  * left out (missingAssetsWarning says so to the user), and why HOPS couldn't import the file back
  * as it is, if it couldn't (too big).
  */
+/**
+ * Export one dashboard (dashboardId), every dashboard and nothing else
+ * ('all-dashboards': Export all), or with neither, the older full export.
+ */
 export async function exportConfig(
   format: 'json' | 'yaml' = 'json',
-  dashboardId?: string
+  dashboardId?: string | 'all-dashboards'
 ): Promise<{ blob: Blob; missing: MissingAsset[]; importWarning: string | null }> {
   let url = `${API_BASE}/config/export?format=${format}`;
-  if (dashboardId) {
+  if (dashboardId === 'all-dashboards') {
+    url += '&scope=dashboards';
+  } else if (dashboardId) {
     url += `&dashboardId=${encodeURIComponent(dashboardId)}`;
   }
 
@@ -667,15 +673,36 @@ export async function exportConfig(
   return { blob: await response.blob(), missing, importWarning };
 }
 
-export async function importConfig(file: File, options?: { autoMatchIcons?: boolean }): Promise<ImportResult> {
+/** Check an import file and list its dashboards (with any name clash); nothing is written. */
+export async function previewImport(file: File): Promise<ImportPreview> {
+  return postImport(file, { preview: 'true' }) as Promise<ImportPreview>;
+}
+
+/**
+ * Import a file. choices (one per dashboard, in file order, from previewImport)
+ * say what to do with each, and targets give the clash ids the preview showed;
+ * the server refuses them if the clashes changed since.
+ */
+export async function importConfig(
+  file: File,
+  options?: { autoMatchIcons?: boolean; choices?: ImportChoice[]; targets?: string[] }
+): Promise<ImportResult> {
+  const fields: Record<string, string> = {};
+  if (options?.autoMatchIcons) fields.autoMatchIcons = 'true';
+  if (options?.choices) fields.choices = JSON.stringify(options.choices);
+  // The clash each dashboard had when checked ('' for none): the server refuses the import if
+  // that has changed since, so a Replace is always of the dashboard the admin saw.
+  if (options?.targets) fields.targets = JSON.stringify(options.targets);
+  return postImport(file, fields) as Promise<ImportResult>;
+}
+
+async function postImport(file: File, fields: Record<string, string>): Promise<unknown> {
   // A file over the import limit is refused before it is sent, naming the limit and its size.
   const refusal = await checkUploadSize('import', file);
   if (refusal) throw new Error(refusal);
   const formData = new FormData();
   formData.append('file', file);
-  if (options?.autoMatchIcons) {
-    formData.append('autoMatchIcons', 'true');
-  }
+  for (const [k, v] of Object.entries(fields)) formData.append(k, v);
 
   const response = await sendUpload(`${API_BASE}/config/import`, {
     method: 'POST',

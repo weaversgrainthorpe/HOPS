@@ -13,7 +13,12 @@ async function importSample(page: Page, file: string) {
   await page.goto('/settings/dashboards');
   await page.getByRole('button', { name: 'Import' }).click();
   await page.locator('input[type="file"][accept=".json,.yml,.yaml"]').setInputFiles(path.join(SAMPLES, file));
-  await page.getByRole('button', { name: /^Import/ }).last().click();
+  // The file is checked and its dashboards listed first; a name already used (left from an
+  // earlier run) needs a choice, so keep both.
+  await page.getByRole('button', { name: 'Next' }).click();
+  await expect(page.getByTestId('import-rows')).toBeVisible();
+  for (const keep of await page.getByRole('radio', { name: /Keep both/ }).all()) await keep.check();
+  await page.getByTestId('import-confirm').click();
 }
 
 async function importedPath(page: Page, name: string): Promise<string> {

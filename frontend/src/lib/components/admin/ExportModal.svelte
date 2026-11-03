@@ -33,7 +33,7 @@
 
     try {
       if (!(await loadAll())) return;
-      const { blob, missing, importWarning } = await exportConfig('json');
+      const { blob, missing, importWarning } = await exportConfig('json', 'all-dashboards');
       downloadBlob(blob, `hops-all-dashboards-${new Date().toISOString().split('T')[0]}.json`);
       // Pictures left out, or a file too big to import back, are said and stay on screen until dismissed.
       const warning = missingAssetsWarning(missing);
