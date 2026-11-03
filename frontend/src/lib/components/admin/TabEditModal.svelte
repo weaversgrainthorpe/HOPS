@@ -119,7 +119,7 @@
 >
   <form id="tab-edit-form" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
     <div class="form-group">
-      <label for="name">Tab Name *</label>
+      <label for="name">Name *</label>
       <input
         id="name"
         type="text"
@@ -131,7 +131,7 @@
 
     <!-- Icon: small preview + button to open the icon sub-modal. -->
     <div class="form-group">
-      <label>Icon (optional)</label>
+      <label>Icon</label>
       <button type="button" class="icon-summary" onclick={() => showIconEditor = true}>
         <span class="icon-preview-tile"
               class:has-bg={iconBgColor}
@@ -160,23 +160,29 @@
       </button>
     </div>
 
-    <ColorPicker
-      selectedColor={color}
-      onSelect={(c) => color = c}
-    />
-    {#if textOn.invalid}
-      <p class="colour-problem" role="status" data-colour-unreadable>Its colour ({color}) can't be read, so the tab shows the theme colour. Choose a colour above.</p>
-    {/if}
+    <section class="dialog-section" aria-labelledby="tab-colour-heading">
+      <h3 id="tab-colour-heading" class="part-title">Colour</h3>
+      <div class="stack">
+        <ColorPicker
+          label="Colour"
+          hideLabel
+          selectedColor={color}
+          onSelect={(c) => color = c}
+        />
+        {#if textOn.invalid}
+          <p class="colour-problem" role="status" data-colour-unreadable>Its colour ({color}) can't be read, so the tab shows the theme colour. Choose a colour above.</p>
+        {/if}
 
-    <OpacitySlider
-      opacity={opacity}
-      onSelect={(o) => opacity = o}
-    />
+        <OpacitySlider
+          label="Background opacity"
+          opacity={opacity}
+          onSelect={(o) => opacity = o}
+        />
 
-    <div class="text-colour-row">
-      <TextColourSetting name="tab-text-color" bind:value={textColor} contrast={textOn.contrastWarning ? textOn.contrast : null}
-        noColourNote={textOn.themed ? 'Text colour applies when the tab has a colour.' : null} />
-    </div>
+        <TextColourSetting name="tab-text-color" bind:value={textColor} contrast={textOn.contrastWarning ? textOn.contrast : null}
+          noColourNote={textOn.themed ? 'Text colour applies when the tab has a colour.' : null} />
+      </div>
+    </section>
 
 
     <StatusCheckSetting level="tab" bind:value={statusSetting} context={statusContext} />
@@ -308,8 +314,23 @@
     color: var(--color-error-text);
   }
 
-  .text-colour-row {
-    margin: 1rem 0 1.5rem;
+  .dialog-section {
+    margin: 1.5rem 0;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .part-title {
+    margin: 0 0 0.85rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .stack {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
   }
 
   .form-group {

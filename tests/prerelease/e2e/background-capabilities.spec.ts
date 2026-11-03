@@ -208,7 +208,7 @@ test.describe('background dialog driven by the capability table', () => {
     await page.goto(f.path);
     await enterEdit(page);
     const tab = await openTabPicker(page);
-    await expect(tab.getByRole('group', { name: /Background Type/ }).getByRole('button')).toHaveText(['None', 'Color', 'Image', 'Slideshow']);
+    await expect(tab.getByRole('group', { name: /Background Type/ }).getByRole('button')).toHaveText(['None', 'Colour', 'Image', 'Slideshow']);
     await expectMotion(tab, true);
     await expect(tab.getByText(/^Overlay Darkness/)).toBeVisible();
     await expect(tab.getByText(/^Overlay Blur/)).toBeVisible();
@@ -219,7 +219,7 @@ test.describe('background dialog driven by the capability table', () => {
 
     const dash = await openDashboardBackground(page);
     await expect(dash.getByRole('switch', { name: 'Show background picture' })).toBeChecked();
-    await expect(dash.getByRole('group', { name: /Background Type/ }).getByRole('button')).toHaveText(['None', 'Color', 'Image', 'Slideshow']);
+    await expect(dash.getByRole('group', { name: /Background Type/ }).getByRole('button')).toHaveText(['None', 'Colour', 'Image', 'Slideshow']);
     await expectMotion(dash, true);
     await expect(dash.getByText(/^Overlay Darkness/)).toBeVisible();
     await expect(dash.locator('[data-motion-notes]')).toHaveCount(0);

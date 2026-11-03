@@ -371,7 +371,7 @@ test.describe('the folder background is pictures only', () => {
     await picker.getByRole('radio', { name: 'Its own picture' }).check();
     const types = picker.getByRole('group', { name: /Picture type/ }).getByRole('button');
     await expect(types).toHaveText(['Image', 'Slideshow']);
-    await expect(picker.getByRole('button', { name: /^Color$/ })).toHaveCount(0);
+    await expect(picker.getByRole('button', { name: /^Colour$/ })).toHaveCount(0);
     await expect(picker.getByRole('button', { name: /^None$/ })).toHaveCount(0);
     // Its own picture with nothing chosen: refused visibly.
     await picker.getByRole('button', { name: 'Save', exact: true }).click();
@@ -387,7 +387,7 @@ test.describe('the folder background is pictures only', () => {
     const tabDlg = page.getByRole('dialog', { name: 'Edit Tab' });
     await tabDlg.getByRole('button', { name: /Configure Tab Background/ }).click();
     const picker = page.getByRole('dialog', { name: 'Tab background' });
-    await expect(picker.getByRole('group', { name: /Background Type/ }).getByRole('button')).toHaveText(['None', 'Color', 'Image', 'Slideshow']);
+    await expect(picker.getByRole('group', { name: /Background Type/ }).getByRole('button')).toHaveText(['None', 'Colour', 'Image', 'Slideshow']);
   });
 
   test('a stored colour background keeps rendering, is shown, and "Use as folder colour" saves it as the folder colour', async ({ page, context }) => {

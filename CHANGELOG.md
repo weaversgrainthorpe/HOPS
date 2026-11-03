@@ -69,6 +69,11 @@ After upgrading, a few things look or behave differently. Details are below.
   says Undo, Discard, Save; Global settings says Discard instead of Revert.
   Delete is the same red everywhere, disabled buttons look the same
   everywhere, and a hovered button stays readable in every colour theme.
+- **Dialogs read the same everywhere.** The tab dialog now has a Colour
+  section like the tile and folder dialogs ("Name", "Icon", "Background
+  opacity"), the colour picker is called Colour (UK spelling) in every
+  dialog, and the top-bar export dialog is "Export dashboards", saying what
+  an export holds and that settings and the theme are in Backups.
 - **One hover popup for tiles and folders.** Hovering a tile or folder, or
   moving to it with the keyboard, shows its name in larger text, then its
   description, then any notes such as the away address. Before, tiles showed

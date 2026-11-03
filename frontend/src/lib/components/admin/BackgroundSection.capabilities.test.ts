@@ -26,7 +26,7 @@ const slideshow = (opacity = 1): Background => ({
 });
 /** The stored background that gives this case's form state (see-through = opacity below 1). */
 const bgFor = (c: BackgroundCase) => slideshow(c.form.seeThrough ? 0.8 : 1);
-const TYPE_LABEL = { none: 'None', color: 'Color', image: 'Image', slideshow: 'Slideshow' } as const;
+const TYPE_LABEL = { none: 'None', color: 'Colour', image: 'Image', slideshow: 'Slideshow' } as const;
 const name = (c: BackgroundCase) => `${c.level} ${JSON.stringify(c.runtime)} ${JSON.stringify(c.form)}`;
 const SEE_THROUGH_NOTE = "A see-through tab uses the dashboard's darkness and blur.";
 

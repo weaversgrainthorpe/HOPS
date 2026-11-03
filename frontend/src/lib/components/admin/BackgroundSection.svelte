@@ -70,7 +70,7 @@
   const openCaps = backgroundCapabilities(level, runtime);
   const TYPE_BUTTONS: Record<PictureType, { icon: string; label: string }> = {
     none: { icon: 'mdi:close-circle-outline', label: 'None' },
-    color: { icon: 'mdi:palette', label: 'Color' },
+    color: { icon: 'mdi:palette', label: 'Colour' },
     image: { icon: 'mdi:image', label: 'Image' },
     slideshow: { icon: 'mdi:view-carousel', label: 'Slideshow' }
   };
@@ -679,7 +679,7 @@
 <!-- Color Picker -->
 {#if backgroundType === 'color'}
   <div class="form-group">
-    <label for="color">Background Color</label>
+    <label for="color">Colour</label>
     <div class="color-row">
       <input id="color" type="color" bind:value={colorValue} class="color-input" />
       <input type="text" bind:value={colorValue} placeholder="#1e293b" class="color-text bg-field" />

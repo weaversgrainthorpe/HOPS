@@ -101,7 +101,7 @@ describe('DashboardEditModal: one dialog, one Save, one Cancel', () => {
 		await screen.findByText('Check timeout (seconds)');
 		await fireEvent.input(screen.getByLabelText(/Custom Title/), { target: { value: 'New title' } });
 		await section('Background');
-		await fireEvent.input(screen.getByLabelText('Background Color'), { target: { value: '#445566' } });
+		await fireEvent.input(screen.getByLabelText('Colour'), { target: { value: '#445566' } });
 		const before = undoDepth();
 		await save();
 		await waitFor(() => expect((draft().header as { centerTitle?: string }).centerTitle).toBe('New title'));

@@ -337,7 +337,7 @@ describe('Dashboard edit mode (the editor shell)', () => {
     // The tab's shared edit handle opens the tab dialog.
     await fireEvent.click(screen.getByRole('button', { name: 'Edit Main tab' }));
     await tick();
-    const name = screen.getByLabelText(/Tab Name/) as HTMLInputElement;
+    const name = screen.getByLabelText('Name *') as HTMLInputElement;
     await fireEvent.input(name, { target: { value: 'Front' } });
     await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Save/ }));
     expect(draft().tabs.find((t) => t.id === 't1')!.name).toBe('Front');
@@ -351,7 +351,7 @@ describe('Dashboard edit mode (the editor shell)', () => {
     enterEdit();
     await tick();
     await fireEvent.click(screen.getByRole('button', { name: /^Add tab/ }));
-    await fireEvent.input(screen.getByLabelText(/Tab Name/), { target: { value: 'Media' } });
+    await fireEvent.input(screen.getByLabelText('Name *'), { target: { value: 'Media' } });
     await fireEvent.click(screen.getByRole('button', { name: /^Create/ }));
     await tick();
     await tick();
@@ -533,16 +533,16 @@ describe('one editing flow: handle, double-click and menu for every item', () =>
     await fireEvent.click(screen.getByRole('button', { name: 'Edit Second tab' }));
     await tick();
     expect(get(editorDialog)).toEqual({ kind: 'tab', id: 't2' });
-    expect((screen.getByLabelText(/Tab Name/) as HTMLInputElement).value).toBe('Second');
+    expect((screen.getByLabelText('Name *') as HTMLInputElement).value).toBe('Second');
     await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Cancel/ }));
     await tick();
     expect(get(editorDialog)).toBeNull();
-    expect(screen.queryByLabelText(/Tab Name/)).toBeNull();
+    expect(screen.queryByLabelText(/Name \*/)).toBeNull();
     // Double-click.
     await fireEvent.dblClick(tabEl);
     await tick();
     expect(get(editorDialog)).toEqual({ kind: 'tab', id: 't2' });
-    expect((screen.getByLabelText(/Tab Name/) as HTMLInputElement).value).toBe('Second');
+    expect((screen.getByLabelText('Name *') as HTMLInputElement).value).toBe('Second');
     editorDialog.set(null);
     await tick();
     // Right-click: the shared menu with Edit, Duplicate, Delete.
@@ -554,7 +554,7 @@ describe('one editing flow: handle, double-click and menu for every item', () =>
     await fireEvent.click(within(menu).getByRole('menuitem', { name: 'Edit' }));
     await tick();
     expect(get(editorDialog)).toEqual({ kind: 'tab', id: 't2' });
-    expect((screen.getByLabelText(/Tab Name/) as HTMLInputElement).value).toBe('Second');
+    expect((screen.getByLabelText('Name *') as HTMLInputElement).value).toBe('Second');
     noRequestsButSettingsRead(fetchSpy);
   });
 

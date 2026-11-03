@@ -22,7 +22,7 @@ describe('ExportModal (m7)', () => {
       ]
     } as Config);
     render(ExportModal, { onClose: () => {} });
-    expect(screen.getByRole('button', { name: /Export All \(3 dashboards\)/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Export all \(3 dashboards\)/ })).toBeInTheDocument();
     for (const n of ['Home', 'Work', 'Fancy']) expect(screen.getByText(n)).toBeInTheDocument();
     expect(screen.getByText('/fancy')).toBeInTheDocument();
     const items = Array.from(document.querySelectorAll('.dashboard-item'));
@@ -48,7 +48,7 @@ describe('ExportModal with only the index of the other dashboards', () => {
     ] } as never);
     vi.mocked(api.getConfig).mockRejectedValue(new Error('HOPS hit an error'));
     render(ExportModal, { onClose: () => {} });
-    await fireEvent.click(screen.getByRole('button', { name: /Export All/ }));
+    await fireEvent.click(screen.getByRole('button', { name: /Export all/ }));
     await waitFor(() => expect(err).toHaveBeenCalledWith("Export failed: couldn't load all your dashboards: HOPS hit an error"));
     expect(api.exportConfig).not.toHaveBeenCalled();
     resetPartialLoadingForTests();

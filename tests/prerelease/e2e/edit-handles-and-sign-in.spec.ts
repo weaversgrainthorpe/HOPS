@@ -536,7 +536,7 @@ test.describe('editing changes in a real browser', () => {
       item: tab,
       handle: 'Edit Two tab',
       dialog: 'Edit Tab',
-      field: page.getByRole('dialog').getByLabel(/Tab Name/),
+      field: page.getByRole('dialog').getByLabel('Name *', { exact: true }),
       value: 'Two'
     });
     // The double-click's clicks switched to the tab — harmless, and still the tab edited.
@@ -717,7 +717,7 @@ test.describe('Escape in edit dialogs (real browser)', () => {
     await page.keyboard.press('Escape');
     await expect(picker).toHaveCount(0);
     await expect(dlg).toBeVisible();
-    await dlg.getByLabel(/Tab Name/).focus();
+    await dlg.getByLabel('Name *', { exact: true }).focus();
     await page.keyboard.press('Escape');
     await expect(dlg).toHaveCount(0);
     await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible(); // edit mode stays on
