@@ -32,9 +32,10 @@ For installing, running as a service, reverse proxies and HTTPS, see the
 18. [Settings](#settings)
 19. [Password and sessions](#password-and-sessions)
 20. [Per-browser preferences](#per-browser-preferences)
-21. [Phones, tablets and touch](#phones-tablets-and-touch)
-22. [Upgrading from HOPS 2](#upgrading-from-hops-2)
-23. [Troubleshooting](#troubleshooting)
+21. [When HOPS can't be reached](#when-hops-cant-be-reached)
+22. [Phones, tablets and touch](#phones-tablets-and-touch)
+23. [Upgrading from HOPS 2](#upgrading-from-hops-2)
+24. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -53,20 +54,29 @@ share a link with the household.
 
 **Signing in.** Click the **pencil** in the top bar (*Sign in to edit this
 dashboard*) or the **gear** (**Settings**). The first sign-in is `admin` /
-`admin`, and HOPS makes you set a new password straight away; see
-[Step 2: Sign in](QUICKSTART.md#step-2-sign-in). Once signed in, a **Log
-out** button sits at the right of the top bar. If the buttons are hidden
-(**Show the edit and Settings buttons when signed out**, under Settings ›
-Global settings › General), go to `/settings` on your HOPS address: it always
-asks for the password. An installed HOPS app always keeps the gear, since it
-has no address bar.
+`admin`, and HOPS makes you **Set a new password** straight away (see
+[Password and sessions](#password-and-sessions)). Every password box has an
+eye button (*Show password* / *Hide password*) to show what you typed; it
+goes back to dots when you submit. Once signed in, a **Log out** button
+sits at the right of the top bar.
+
+**Hiding the buttons from visitors.** **Show the edit and Settings buttons
+when signed out** (**Settings › Global settings › General**) is on by
+default. Turn it off and people who aren't signed in see neither the pencil
+nor the gear. To sign in while they're hidden, go to `/settings` on your
+HOPS address (for example `http://<server>:8080/settings`), so bookmark it:
+that address always asks for the password. An installed HOPS app (see [Open
+HOPS like an app](#open-hops-like-an-app)) always keeps the gear, since it
+has no address bar to type `/settings` into. If HOPS can't read the
+setting, the buttons show. This only hides buttons: who can sign in and
+what they can do stay the same.
 
 Old addresses from HOPS 2 still work where it makes sense: anything under
 `/admin/discovery` goes to the matching page under
 `/settings/discovery`.
 
-The port is 8080 unless you changed it under **Settings › Global settings ›
-Server › Port** (see [Change the port](QUICKSTART.md#change-the-port)).
+The port is 8080 unless you changed it (see [Changing the
+port](#changing-the-port)).
 
 ---
 
@@ -87,18 +97,19 @@ Dashboard        one page with its own path, e.g. /home
 
 Everything about the list of dashboards is on **Settings › Dashboards**:
 
-- **New Dashboard**: type a **Name**; the **URL Path** fills itself in from
+- **New dashboard**: type a **Name**; the **URL path** fills itself in from
   the name (`Home` becomes `/home`) and you can change it. Click **Save**.
   A new dashboard starts with one empty tab called *Home*. With no
-  dashboards at all, the page shows **Create Your First Dashboard**
+  dashboards at all, the page shows **Create your first dashboard**
   instead.
-- **Import**: see [Import and export](#import-and-export).
+- **Import** and **Export all**: see [Import and export](#import-and-export).
 - Each dashboard in the list has these buttons:
-  - **Move up** / **Move down**: the order of the list. The top dashboard
-    is the one `/` opens.
-  - **Rename**: change the **Name** and the **URL Path**.
+  - **To the top**, **Up**, **Down** and **To the bottom**: the order of
+    the list. The top dashboard is the one `/` opens.
+  - **Rename**: change the **Name** and the **URL path**.
   - **Tab order**: a page for reordering that dashboard's tabs; see [Tab order](#tab-order).
-  - **Export**: download that dashboard as a HOPS JSON file.
+  - **Export**: download that dashboard as a HOPS JSON file (see
+    [Export](#export)).
   - **Show QR code (scan with phone)**: see [QR codes](#qr-codes).
   - **Open in new tab**.
   - **Delete**: asks first. There is no undo, but HOPS takes a backup
@@ -121,20 +132,22 @@ its own pages: `/add`, `/admin`, `/settings`, `/api`, `/icons`,
 For moving a tab a long way, or rearranging many, use **Tab order** on the
 dashboard's row in **Settings › Dashboards** (dragging tabs on the dashboard
 is still the quick way for a small move). It lists every tab with its
-position, and nothing changes on the dashboard until you **Save order**.
+position, and nothing changes on the dashboard until you click **Save**.
 
 - **Move a tab**: drag a row by its handle, or use the buttons on the row:
-  **↑** and **↓** move it one place, **⤒** and **⤓** send it to the top or
-  the bottom. The **Find a tab** box narrows the list; the numbers still
-  show each tab's real position.
+  **Up** and **Down** move it one place, **To the top** and **To the
+  bottom** send it to either end (the same buttons as the dashboard list).
+  The **Find a tab** box narrows the list; the numbers still show each
+  tab's real position.
 - **Move several together**: tick their boxes, then **Move ticked to top**,
   **Move ticked to bottom**, or type a position and click **Move**. Dragging
   any ticked row moves all the ticked rows. They keep their order relative
   to each other.
 - **Sort A→Z** puts every tab in name order (capitals ignored, "Tab 2"
   before "Tab 10").
-- **Undo** takes back the last move (a sort is one step). **Discard
-  changes** goes back to the saved order. **Save order** saves it.
+- **Undo** takes back the last move (a sort is one step). **Discard** goes
+  back to the saved order. **Save** saves it. Leaving the page with unsaved
+  changes warns you once, and each move is announced to screen readers.
 
 Saving is refused, with the reason, while that dashboard is open for
 editing or has unsaved changes kept from a sign-out: save or discard those
@@ -160,10 +173,18 @@ Delete it from **Settings › Dashboards** when you're done with it. A
   the [header](#header) shows custom text there).
 - Or go straight to the address, such as `http://<server>:8080/media`.
 
+**The dashboard you open loads first.** HOPS loads only that dashboard
+before showing it, so it appears quickly even in a big setup. The others
+arrive in the background. Until they have, HOPS says *Loading the other
+dashboards…* where it needs them (Search, for example, says it searched
+"the loaded dashboards"). If they can't be loaded, it says so, with
+**Retry**. Editing, exporting and the pencil wait until every dashboard has
+loaded, and say so.
+
 ### A dashboard's own settings
 
 In [edit mode](#the-editor), the **Dashboard** button in the toolbar opens
-**Edit Dashboard**, in three parts:
+**Edit dashboard**, in three parts:
 
 - **Header**: see [Header](#header).
 - **Background**: see [Backgrounds](#backgrounds).
@@ -191,26 +212,39 @@ sideways and four arrows appear at its ends: **«** and **»** jump to the
 first and last tab, **‹** and **›** move about one screenful. The arrows only
 scroll the row; they never change the open tab. You can also scroll with the
 mouse wheel or by swiping, and the open tab is always scrolled into view.
-Keyboard: with a tab focused, Left/Right and Home/End move to another tab.
+The arrows are 44 pixels, so they are easy to hit on a touch screen.
+
+Keyboard: the Tab key stops once on the row of tabs; then Left, Right, Home
+and End move between them (in edit mode too).
+
+A coloured tab shows hover with an outline instead of brightening, so it
+keeps its colour and its text stays readable.
 
 In edit mode:
 
-- **Add tab** (toolbar) opens **New Tab**.
+- **Add tab** (toolbar) opens **New tab**.
 - To change a tab, click the pencil next to its name, or right-click it.
   The menu has **Edit**, **Duplicate** and **Delete**.
-- Drag a tab's name to reorder the tabs.
+- Drag a tab's name to reorder the tabs. Hold a dragged item over a tab's
+  name, even one at the end of the row, to open that tab and drop it
+  there.
+- A tab colour HOPS can't read is marked, and a line under the tabs says
+  which tab and why.
 
-The tab dialog has:
+The tab dialog (**New tab** or **Edit tab**) has:
 
-| Field | Notes |
-|-------|-------|
-| **Tab Name** | Required. |
-| **Icon (optional)** | **Edit icon** opens the icon editor (see [Icons](#icons)). |
-| **Background Color** and **Opacity** | The tab's own colour. *None* uses the theme's. |
-| **Status checks for tiles in this tab** | **Enabled** or **Disabled**. Disabled stops every check on the tab. See [Status checks](#status-checks). |
-| **Configure Tab Background** | **Same as the dashboard** or **Its own background**. See [Backgrounds](#backgrounds). |
+| Part | Field | Notes |
+|------|-------|-------|
+| | **Name** | Required. |
+| | **Icon** | **Edit icon** opens the icon editor (see [Icons](#icons)). |
+| **Colour** | **Colour** | The tab's own colour. *None* uses the theme's. |
+| | **Background opacity** | How see-through the tab's colour is. |
+| | **Text colour** | *Auto* (default), *Light*, *Dark*. See [Text colour](#text-colour). |
+| | **Status checks for tiles in this tab** | **Enabled** or **Disabled**. Disabled stops every check on the tab. See [Status checks](#status-checks). |
+| | **Configure tab background** | **Same as the dashboard** or **Its own background**. See [Backgrounds](#backgrounds). |
 
-The dialog's footer has **Delete** and **Duplicate** for an existing tab.
+The dialog's footer has **Delete** and **Duplicate** for an existing tab,
+then **Cancel** and **Create** (new tab) or **Save**.
 
 A dashboard holds at most 200 tabs.
 
@@ -230,26 +264,27 @@ or both.
 
 - **Add folder** in the toolbar, or **Add folder here** when you right-click
   inside a folder or on a tab's empty space.
-- Drag one tile onto the middle of another and hold: the cue says *Hold to
-  make a folder*, then *Make a folder*. Let go, and the new folder's
-  dialog opens.
+- Drag one tile onto the middle of another and hold it there for half a
+  second: the cue says *Hold to make a folder*, then *Make a folder*. Let
+  go, and the new folder's dialog opens.
 
-Step by step: [Add folders](QUICKSTART.md#add-folders).
+Step by step: [Make a folder, two ways](QUICKSTART.md#make-a-folder-two-ways).
 
 ### The folder dialog
 
-**Edit Folder** (or **New Folder**) has these parts:
+**Edit folder** (or **New folder**) has these parts:
 
 | Part | Field | Choices and defaults |
 |------|-------|----------------------|
-| | **Folder name** | Required. |
-| | **Icon (optional)** | **Edit icon**; see [Icons](#icons). |
-| | **When minimised, show** | *Icons inside* (default): the folder tile previews the items inside. *Its own icon*: it shows the icon above instead. With no icon set, it keeps showing the icons inside, and the dialog says so. |
+| | **Name** | Required. |
+| | **Description** | Optional. Shown when you hover over the folder (see [The hover popup](#the-hover-popup)). Up to 2,000 characters. |
+| | **Icon** | **Edit icon**; see [Icons](#icons). |
+| | **When minimised, show** | *Icons inside* (default): the folder tile previews the items inside. *Its own icon*: it shows the folder's icon instead. With no icon set, it keeps showing the icons inside, and the dialog says so. |
 | **Look** | (the shape) | *Rounded box*, *Simple tab*, *Folder (flat)*, *Folder with paper*, *Folder (outlined)*, *Folder (cartoon)*, *Folder (open flap)*. Each has a live preview. A folder you make with **Add folder** starts as *Folder (flat)*. |
 | | **Tab position** | *Left*, *Centre*, *Right*. Every look except Rounded box has a tab. |
-| **Colour** | **Folder colour** | A swatch, **Custom** (any colour), or *None* for the theme's colour. |
-| | **Opacity** | How see-through the folder is. |
-| | **Text colour** | *Auto* (default), *Light*, *Dark*. HOPS warns when the text would be hard to read on the colour. |
+| **Colour** | **Colour** | A swatch, **Custom** (any colour), or *None* for the theme's colour. |
+| | **Background opacity** | How see-through the folder is. An outlined folder is see-through, so its colour draws only the outline: Background opacity is hidden for it, and the dialog says why. |
+| | **Text colour** | *Auto* (default), *Light*, *Dark*. See [Text colour](#text-colour). |
 | **Display** | **Starts** | *Expanded* or *Collapsed*: how the folder looks to anyone who hasn't minimised or opened it themselves. |
 | | **Contents size** | *Small*, *Medium*, *Large*. Every tile and folder inside is shown at this size. |
 | | **Size when minimised** | *Small*, *Medium*, *Large*: the size of its folder tile when minimised. |
@@ -258,7 +293,14 @@ Step by step: [Add folders](QUICKSTART.md#add-folders).
 | **Background** | **Background…** | A picture or slideshow inside the folder. See [Folder backgrounds](#folder-backgrounds). |
 | **Move or copy** | **Move or copy to…** | See [Move/Copy to…](#movecopy-to). |
 
-The footer has **Delete** and **Duplicate** for an existing folder.
+The footer has **Delete** and **Duplicate** for an existing folder, then
+**Cancel** and **Create** or **Save**. **Duplicate** waits until you have
+saved the dialog's changes (*Save your changes before duplicating.*), so
+the copy is never of a half-edited folder.
+
+A minimised folder shows its name in its tab, as it does when open. A
+*Rounded box*, or a folder too small for a readable tab, shows its name at
+the top, like a tile.
 
 ### Open and minimised
 
@@ -332,25 +374,56 @@ Windows Terminal) before SSH tiles open anything.
 | Field | Types | Notes |
 |-------|-------|-------|
 | **Name** | all | Required. For a Note, the heading. |
-| **Subtitle/Description** | Link, SSH | Small text under the name. For a Note this field is **Body text**. |
+| **Description** | Link, SSH | Small text under the name, also shown in the [hover popup](#the-hover-popup). Up to 2,000 characters. For a Note this field is **Body text**. |
 | **Address** | Link | The home address, e.g. `http://192.168.1.1`. HOPS says under the field if it can't open what you typed. |
 | **Away address (optional)** | Link | See [Home and away](#home-and-away). |
 | **Host**, **Port**, **User** | SSH | **Port** is 22 if left blank; **User** is optional. |
 | **Away host (optional)**, **Away port** | SSH | See [Home and away](#home-and-away). |
 | **Icon** | Link, SSH | **Edit icon**; see [Icons](#icons). |
-| **Background Color** | all | A swatch, **Custom**, or *None* for the theme's colour. |
-| **Background opacity** | all | Fades the tile's background only. |
-| **Text opacity** | all | Fades the text. |
-| **Icon opacity** | Link, SSH | Fades the icon. The status badge is never faded. |
-| **Size** | all | *Small*, *Medium* (default), *Large*. |
-| **Open Mode** | Link | See [Open modes](#open-modes). SSH tiles always open in place. |
+| **Colour** › **Colour** | all | A swatch, **Custom**, or *None* for the theme's colour. |
+| **Colour** › **Background opacity** | all | Fades the tile's background only. |
+| **Colour** › **Text colour** | all | *Auto* (default), *Light*, *Dark*. See [Text colour](#text-colour). |
+| **Colour** › **Text opacity** | all | Fades the text. |
+| **Colour** › **Icon opacity** | Link, SSH | Fades the icon. The status badge is never faded. |
+| **Display** › **Size** | all | *Small*, *Medium* (default), *Large*. |
+| **Display** › **Open mode** | Link | See [Open modes](#open-modes). SSH tiles always open in place. |
 | **Status check** | Link, SSH | **On** or **Off** (Off by default). See [Status checks](#status-checks). |
-| **Move or copy to…** | all | See [Move/Copy to…](#movecopy-to). |
+| **Move or copy** › **Move or copy to…** | all | See [Move/Copy to…](#movecopy-to). |
 
 Greyed italic text in an empty field is only an example, not a value.
 
-The footer has **Delete**, **Cancel**, and **Create** (new tile) or
-**Save**.
+The tile dialog has the same sections, in the same order, as the folder
+dialog (Colour, Display, Status check, Move or copy).
+
+The footer has **Delete** and **Duplicate** for an existing tile, then
+**Cancel** and **Create** (new tile) or **Save**. **Duplicate** waits until
+you have saved the dialog's changes (*Save your changes before
+duplicating.*), so the copy is never of a half-edited tile.
+
+On a tile, the name sits at the top and the icon fills the rest, with room
+kept for one line of description, so tiles in a row line up whether or not
+they have one. A long one-word name shrinks to fit, and a joined-up name
+such as "HomeAssistant" breaks at its capital rather than mid-word.
+
+### Text colour
+
+Tiles, folders and tabs all have the same **Text colour** choice:
+
+- **Auto** (the default): whichever of black or white is easier to read on
+  the colour you picked. With no colour, the theme's text is used.
+- **Light** or **Dark**: always white, or always black. If that would be
+  hard to read on the colour, the dialog warns you (*Light text is hard to
+  read on this colour…*) and suggests Auto or another colour.
+
+Upgraded from HOPS 3.0? Some coloured tiles and tabs may now show black
+text, because Auto picks the more readable one. Set **Text colour** to
+*Light* to keep white.
+
+### The hover popup
+
+Hover over a tile or folder, or move to it with the keyboard, and a popup
+shows its name in larger text, then its description, then any notes (such
+as its away address). It is hidden while you drag in edit mode.
 
 ### Sizes and the grid
 
@@ -365,14 +438,14 @@ are pushes them aside.
 
 ### Open modes
 
-**Open Mode** decides what clicking a Link tile does:
+**Open mode** decides what clicking a Link tile does:
 
-- **New Tab** (default): opens the address in a new browser tab.
-- **Same Tab**: replaces HOPS with the service.
-- **iFrame Modal**: shows the service in a window on top of HOPS. Some
-  sites refuse to be shown inside another page; use New Tab for those.
-- **Popup Modal**: asks first, with **Open in New Tab** and **Open in Same
-  Tab**.
+- **New tab** (default): opens the address in a new browser tab.
+- **Same tab**: replaces HOPS with the service.
+- **iFrame modal**: shows the service in a window on top of HOPS. Some
+  sites refuse to be shown inside another page; use New tab for those.
+- **Popup modal**: asks first, with **Open in new tab** and **Open in same
+  tab**.
 
 ### Icons
 
@@ -381,7 +454,7 @@ are pushes them aside.
 - Type a name for suggestions (↑/↓ to move, Tab or Enter to accept), for
   example `mdi:server`. Any icon name from
   [iconify.design](https://iconify.design) works.
-- **Browse** opens **Choose an Icon**, the icon library, with categories,
+- **Browse** opens **Choose an icon**, the icon library, with categories,
   your uploads and your recently used icons.
 - **Upload** adds your own image (PNG, JPG, GIF, WebP or SVG; up to 2 MB
   by default, set under **Settings › Global settings › Uploads › Largest
@@ -409,27 +482,31 @@ add your own categories under **Your categories**.
 
 ![Edit mode, with the toolbar and a selection](docs/screenshots/edit-mode.png)
 
-Click the **pencil** in the top bar (*Enter Edit Mode*) to start editing the
+Click the **pencil** in the top bar (*Enter edit mode*) to start editing the
 dashboard you're on. It turns into an **Editing** badge; click it again to
-leave edit mode. Step-by-step introduction: [Edit
-mode](QUICKSTART.md#edit-mode).
+leave edit mode. Step-by-step introduction: [Build your first
+dashboard](QUICKSTART.md#step-3-build-your-first-dashboard).
 
 ### The toolbar
 
-Pinned to the bottom of the screen while you edit:
+Pinned to the bottom of the screen while you edit, from left to right:
 
 | Button | What it does |
 |--------|--------------|
-| **Save** (Ctrl+S) | Stores your draft. A *Changes saved* message confirms it. |
-| **Discard** | Throws away everything since the last save. Asks first (*Discard changes?*); **Keep editing** backs out. |
-| **Undo** (Ctrl+Z) / **Redo** (Ctrl+Shift+Z or Ctrl+Y) | One step at a time: a drag, a resize, a delete, or everything changed in one dialog. |
-| *Unsaved changes* | Shows while your draft differs from what is saved. |
 | **Add tile**, **Add folder**, **Add tab** | Adds to the tab (or the open folder) you're looking at. |
 | **Dashboard** | The dashboard's **Header**, **Background** and **Settings**. |
+| *Unsaved changes* | Shows while your draft differs from what is saved. |
+| **Undo** (Ctrl+Z) / **Redo** (Ctrl+Shift+Z or Ctrl+Y) | One step at a time: a drag, a resize, a delete, or everything changed in one dialog. |
+| **Discard** | Throws away everything since the last save. Asks first (*Discard changes?*); **Keep editing** backs out. |
+| **Save** (Ctrl+S) | Stores your draft. A *Changes saved* message confirms it. |
+
+Save is always at the right-hand end, as in every dialog (Cancel, then the
+main action). On a narrow screen the toolbar scrolls sideways and Save
+stays in view. Notices sit above the toolbar, so they never cover Save.
 
 On a Mac, use Cmd where this guide says Ctrl.
 
-While editing, an **Export Dashboard** button also appears in the top bar
+While editing, an **Export dashboard** button also appears in the top bar
 (see [Export](#export)).
 
 ### Selection
@@ -547,7 +624,7 @@ sees it, and nothing is stored until you click **Save**.
   Choose **Reload (lose my draft)** or **Keep editing**.
 - **Signed out while editing.** Unsaved changes are kept while the page
   stays open. A banner says so; sign in, open that dashboard and click Edit
-  to get them back, or click **Discard them**.
+  to get them back, or click **Discard** in the banner.
 - HOPS takes a backup before every save (see [Backups](#backups)).
 
 ### Keyboard shortcuts
@@ -583,13 +660,13 @@ change.
 
 A background can go behind the whole dashboard, behind one tab, or inside
 one folder. Each is part of your draft like any other change: save the
-dialog, then click **Save** in the toolbar. Step by step:
-[Backgrounds](QUICKSTART.md#backgrounds).
+dialog, then click **Save** in the toolbar. Step by step: [A background
+picture](QUICKSTART.md#a-background-picture).
 
 | Level | Where | First choice |
 |-------|-------|--------------|
 | Dashboard | **Dashboard › Background** | **Show background picture** on or off |
-| Tab | Tab dialog › **Configure Tab Background** | **Same as the dashboard** or **Its own background** |
+| Tab | Tab dialog › **Configure tab background** | **Same as the dashboard** or **Its own background** |
 | Folder | Folder dialog › **Background…** | **No picture of its own — show what's behind** or **Its own picture** |
 
 Turning a background off keeps its settings, so you can turn it on again
@@ -597,39 +674,40 @@ later.
 
 ### Background types
 
-**Background Type** (for a folder: **Picture type**):
+**Background type** (for a folder: **Picture type**):
 
 - **None**: no background (dashboard and tab).
-- **Color**: one plain colour (dashboard and tab; a folder's colour is
+- **Colour**: one plain colour (dashboard and tab; a folder's colour is
   set in the folder dialog).
 - **Image**: one picture.
 - **Slideshow**: several pictures in turn.
 
 For pictures:
 
-- **Image Gallery**: pictures that come with HOPS, in categories such as
+- **Image gallery**: pictures that come with HOPS, in categories such as
   Network, Servers, Homelab and Space. They work with no internet
   connection.
 - **Upload**: your own JPEG, PNG, GIF or WebP, up to 25 MB by default
   (**Settings › Global settings › Uploads › Largest background upload**).
   Uploads appear in the gallery for reuse.
 - **Image URL**: a picture on another site.
-- **Image Fit**: *Cover* (fills the area, may crop), *Contain* (whole
+- **Image fit**: *Cover* (fills the area, may crop), *Contain* (whole
   picture visible, may leave bars) or *Fill* (stretches).
-- **Overlay Darkness** and **Overlay Blur**: darken and soften the picture
+- **Overlay darkness** and **Overlay blur**: darken and soften the picture
   so tiles stay readable.
-- **Background opacity**: fades the background itself.
+- **Background opacity** (for a folder: **Picture opacity**): fades the
+  background itself.
 
-For a slideshow, click pictures to add them to **Selected Images**, then
+For a slideshow, click pictures to add them to **Selected images**, then
 set:
 
-- **Rotation Interval (seconds, 5–3600)**;
-- **Transition Effect**: Crossfade, Slide, Slide Up, Slide Down, Zoom In,
-  Zoom Out, Fade Black, Blur, Flip, Swirl, Wipe, Curtain, Circle, Diamond,
+- **Rotation interval (seconds, 5–3600)**;
+- **Transition effect**: Crossfade, Slide, Slide up, Slide down, Zoom in,
+  Zoom out, Fade black, Blur, Flip, Swirl, Wipe, Curtain, Circle, Diamond,
   Dissolve, Flash, Glitch, Ken Burns, Instant, or Random;
-- **Transition Duration**.
+- **Transition duration**.
 
-Click **Save Background**.
+Click **Save**.
 
 ### Folder backgrounds
 
@@ -661,9 +739,9 @@ dashboard or the tab.
 
 **Dashboard › Header** controls the top bar's left and centre:
 
-- **Show left section**, with **Custom Text (optional)**. Empty shows the
+- **Show left section**, with **Custom text (optional)**. Empty shows the
   HOPS logo and links to your dashboards.
-- **Show center title**, with **Custom Title (optional)**. Empty shows the
+- **Show centre title**, with **Custom title (optional)**. Empty shows the
   dashboard's name.
 
 The right of the top bar is always there. From left to right it can hold:
@@ -673,11 +751,11 @@ The right of the top bar is always there. From left to right it can hold:
 | **Home** / **Away** | when the dashboard has a tile with an away address | See [Home and away](#home-and-away). |
 | **Search** | always | See [Search](#search). |
 | **Decrease text size** / **Increase text size** (the two **A** buttons) | on dashboards | *Small*, *Medium*, *Large*, *Extra Large*. Kept in this browser. |
-| **Theme Settings** | always | **Brightness Mode** (*Dark*, *Light*, *Auto*), **Theme Preset** (Default, Metallic, Modern, Subtle, Cyberpunk, Sunset, Ocean, Forest), **Show recently used** and **Clear history**. Click **Apply Theme**. Kept in this browser. |
-| **Export Dashboard** | while editing | See [Export](#export). |
+| **Theme settings** | always | **Brightness mode** (*Dark*, *Light*, *Auto*), **Theme preset** (Default, Metallic, Modern, Subtle, Cyberpunk, Sunset, Ocean, Forest), **Show recently used** and **Clear history**. Click **Apply theme**. Kept in this browser. |
+| **Export dashboard** | while editing | Opens **Export dashboards**. See [Export](#export). |
 | **pencil** / **Editing** | on dashboards, not on phones (signed out, unless hidden by the setting below) | Sign in, or enter and leave edit mode. |
 | **Help** | signed in | Keyboard shortcuts and features. |
-| **About HOPS** | signed in | The version, the data folder and what HOPS can do. |
+| **About HOPS** | signed in | The version, the data folder, whether this browser has an [offline copy](#when-hops-cant-be-reached), and what HOPS can do. |
 | **Settings** (gear) | always, unless hidden while signed out by **Show the edit and Settings buttons when signed out** (an installed HOPS app always keeps it) | Settings (asks you to sign in). |
 | **Log out** | signed in (on a phone, in Settings) | Signs this browser out. |
 
@@ -779,14 +857,19 @@ Click **Search** or press `/`.
 - ↑ and ↓ move through the results. **Enter** opens the tile (as a click
   would, including [Home/Away](#home-and-away)). **Shift**+**Enter** (or
   Shift-click or Ctrl-click) shows where it lives instead: HOPS switches
-  to its tab and opens the folders around it. **Esc** closes search.
+  to its tab and opens the folders around it.
+- **Esc** closes search wherever you are in it. The **Esc** hint in the
+  search box is a button too, so you can click or tap it.
+- While the other dashboards are still loading (see [Switching
+  dashboards](#switching-dashboards)), it says it searched "the loaded
+  dashboards".
 
 ---
 
 ## QR codes
 
 On **Settings › Dashboards**, click a dashboard's QR button (*Show QR code
-(scan with phone)*). The **QR Code** dialog shows:
+(scan with phone)*). The **QR code** dialog shows:
 
 - a code to scan with a phone's camera;
 - the full address, with **Copy URL**;
@@ -933,7 +1016,7 @@ are the broadcast-discovered ones (TVs, speakers, some smart-home devices).
 
 ### Starting a scan
 
-**Settings › Discovery › New Scan** opens **New Discovery Scan**:
+**Settings › Discovery › New scan** opens **New discovery scan**:
 
 - **Targets to scan**: add one or more of:
   - **CIDRs**: `192.168.1.0/24` (anything from /16 to /32);
@@ -951,7 +1034,10 @@ are the broadcast-discovered ones (TVs, speakers, some smart-home devices).
   Nginx Proxy Manager, Traefik), enter its domain, e.g. `home.arpa`. HOPS
   then tries well-known names such as `sonarr.home.arpa`, so services behind
   a reverse proxy are found. This step gives up after about a minute, so a
-  wildcard DNS record can't stall a scan.
+  wildcard DNS record can't stall a scan. If your domain answers for any
+  name at all, HOPS keeps only names whose page differs from that of a
+  made-up name (an empty page doesn't count), and the scan says the domain
+  answers every name.
 - **Scan intensity**:
   - **Passive only**: mDNS, UPnP, the ARP cache, DNS names and an SNMP
     query. No web-port probes. Finds things that announce themselves.
@@ -991,9 +1077,14 @@ category before adding it.
 
 - **Select all**, **Select none** and **Select all high-confidence** (a
   good start).
-- Compare with the previous scan of the same range: **New only**, **All**
-  or **Gone**. A gone service that was a tile on a dashboard is flagged:
-  that tile may be dead.
+- Compare with the previous scan of the same range: **New or changed**,
+  **All** or **Gone**. Each name is compared with itself, so names that
+  share one proxy's address aren't called "changed" when they aren't. A
+  gone service that was a tile on a dashboard is flagged: that tile may be
+  dead. Results already offered in the last scan aren't ticked for you.
+- The selected count and **Promote** only take in the rows you can see.
+  Ticks on rows the filter hides are kept, and a line says how many there
+  are, with **Show all**.
 - A service that is already a tile on one of your dashboards is marked and
   won't be added again.
 - Each row can copy its address or open it in a new tab.
@@ -1011,7 +1102,7 @@ with the same name is reused). Into a folder, all the tiles go into it.
 Click **Promote**.
 
 At the top of a draft: **Re-scan** runs the same scan again; **Edit &
-re-scan** opens **New Scan** filled in with this draft's targets,
+re-scan** opens **New scan** filled in with this draft's targets,
 intensity, domain and label, so you can add an exclusion or change the
 intensity first. **Cancel scan** stops a running scan; **Delete** removes
 the draft.
@@ -1062,27 +1153,87 @@ Changes apply to the next scan you start.
 
 ## Import and export
 
+Export and import move dashboards between HOPS installs, or bring them in
+from another dashboard app. They hold dashboards only. To save or move
+everything (settings, theme, icons library, password), use
+[Backups](#backups).
+
+### Export
+
+- **Export all**, at the top of **Settings › Dashboards**, saves every
+  dashboard in one file.
+- **Export** next to a dashboard on **Settings › Dashboards** saves just
+  that one.
+- **Export dashboard** in the top bar, while editing, opens **Export
+  dashboards**, with **Export all** and **Export one dashboard**. It saves
+  the same files.
+
+An export is a HOPS JSON file holding the dashboards with their tabs,
+folders and tiles, and the uploaded icons and background pictures they
+use, so it can be imported into another HOPS. Settings, the theme and the
+icons library are not included: they are in a backup (**Settings ›
+Backups**). An export is not a backup.
+
+Exporting waits until every dashboard has loaded (see [Switching
+dashboards](#switching-dashboards)).
+
+A very large setup (more than about 12,000 tiles in all, or bigger than
+**Largest import**) can't be imported back as one file, so that a small
+machine such as a Pi Zero isn't run out of memory. The export still
+downloads, and HOPS says so. To move a setup that big to another HOPS, use
+[Backups](#backups): they move a setup of any size.
+
 ### Import
 
-On **Settings › Dashboards**, click **Import**, then **Select File**. The
-**Import Configuration** dialog reads:
+On **Settings › Dashboards**, click **Import**. The **Import dashboards**
+dialog reads:
 
 | Format | File | How it comes in |
 |--------|------|-----------------|
-| **HOPS JSON** (HOPS 3) | An export from HOPS 3 | As it was. |
-| **HOPS JSON** (HOPS 2) | An export from HOPS 2 | Converted: each group becomes a folder (see [What changes](#what-changes)). |
+| **HOPS export** (HOPS 3) | **Export all**, or a single-dashboard export | As it was. |
+| **HOPS export** (HOPS 2) | An export from HOPS 2 | Converted: each group becomes a folder (see [What changes](#what-changes)). |
 | **Homer YAML** | Homer's `config.yml` | One dashboard; each Homer service group becomes a folder. |
 | **Dashy YAML** | Dashy's `conf.yml` | One dashboard; each section becomes a folder. |
 | **Heimdall JSON** | Heimdall's list of apps (signed in to Heimdall, open `http://<your-heimdall>/api/item` and save the page as a `.json` file) | A dashboard called *Heimdall Import*; each tag becomes a folder; untagged apps go in *Services*. |
 
 HOPS works out the format by itself.
 
-- **Auto-match icons** (ticked by default) finds icons from the tile names
-  for tiles whose icon HOPS can't use.
-- Imported dashboards are **added next to yours, never over them**. If a
-  path is taken, the new one gets a suffix (`/home` becomes `/home-1`).
-- Anything that couldn't come across is listed when the import finishes,
-  so nothing is lost silently. For example:
+1. Click **Select file** and choose one file. (Choosing more than one at
+   once is refused, rather than quietly importing only the first.)
+2. **Auto-match icons** (ticked by default) finds icons from the tile names
+   for tiles whose icon HOPS can't use.
+3. Click **Next**. HOPS checks the file and lists its dashboards, with each
+   one's path and number of tabs. **Nothing is imported yet.**
+4. Choose what happens to each dashboard:
+   - One with the same name as a dashboard you have: **Replace** (yours is
+     swapped for the one in the file), **Keep both** (the new one gets a
+     number, like "Home (2)") or **Skip**. Replace keeps your dashboard's
+     address, so links and bookmarks to it still work.
+   - Any other: **Add** or **Skip**. So you can take just part of an
+     **Export all** file.
+
+   If every dashboard is set to Skip, there is nothing to import, and the
+   dialog says so. **Back** goes back to choose another file.
+5. Click **Import**. A summary says what was added, replaced, renamed and
+   skipped.
+
+Good to know:
+
+- **Nothing is half-imported.** If any dashboard in the file is broken,
+  nothing is imported, and HOPS says which dashboard and why.
+- **A file HOPS can't read is named for what it is.** A cut-off or damaged
+  file, an empty file, and an export from a newer HOPS each get their own
+  message, saying what to do (export it again, or update HOPS).
+- **A backup file is not imported here.** HOPS says it is a backup and
+  points you to **Settings › Backups**, where you restore it.
+- **Parts HOPS doesn't recognise.** If a HOPS file has fields this HOPS
+  doesn't know (from a newer or changed version, say), they are still
+  imported, and HOPS lists them for each dashboard before and after the
+  import.
+- **Paths.** Kept where they are free. If a path is taken by a dashboard
+  you keep, the new one gets a suffix (`/home` becomes `/home-1`).
+- **What couldn't come across** is listed when the import finishes, so
+  nothing is lost silently. For example:
   - icons HOPS can't draw (Font Awesome, emoji, an image on the old
     dashboard's own server) get a generic icon (or a matched one);
   - Dashy widgets are left out (a section with only widgets is not
@@ -1091,40 +1242,23 @@ HOPS works out the format by itself.
   - Dashy pages kept in other files must be imported one by one;
   - Heimdall apps with several tags go into their first tag's folder;
   - Heimdall "enhanced app" settings (which can hold API keys) are never
-    imported.
+    imported;
+  - HOPS 2 settings with no HOPS 3 equivalent (see [What
+    changes](#what-changes)).
 - If only part of a file could be imported, HOPS says *Imported, but not
   everything succeeded* and what was left out.
-- Tiles imported from Homer, Dashy and Heimdall arrive with status checks
-  **Off**. HOPS 2 tiles that had checks ticked are **On**, the rest **Off**
-  (see [Blocked status checks](#blocked-status-checks)). A HOPS 3 export
-  keeps its own settings.
-- Files up to 50 MB are accepted by default (**Settings › Global settings ›
-  Uploads › Largest import**). Very deeply nested files, or files with an
-  enormous number of entries, are refused with a reason.
+- **Status checks.** Tiles imported from Homer, Dashy and Heimdall arrive
+  with status checks **Off**. HOPS 2 tiles that had checks ticked are
+  **On**, the rest **Off** (see [Blocked status
+  checks](#blocked-status-checks)). A HOPS 3 export keeps its own settings.
+- **Size.** Files up to 50 MB are accepted by default (**Settings › Global
+  settings › Uploads › Largest import**). Very deeply nested files, or
+  files with an enormous number of entries, are refused with a reason.
+  Tile and folder descriptions longer than 2,000 characters are refused,
+  and the message names the item.
 
 Import is **not** the way to upgrade from HOPS 2: see [Upgrading from HOPS
 2](#upgrading-from-hops-2).
-
-### Export
-
-- **Export** next to a dashboard on **Settings › Dashboards** downloads that
-  dashboard.
-- **Export Dashboard** in the top bar while editing opens **Export
-  Configuration**, with **Export All Dashboards** and **Export Individual
-  Dashboard**.
-
-An export is a HOPS JSON file that carries your uploaded icons and
-background pictures with it, so it can be imported into another HOPS.
-Import it with **Import** above.
-
-An export is not a backup. It holds dashboards only, not your settings,
-password, scans or backups. For those, see [Backups](#backups).
-
-A very large setup (more than about 12,000 tiles in all, or bigger than
-**Largest import**) can't be imported back as one file, so that a small
-machine such as a Pi Zero isn't run out of memory. The export still
-downloads, and HOPS says so. To move a setup that big to another HOPS, use
-[Backups](#backups): they move a setup of any size.
 
 ---
 
@@ -1152,7 +1286,7 @@ backup fails, nothing is changed.
 
 ### Settings › Backups
 
-- **Create Backup**: make one now.
+- **Create backup**: make one now.
 - Each backup has **Download**, **Restore** and **Delete**.
 - **Download** gives a file that includes the images (icons and
   backgrounds) the backup uses. Keep a copy somewhere other than the HOPS
@@ -1237,13 +1371,16 @@ its allowed range. Most apply as soon as you save; the few marked
 **Restart required** take effect the next time HOPS starts, and a banner
 lists any that are waiting.
 
-To change one: type the new value, click **Save**. **Revert** drops an
-unsaved change; **Reset to default** puts the default back. An invalid
-value is refused with a reason and the running value stays as it was.
+Each setting has its description on the left, then the control, then
+**Reset to default**, **Discard** and **Save** beside it. To change one:
+type the new value, click **Save**. **Discard** drops an unsaved change;
+**Reset to default** puts the default back. An invalid value is refused
+with a reason and the running value stays as it was.
 
 | Group | Setting | Default | Notes |
 |-------|---------|---------|-------|
-| **Server** | **Port** | 8080 | 1–65535. **Restart required.** See [Change the port](QUICKSTART.md#change-the-port). |
+| **General** | **Show the edit and Settings buttons when signed out** | On | Off hides the pencil and the gear from people who aren't signed in. See [Hiding the buttons from visitors](#addresses-and-signing-in). |
+| **Server** | **Port** | 8080 | 1–65535. **Restart required.** See [Changing the port](#changing-the-port). |
 | | **Log level** | info | debug, info, warn, error. |
 | | **Wait for request headers (seconds)** | 10 | **Restart required.** |
 | | **Wait for a whole request (seconds)** | 60 | **Restart required.** |
@@ -1272,6 +1409,29 @@ value is refused with a reason and the running value stays as it was.
 Each row also shows the setting's internal key (for example
 `server.port`).
 
+If the data folder is on a network share that can't keep HOPS's database
+in its normal (WAL journal) mode, Settings shows a notice and the log
+warns. HOPS still works, but it is slower and can pause while it saves.
+Keep the data folder on a local disk if you can.
+
+### Changing the port
+
+HOPS listens on port 8080. To use another port:
+
+1. **Settings › Global settings › Server › Port**: type the new port and
+   click **Save**. It is marked **Restart required**.
+2. Restart HOPS: `sudo systemctl restart hops` for the install script and
+   the Proxmox container; stop and start it again if you run the file
+   yourself. For Docker, leave this setting alone and change the `ports:`
+   line in `docker-compose.yml` instead (see [Customising the
+   port](DEPLOY.md#customising-the-port)).
+3. Open HOPS on the new port.
+
+If you used the install script, pass the new port when you next upgrade, so
+its health check looks in the right place:
+`curl -fsSL https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/install.sh | sudo bash -s -- --port 8181`
+(it also finds the port by itself if HOPS was last running on it).
+
 ### Logs
 
 **Settings › Logs** shows what HOPS has been doing, newest last. Choose how
@@ -1285,7 +1445,7 @@ to *info*.
 
 **Settings › Factory reset** deletes every dashboard, tab, folder and tile,
 and puts the [Sample](#the-sample) back. It asks first (**Reset
-Everything**). A safety backup is taken first; if that fails, nothing is
+everything**). A safety backup is taken first; if that fails, nothing is
 reset. Your password, Global settings, uploaded icons and backups are not
 touched.
 
@@ -1294,13 +1454,17 @@ touched.
 ## Password and sessions
 
 **First sign-in.** The username is `admin` and the first password is
-`admin`. HOPS asks you to **Set a New Password** straight away, and you
-can't do anything else until you do.
+`admin`. HOPS asks you to **Set a new password** straight away, and you
+can't do anything else until you do: type `admin` as the **Current
+password**, then your new one twice, and click **Set password**.
 
-**Changing the password.** **Settings › Password**: **Current Password**,
-**New Password** and **Confirm New Password**. The new one must be 8 to 72
-characters and different from the current one. Changing it signs out
-every other browser that was signed in.
+**Changing the password.** **Settings › Password**: **Current password**,
+**New password** and **Confirm new password**, then **Change password**.
+The new one must be 8 to 72 characters and different from the current one.
+Changing it signs out every other browser that was signed in.
+
+Every password box has an eye button that shows or hides what you typed, in
+every browser. It goes back to dots when you submit.
 
 **Forgotten password.** On the computer that runs HOPS, run the HOPS
 program with `reset-password`:
@@ -1318,7 +1482,7 @@ service, or where the installer puts it), prints `Data folder:` and the
 folder, then the username and a temporary password, and signs out every
 browser. Run as root, it does the change as the user that owns the
 database. Sign in with the temporary password and HOPS asks you to **Set a
-New Password**, as on first sign-in. HOPS can keep running while you do
+new password**, as on first sign-in. HOPS can keep running while you do
 this.
 
 If it finds HOPS data in more than one folder, or in none, or can't look
@@ -1353,7 +1517,7 @@ These are kept in each browser, not on the server. Each person and each
 device can choose their own, signed in or not, and they never change what
 anyone else sees:
 
-- theme (**Brightness Mode** and **Theme Preset**);
+- theme (**Brightness mode** and **Theme preset**);
 - text size;
 - **Home** / **Away**;
 - **Show recently used**, and the recently used tiles themselves (**Clear
@@ -1367,6 +1531,34 @@ last only until it is closed.
 
 ---
 
+## When HOPS can't be reached
+
+A browser that has opened HOPS before keeps an **offline copy** of it. If
+HOPS can't be reached (the server is down, or your phone is away from
+home), that browser still opens your dashboards as last seen, with a banner
+saying so: *You're offline*, or *This is a saved copy, and may be out of
+date*. Tiles show their last known status. When HOPS is back, the page
+updates by itself, unless you are editing. The status tick in the header
+agrees with the banner.
+
+- **https or localhost only.** Browsers only allow the offline copy on
+  `https://` addresses and on `localhost`. Over plain `http://` there is no
+  copy, and HOPS simply won't open during an outage. See
+  [HTTPS](DEPLOY.md#https) in the deployment guide.
+- **Is it there?** Signed in, **About HOPS** shows **Offline copy**:
+  *Ready*, or why not (for example *Needs https:// or localhost*). If the
+  copy can't be saved or updated, HOPS says so on screen, with **Retry**.
+- **On a very slow connection**, if HOPS hasn't answered after 45 seconds
+  and this browser has a copy, you get the copy with the banner. HOPS's late
+  answer still updates it.
+- **Behind a sign-in proxy**, the copy can't be saved until you are signed
+  in to the proxy. HOPS checks that it got its own page, so the proxy's
+  sign-in page is never kept as the offline copy.
+- Settings doesn't ask you to sign in just because the server can't be
+  reached.
+
+---
+
 ## Phones, tablets and touch
 
 ![HOPS on a phone](docs/screenshots/mobile.png)
@@ -1377,13 +1569,34 @@ last only until it is closed.
   of the grid.
 - At 480 pixels wide or narrower (phones), the edit button is hidden:
   phones are for viewing. The gear (Settings) is still there, so you can
-  manage backups, the password and everything else.
+  manage backups, the password and everything else. On a phone, **Log
+  out** is in Settings.
 
 ### Open HOPS like an app
 
-Open HOPS in the phone's browser and use the browser's *Add to Home
-Screen* (on iPhone, under the Share button). HOPS then opens from its own
-icon. A [QR code](#qr-codes) saves typing the address.
+A [QR code](#qr-codes) saves typing the address. Then put HOPS on the
+home screen:
+
+- **Android**: open HOPS in Chrome, tap the **⋮** menu, then **Add to Home
+  screen** (on some phones it says **Install app**).
+- **iPhone or iPad**: open HOPS in Safari (it must be Safari: other
+  browsers on iOS can't do this), tap the **Share** button, then **Add to
+  Home Screen**.
+
+What you get depends on the address:
+
+- Over `https://` (for example behind a reverse proxy with a certificate),
+  HOPS installs as a full-screen app with its own icon, and keeps an
+  [offline copy](#when-hops-cant-be-reached).
+- Over plain `http://`, it's a home-screen shortcut that opens in a normal
+  browser window, with no offline copy.
+
+An installed HOPS app always shows the gear (Settings), even when
+[the buttons are hidden for visitors](#addresses-and-signing-in), because
+it has no address bar for typing `/settings`.
+
+Installed HOPS before 3.1? Reinstall it to get the new icon (the bunny and
+hop cones from the logo).
 
 ### Touch editing
 
@@ -1431,7 +1644,7 @@ anything.
    creates nothing.
 
 How to upgrade depends on how you installed HOPS; see
-[Upgrading](QUICKSTART.md#upgrading),
+[Upgrading](DEPLOY.md#upgrading),
 [Upgrading from v2 with install.sh](DEPLOY.md#upgrading-from-v2-with-installsh)
 and [Rolling back from 3.x to 2.2.1](DEPLOY.md#rolling-back-from-3x-to-221).
 
@@ -1451,6 +1664,10 @@ and [Rolling back from 3.x to 2.2.1](DEPLOY.md#rolling-back-from-3x-to-221).
 - **Settings** (port, log level, uploads and so on) carry over. Upload
   limits still at the old HOPS 2 defaults move to the new ones (25 MB for
   backgrounds, 2 MB for icons), and a notice tells you.
+- **Settings with no HOPS 3 equivalent** (a light/dark mode, custom CSS,
+  search shortcut or default dashboard you had changed) can't come across.
+  A one-time notice names each one and what to do instead. Importing a
+  HOPS 2 file lists them too.
 - **The admin pages** moved into **Settings** (the gear). Discovery is at
   **Settings › Discovery**.
 
@@ -1478,8 +1695,8 @@ You hit a [limit](#limits): 12 levels of folders, 5,000 items, or 200
 tabs per dashboard.
 
 **A tile doesn't open, or opens a blank window.**
-Check the **Address**. If **Open Mode** is **iFrame Modal**, the site may
-refuse to be shown inside another page; use **New Tab**. If you're away
+Check the **Address**. If **Open mode** is **iFrame modal**, the site may
+refuse to be shown inside another page; use **New tab**. If you're away
 from home, check the **Home** / **Away** button.
 
 **A status badge says Offline or Error, but the service works.**
@@ -1505,9 +1722,28 @@ Another Iconify name is fetched from the internet the first time. Pick one
 from **Browse**, or upload your own.
 
 **An import failed.**
-Check the file is one of the [formats HOPS reads](#import). A file larger
-than **Largest import** (50 MB by default) is refused. If part of a file was
-imported, HOPS lists what was left out.
+Check the file is one of the [formats HOPS reads](#import). The message
+says what is wrong: a cut-off or damaged file, an empty file, an export
+from a newer HOPS, a backup file (restore it in **Settings › Backups**),
+more than one file chosen, or a broken dashboard (then nothing is
+imported). A file larger than **Largest import** (50 MB by default) is
+refused. If part of a file was imported, HOPS lists what was left out.
+
+**HOPS can't be reached, and the page won't open at all.**
+Only a browser on an `https://` address or `localhost` keeps an offline
+copy; see [When HOPS can't be reached](#when-hops-cant-be-reached).
+
+**A notice says the database isn't using its normal journal mode.**
+The data folder is probably on a network share. HOPS still works, but more
+slowly; move the data folder to a local disk if you can (see [Global
+settings](#global-settings)).
+
+**The data folder path has odd characters.**
+A `?` or `#` in the path is fine. On Windows, a data folder on a network
+share (`\\server\share\…`) works. In PowerShell or cmd, don't end a quoted
+path with a backslash: `--data "C:\HOPS Data"` works, but
+`--data "C:\HOPS Data\"` passes a stray quote mark, and HOPS tells you to
+remove the trailing `\`.
 
 **Discovery finds little or nothing.**
 See [What to expect first](#what-to-expect-first) and [Running HOPS in
