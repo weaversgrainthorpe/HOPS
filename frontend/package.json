@@ -37,7 +37,7 @@
 		"svelte-check": "^4.3.4",
 		"typescript": "^5.9.3",
 		"vite": "^7.2.6",
-		"vitest": "^4.1.4"
+		"vitest": "^5.0.5"
 	},
 	"dependencies": {
 		"qrcode": "^1.5.4"
